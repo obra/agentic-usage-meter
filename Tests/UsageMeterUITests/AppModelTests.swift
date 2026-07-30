@@ -245,6 +245,53 @@ struct AppModelTests {
     }
 
     @Test
+    func wakeRefreshStillObservesTheTenMinuteFloor() async {
+        let account = SubscriptionAccount(
+            provider: .minimax,
+            displayName: "MiniMax",
+            displayOrder: 0,
+        )
+        let initialTime = reference
+        let clock = TestMutableDate(initialTime)
+        let adapter = TestProviderAccountAdapter(
+            provider: .minimax,
+            result: .success(
+                UsageSnapshot(
+                    accountID: account.id,
+                    fetchedAt: initialTime.addingTimeInterval(60),
+                    windows: [],
+                )
+            ),
+        )
+        let model = AppModel(
+            stateStore: TestAppStateStore(
+                state: PersistedAppState(
+                    accounts: [account],
+                    snapshots: [:],
+                    refreshStates: [
+                        account.id: AccountRefreshState(
+                            lastRequestStartedAt:
+                                initialTime.addingTimeInterval(-540),
+                        ),
+                    ],
+                )
+            ),
+            credentialStore: TestCredentialStore(),
+            adapters: [adapter],
+            now: { clock.current },
+        )
+        await model.start()
+
+        await model.refreshAfterWake()
+        #expect(await adapter.fetchedAccountIDs.isEmpty)
+
+        clock.advance(by: 60)
+        await model.refreshAfterWake()
+
+        #expect(await adapter.fetchedAccountIDs == [account.id])
+    }
+
+    @Test
     func launchRechecksEligibleClaudeSessionMarkedForReconnect() async {
         let profileID = UUID()
         let organizationID = UUID()

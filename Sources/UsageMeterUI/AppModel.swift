@@ -79,6 +79,8 @@ public final class AppModel {
     @ObservationIgnored
     private let adaptersByProvider: [Provider: any ProviderAccountAdapter]
     @ObservationIgnored
+    private let refreshCoordinator: RefreshCoordinator
+    @ObservationIgnored
     private let now: @Sendable () -> Date
     @ObservationIgnored
     private var persistedState = PersistedAppState.empty
@@ -89,6 +91,7 @@ public final class AppModel {
         stateStore: any AppStatePersisting,
         credentialStore: any CredentialStore,
         adapters: [any ProviderAccountAdapter],
+        refreshCoordinator: RefreshCoordinator = RefreshCoordinator(),
         isSampleData: Bool = false,
         now: @escaping @Sendable () -> Date = { Date() },
     ) {
@@ -99,6 +102,7 @@ public final class AppModel {
                 ($0.provider, $0)
             },
         )
+        self.refreshCoordinator = refreshCoordinator
         self.isSampleData = isSampleData
         self.now = now
     }
@@ -164,9 +168,15 @@ public final class AppModel {
     }
 
     public func refreshAllAccounts() async {
-        for id in accounts.map(\.id) {
-            await refreshAccount(id: id)
+        let accountIDs = accounts.map(\.id)
+        await refreshCoordinator.run(accountIDs: accountIDs) {
+            [weak self] accountID in
+            await self?.refreshAccount(id: accountID)
         }
+    }
+
+    public func refreshAfterWake() async {
+        await refreshAllAccounts()
     }
 
     public func runAutomaticRefresh(

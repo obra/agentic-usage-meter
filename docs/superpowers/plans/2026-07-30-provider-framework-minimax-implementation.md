@@ -1187,7 +1187,7 @@ reconnect failures.
 - Produces: `RefreshCoordinator.run(accountIDs:operation:)` and
   `AppModel.refreshAfterWake()`.
 
-- [ ] **Step 1: Write failing bounded-concurrency tests**
+- [x] **Step 1: Write failing bounded-concurrency tests**
 
 Create `RefreshCoordinatorTests.swift` with an actor counter whose operation
 suspends on a continuation. Start five account operations with a coordinator
@@ -1198,7 +1198,7 @@ Add an AppModel test that sets an account's last attempt nine minutes ago,
 calls `refreshAfterWake`, and sees no adapter contact; move the clock to exactly
 ten minutes, call again, and see one contact.
 
-- [ ] **Step 2: Run tests and verify RED**
+- [x] **Step 2: Run tests and verify RED**
 
 ```bash
 swift test --filter RefreshCoordinatorTests
@@ -1208,7 +1208,7 @@ swift test --filter AppModelTests
 Expected: compilation fails because the coordinator and wake method do not
 exist.
 
-- [ ] **Step 3: Implement the coordinator**
+- [x] **Step 3: Implement the coordinator**
 
 Create an actor with an internal permit count and FIFO checked continuations:
 
@@ -1246,7 +1246,7 @@ public actor RefreshCoordinator {
 Implement `acquire` and `release` so a released permit resumes the oldest
 waiter without allowing the active count to exceed the limit.
 
-- [ ] **Step 4: Use one coordinator for automatic, manual-all, and wake demand**
+- [x] **Step 4: Use one coordinator for automatic, manual-all, and wake demand**
 
 Give `AppModel` one injected coordinator. Make `refreshAllAccounts` call
 `coordinator.run` with current account IDs. `refreshAccount` still goes through
@@ -1258,7 +1258,7 @@ In `AgenticUsageMeterApp`, subscribe to
 scene task and call `model.refreshAfterWake()`. Cancel naturally with the
 SwiftUI task.
 
-- [ ] **Step 5: Run focused and full tests and verify GREEN**
+- [x] **Step 5: Run focused and full tests and verify GREEN**
 
 ```bash
 swift test --filter RefreshCoordinatorTests
@@ -1267,7 +1267,7 @@ swift test --filter AppModelTests
 swift test
 ```
 
-- [ ] **Step 6: Commit refresh coordination**
+- [x] **Step 6: Commit refresh coordination**
 
 Commit with:
 

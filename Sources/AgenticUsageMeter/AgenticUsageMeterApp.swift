@@ -54,6 +54,15 @@ private struct MenuBarLabel: View {
             widgetController.synchronize()
             await model.runAutomaticRefresh()
         }
+        .task {
+            for await _ in NSWorkspace.shared.notificationCenter
+                .notifications(
+                    named: NSWorkspace.didWakeNotification
+                )
+            {
+                await model.refreshAfterWake()
+            }
+        }
         .onChange(of: model.isFloatingWidgetVisible) {
             widgetController.synchronize()
         }
