@@ -73,7 +73,7 @@ public final class FloatingWidgetController:
         panel.hidesOnDeactivate = false
         panel.isMovableByWindowBackground = true
         panel.delegate = self
-        panel.contentViewController = NSHostingController(
+        panel.contentView = NSHostingView(
             rootView: FloatingWidgetView(model: model),
         )
         self.panel = panel

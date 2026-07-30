@@ -13,6 +13,9 @@ public struct MenuBarContentView: View {
             HStack {
                 Text("Usage")
                     .font(.title3.weight(.semibold))
+                if model.isSampleData {
+                    sampleDataBadge
+                }
                 Spacer()
                 Button {
                     refreshAllAccounts()
@@ -75,5 +78,15 @@ public struct MenuBarContentView: View {
                 await model.refreshAccount(id: account.id)
             }
         }
+    }
+
+    private var sampleDataBadge: some View {
+        Text("SAMPLE DATA")
+            .font(.caption2.weight(.bold))
+            .foregroundStyle(.orange)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(.orange.opacity(0.14), in: Capsule())
+            .accessibilityLabel("Sample data")
     }
 }

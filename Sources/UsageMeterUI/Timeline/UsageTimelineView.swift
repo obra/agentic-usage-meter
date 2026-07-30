@@ -17,7 +17,7 @@ public struct UsageTimelineView: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 14) {
             timelineSection(
                 title: "5-hour windows",
                 kind: .short,
@@ -40,16 +40,21 @@ public struct UsageTimelineView: View {
             timeZone: timeZone,
         )
 
-        return VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text(title)
-                    .font(.headline)
-                Spacer()
-                Text("Now")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity)
-                Spacer()
+        return VStack(alignment: .leading, spacing: 7) {
+            ZStack {
+                HStack {
+                    Text(title)
+                        .font(.headline)
+                    Spacer()
+                }
+                HStack(spacing: UsageWindowRow.labelSpacing) {
+                    Color.clear
+                        .frame(width: UsageWindowRow.labelColumnWidth)
+                    Text("Now")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity)
+                }
             }
 
             if section.rows.isEmpty {

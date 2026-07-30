@@ -2,6 +2,9 @@ import SwiftUI
 import UsageMeterCore
 
 public struct UsageWindowRow: View {
+    static let labelColumnWidth: CGFloat = 96
+    static let labelSpacing: CGFloat = 10
+
     private let row: UsageTimelineRowPresentation
 
     public init(row: UsageTimelineRowPresentation) {
@@ -9,18 +12,24 @@ public struct UsageWindowRow: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(row.account.provider.timelineColor)
-                    .frame(width: 7, height: 7)
-                Text(row.account.provider.displayName)
-                    .foregroundStyle(.secondary)
+        HStack(spacing: Self.labelSpacing) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 5) {
+                    Circle()
+                        .fill(row.account.provider.timelineColor)
+                        .frame(width: 7, height: 7)
+                    Text(row.account.provider.displayName)
+                        .foregroundStyle(.secondary)
+                }
                 Text(row.account.displayName)
                     .fontWeight(.medium)
-                Spacer()
+                    .lineLimit(1)
             }
             .font(.caption)
+            .frame(
+                width: Self.labelColumnWidth,
+                alignment: .leading,
+            )
 
             GeometryReader { geometry in
                 let presentation = row.windowPresentation
@@ -80,6 +89,7 @@ public struct UsageWindowRow: View {
             }
             .frame(height: 38)
         }
+        .frame(height: 38)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(row.windowPresentation.accessibilityValue)
     }

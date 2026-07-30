@@ -79,6 +79,7 @@ public final class AppModel {
     public private(set) var isFloatingWidgetVisible = false
     public private(set) var floatingWidgetPlacement:
         FloatingWidgetPlacement?
+    public let isSampleData: Bool
 
     @ObservationIgnored
     private let stateStore: any AppStatePersisting
@@ -103,6 +104,7 @@ public final class AppModel {
         clients: [any UsageProviderClient],
         claudeClient: (any ClaudeAccountUsageFetching)? = nil,
         claudeProfileRemover: ClaudeProfileRemover? = nil,
+        isSampleData: Bool = false,
         now: @escaping @Sendable () -> Date = { Date() },
     ) {
         self.stateStore = stateStore
@@ -114,6 +116,7 @@ public final class AppModel {
         )
         self.claudeClient = claudeClient
         self.claudeProfileRemover = claudeProfileRemover
+        self.isSampleData = isSampleData
         self.now = now
     }
 

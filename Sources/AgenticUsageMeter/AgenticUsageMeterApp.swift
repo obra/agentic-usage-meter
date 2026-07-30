@@ -67,7 +67,13 @@ private enum AppEnvironment {
         )
         let stateStore: any AppStatePersisting =
             sampleData
-                ? SampleAppStateStore(state: sampleState())
+                ? SampleAppStateStore(
+                    state: sampleState(
+                        showWidget: CommandLine.arguments.contains(
+                            "--show-widget",
+                        ),
+                    ),
+                )
                 : AppStateStore(fileURL: stateFileURL())
 
         return AppModel(
@@ -83,6 +89,7 @@ private enum AppEnvironment {
                     $0,
                 )
             },
+            isSampleData: sampleData,
         )
     }
 
@@ -96,7 +103,9 @@ private enum AppEnvironment {
             )
     }
 
-    private static func sampleState() -> PersistedAppState {
+    private static func sampleState(
+        showWidget: Bool,
+    ) -> PersistedAppState {
         let now = Date()
         let accounts = [
             SubscriptionAccount(
@@ -135,6 +144,7 @@ private enum AppEnvironment {
                         accountID: account.id,
                         fetchedAt: now,
                         windows: sampleWindows(
+                            provider: account.provider,
                             index: index,
                             now: now,
                         ),
@@ -156,14 +166,35 @@ private enum AppEnvironment {
             accounts: accounts,
             snapshots: snapshots,
             refreshStates: refreshStates,
+            isFloatingWidgetVisible: showWidget,
         )
     }
 
     private static func sampleWindows(
+        provider: Provider,
         index: Int,
         now: Date,
     ) -> [UsageWindow] {
-        [
+        let weeklyConsumed =
+            provider == .kimi
+                ? 0.26
+                : min(
+                    0.31 + Double(index) * 0.11,
+                    0.90,
+                )
+        let weekly = UsageWindow(
+            id: "weekly",
+            kind: .weekly,
+            duration: 604_800,
+            resetAt: now.addingTimeInterval(
+                Double(180_000 + index * 72000),
+            ),
+            consumedFraction: weeklyConsumed,
+        )!
+        guard provider == .claude else {
+            return [weekly]
+        }
+        return [
             UsageWindow(
                 id: "short",
                 kind: .short,
@@ -176,18 +207,7 @@ private enum AppEnvironment {
                     0.92,
                 ),
             )!,
-            UsageWindow(
-                id: "weekly",
-                kind: .weekly,
-                duration: 604_800,
-                resetAt: now.addingTimeInterval(
-                    Double(180_000 + index * 72000),
-                ),
-                consumedFraction: min(
-                    0.31 + Double(index) * 0.11,
-                    0.90,
-                ),
-            )!,
+            weekly,
         ]
     }
 }

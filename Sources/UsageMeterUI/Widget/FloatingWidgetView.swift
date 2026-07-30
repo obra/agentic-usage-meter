@@ -12,6 +12,9 @@ public struct FloatingWidgetView: View {
             HStack {
                 Text("Agentic Usage")
                     .font(.headline)
+                if model.isSampleData {
+                    sampleDataBadge
+                }
                 Spacer()
                 Button {
                     Task {
@@ -36,5 +39,15 @@ public struct FloatingWidgetView: View {
             }
         }
         .background(.regularMaterial)
+    }
+
+    private var sampleDataBadge: some View {
+        Text("SAMPLE DATA")
+            .font(.caption2.weight(.bold))
+            .foregroundStyle(.orange)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(.orange.opacity(0.14), in: Capsule())
+            .accessibilityLabel("Sample data")
     }
 }

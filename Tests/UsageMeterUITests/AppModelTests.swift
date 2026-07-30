@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Testing
 import UsageMeterCore
@@ -345,6 +346,19 @@ struct AppModelTests {
     }
 
     @Test
+    func sampleDataStateRemainsVisibleToTheUI() {
+        let model = AppModel(
+            stateStore: TestAppStateStore(state: .empty),
+            credentialStore: TestCredentialStore(),
+            clients: [],
+            isSampleData: true,
+            now: { reference },
+        )
+
+        #expect(model.isSampleData)
+    }
+
+    @Test
     func floatingWidgetPreferenceAndPlacementPersist() async throws {
         let stateStore = TestAppStateStore(state: .empty)
         let model = AppModel(
@@ -371,6 +385,42 @@ struct AppModelTests {
             await stateStore.state.floatingWidgetPlacement
                 == placement,
         )
+    }
+
+    @Test
+    func floatingWidgetOpensAtItsIntendedSize() async throws {
+        let stateStore = TestAppStateStore(
+            state: PersistedAppState(
+                accounts: [],
+                snapshots: [:],
+                isFloatingWidgetVisible: true,
+            ),
+        )
+        let model = AppModel(
+            stateStore: stateStore,
+            credentialStore: TestCredentialStore(),
+            clients: [],
+            now: { reference },
+        )
+        await model.start()
+        let existingWindows = Set(
+            NSApplication.shared.windows.map(ObjectIdentifier.init),
+        )
+        let controller = FloatingWidgetController(model: model)
+
+        controller.synchronize()
+
+        let panel = try #require(
+            NSApplication.shared.windows.first {
+                !existingWindows.contains(ObjectIdentifier($0))
+                    && $0.title == "Agentic Usage"
+            },
+        )
+        #expect(panel.frame.width == 520)
+        #expect(panel.frame.height == 360)
+
+        try await model.setFloatingWidgetVisible(false)
+        controller.synchronize()
     }
 
     @Test
