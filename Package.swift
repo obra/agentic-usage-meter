@@ -19,7 +19,10 @@ let package = Package(
         ),
         .testTarget(
             name: "UsageMeterCoreTests",
-            dependencies: ["UsageMeterCore"]
+            dependencies: ["UsageMeterCore"],
+            resources: [
+                .copy("Fixtures")
+            ]
         )
     ],
     swiftLanguageModes: [.v6]
