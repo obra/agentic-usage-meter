@@ -14,6 +14,11 @@ public final class ClaudeWebProfileStore {
     }
 
     public static func remove(profileID: UUID) async throws {
+        // Initialize WebKit's identified-store machinery in command-line
+        // processes, then release the store before asking WebKit to remove it.
+        autoreleasepool {
+            _ = WKWebsiteDataStore(forIdentifier: profileID)
+        }
         try await WKWebsiteDataStore.remove(forIdentifier: profileID)
     }
 }

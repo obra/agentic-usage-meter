@@ -7,6 +7,7 @@ public final class ClaudeLoginSession: NSObject {
     public let profileID: UUID
     public private(set) var webView: WKWebView?
 
+    private let onPageReady: @MainActor () -> Void
     private let onAuthenticated: @MainActor (UUID) -> Void
     private var profileStore: ClaudeWebProfileStore?
     private var cookieStore: WKHTTPCookieStore?
@@ -19,9 +20,11 @@ public final class ClaudeLoginSession: NSObject {
 
     public init(
         profileID: UUID,
+        onPageReady: @escaping @MainActor () -> Void = {},
         onAuthenticated: @escaping @MainActor (UUID) -> Void
     ) {
         self.profileID = profileID
+        self.onPageReady = onPageReady
         self.onAuthenticated = onAuthenticated
     }
 
@@ -171,6 +174,7 @@ extension ClaudeLoginSession:
         guard !isFinished else {
             return
         }
+        onPageReady()
         searchForSession(
             in: webView.configuration.websiteDataStore.httpCookieStore
         )
