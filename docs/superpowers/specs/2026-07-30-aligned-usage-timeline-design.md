@@ -1,7 +1,7 @@
 # Aligned Usage Timeline Design
 
-**Date:** 2026-07-30  
-**Status:** Visually approved; written-spec review pending  
+**Date:** 2026-07-30
+**Status:** Visually approved; written-spec review pending
 **Target:** Menu-bar popover and floating widget
 
 ## Summary
