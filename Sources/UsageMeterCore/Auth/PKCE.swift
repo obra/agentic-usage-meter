@@ -11,15 +11,10 @@ public struct PKCECodes: Equatable, Sendable {
     public let challenge: String
 
     public static func generate() throws -> Self {
-        var bytes = [UInt8](repeating: 0, count: 64)
-        let status = bytes.withUnsafeMutableBytes { buffer in
-            SecRandomCopyBytes(
-                kSecRandomDefault,
-                buffer.count,
-                buffer.baseAddress!
-            )
-        }
-        guard status == errSecSuccess else {
+        let bytes: [UInt8]
+        do {
+            bytes = try secureRandomBytes(count: 64)
+        } catch let SecureRandomError.generationFailed(status) {
             throw PKCEError.randomGenerationFailed(status)
         }
 
@@ -33,10 +28,29 @@ public struct PKCECodes: Equatable, Sendable {
 }
 
 extension Data {
-    fileprivate func base64URLEncodedString() -> String {
+    func base64URLEncodedString() -> String {
         base64EncodedString()
             .replacingOccurrences(of: "+", with: "-")
             .replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: "=", with: "")
     }
+}
+
+enum SecureRandomError: Error {
+    case generationFailed(OSStatus)
+}
+
+func secureRandomBytes(count: Int) throws -> [UInt8] {
+    var bytes = [UInt8](repeating: 0, count: count)
+    let status = bytes.withUnsafeMutableBytes { buffer in
+        SecRandomCopyBytes(
+            kSecRandomDefault,
+            buffer.count,
+            buffer.baseAddress!
+        )
+    }
+    guard status == errSecSuccess else {
+        throw SecureRandomError.generationFailed(status)
+    }
+    return bytes
 }
