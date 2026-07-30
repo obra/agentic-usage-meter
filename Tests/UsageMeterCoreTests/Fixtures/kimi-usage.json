@@ -1,0 +1,20 @@
+{
+  "usage": {
+    "limit": 1000,
+    "used": 250,
+    "resetAt": "2033-05-18T03:33:20Z"
+  },
+  "limits": [
+    {
+      "window": {
+        "duration": 300,
+        "timeUnit": "MINUTE"
+      },
+      "detail": {
+        "limit": 100,
+        "remaining": 60,
+        "resetIn": 3600
+      }
+    }
+  ]
+}
