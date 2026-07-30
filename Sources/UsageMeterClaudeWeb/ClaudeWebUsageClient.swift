@@ -84,7 +84,8 @@ public final class ClaudeWebUsageClient {
         )
         let cookies = Self.cookieNames.compactMap { name in
             availableCookies.first {
-                $0.name == name && Self.isClaudeDomain($0.domain)
+                $0.name == name
+                    && ClaudeLoginCookieDetector.isClaudeDomain($0.domain)
             }
         }
         guard cookies.contains(where: { $0.name == "sessionKey" }) else {
@@ -150,9 +151,5 @@ public final class ClaudeWebUsageClient {
         formatter.timeZone = TimeZone(secondsFromGMT: 0)
         formatter.dateFormat = "EEE',' dd MMM yyyy HH':'mm':'ss z"
         return formatter.date(from: value)
-    }
-
-    private static func isClaudeDomain(_ domain: String) -> Bool {
-        domain == "claude.ai" || domain.hasSuffix(".claude.ai")
     }
 }
