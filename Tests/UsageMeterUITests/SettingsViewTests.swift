@@ -146,6 +146,81 @@ func claudeEmbeddedBrowserGuidanceRequiresEmailSignIn() {
 }
 
 @Test
+func movingAccountsUsesTheCompleteProviderLocalOrder() {
+    let first = UUID()
+    let second = UUID()
+    let third = UUID()
+
+    #expect(
+        AccountOrder.moving(
+            [first, second, third],
+            fromOffsets: IndexSet(integer: 0),
+            toOffset: 3,
+        ) == [second, third, first],
+    )
+}
+
+@Test
+func movingAnEmptySelectionKeepsTheExistingOrder() {
+    let ids = [UUID(), UUID()]
+
+    #expect(
+        AccountOrder.moving(
+            ids,
+            fromOffsets: IndexSet(),
+            toOffset: 1,
+        ) == ids,
+    )
+}
+
+@Test
+func boundaryMoveKeepsTheProviderOrderUnchanged() {
+    let first = UUID()
+    let second = UUID()
+
+    #expect(
+        AccountOrder.moving(
+            [first, second],
+            accountID: first,
+            by: -1,
+        ) == [first, second],
+    )
+}
+
+@Test
+func moveCommandMovesOneAccountWithinItsProvider() {
+    let first = UUID()
+    let second = UUID()
+
+    #expect(
+        AccountOrder.moving(
+            [first, second],
+            accountID: second,
+            by: -1,
+        ) == [second, first],
+    )
+}
+
+@Test
+func onlyAuthenticationFailuresShowProminentReconnect() {
+    #expect(
+        AccountRowPresentation.showsReconnectAction(
+            for: .authenticationRequired,
+        ),
+    )
+    #expect(
+        !AccountRowPresentation.showsReconnectAction(
+            for: .temporarilyUnavailable,
+        ),
+    )
+    #expect(
+        !AccountRowPresentation.showsReconnectAction(
+            for: nil,
+        ),
+    )
+}
+
+@Test
 func completingAccountConnectionStartsFreshProviderModels() {
     let firstAttemptID = UUID(
         uuidString: "11111111-1111-1111-1111-111111111111",

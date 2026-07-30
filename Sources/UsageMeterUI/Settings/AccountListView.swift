@@ -22,11 +22,72 @@ struct AccountNameEdit {
     }
 }
 
+struct AccountOrder {
+    static func moving(
+        _ ids: [UUID],
+        fromOffsets source: IndexSet,
+        toOffset destination: Int,
+    ) -> [UUID] {
+        guard
+            !source.isEmpty,
+            source.allSatisfy(ids.indices.contains),
+            (0...ids.count).contains(destination)
+        else {
+            return ids
+        }
+
+        let movingIDs = source.map { ids[$0] }
+        var reordered = ids
+        for index in source.sorted(by: >) {
+            reordered.remove(at: index)
+        }
+        let removedBeforeDestination =
+            source.filter { $0 < destination }.count
+        let insertionIndex = min(
+            max(
+                destination - removedBeforeDestination,
+                0,
+            ),
+            reordered.count,
+        )
+        reordered.insert(
+            contentsOf: movingIDs,
+            at: insertionIndex,
+        )
+        return reordered
+    }
+
+    static func moving(
+        _ ids: [UUID],
+        accountID: UUID,
+        by offset: Int,
+    ) -> [UUID] {
+        guard
+            let index = ids.firstIndex(of: accountID),
+            ids.indices.contains(index + offset)
+        else {
+            return ids
+        }
+        var reordered = ids
+        reordered.swapAt(index, index + offset)
+        return reordered
+    }
+}
+
+struct AccountRowPresentation {
+    static func showsReconnectAction(
+        for error: AccountViewError?,
+    ) -> Bool {
+        error == .authenticationRequired
+    }
+}
+
 public struct AccountListView: View {
     private let model: AppModel
     private let onAdd: () -> Void
     private let onReconnect: (SubscriptionAccount) -> Void
     @State private var pendingRemoval: SubscriptionAccount?
+    @State private var editingAccountID: UUID?
 
     public init(
         model: AppModel,
@@ -47,6 +108,8 @@ public struct AccountListView: View {
                         ForEach(accounts) { state in
                             AccountSettingsRow(
                                 state: state,
+                                editingAccountID:
+                                    $editingAccountID,
                                 canMoveUp:
                                 state.id != accounts.first?.id,
                                 canMoveDown:
@@ -76,6 +139,14 @@ public struct AccountListView: View {
                                 onRemove: {
                                     pendingRemoval = state.account
                                 },
+                            )
+                        }
+                        .onMove { source, destination in
+                            move(
+                                accounts,
+                                provider: provider,
+                                fromOffsets: source,
+                                toOffset: destination,
                             )
                         }
                     }
@@ -142,19 +213,44 @@ public struct AccountListView: View {
         _ account: SubscriptionAccount,
         by offset: Int,
     ) {
-        var ids = providerAccounts(account.provider)
+        let currentIDs =
+            providerAccounts(account.provider)
             .map(\.id)
-        guard
-            let index = ids.firstIndex(of: account.id),
-            ids.indices.contains(index + offset)
-        else {
+        let orderedIDs = AccountOrder.moving(
+            currentIDs,
+            accountID: account.id,
+            by: offset,
+        )
+        guard orderedIDs != currentIDs else {
             return
         }
-        ids.swapAt(index, index + offset)
         Task {
             try? await model.reorderAccounts(
                 provider: account.provider,
-                orderedIDs: ids,
+                orderedIDs: orderedIDs,
+            )
+        }
+    }
+
+    private func move(
+        _ accounts: [AccountViewState],
+        provider: Provider,
+        fromOffsets source: IndexSet,
+        toOffset destination: Int,
+    ) {
+        let currentIDs = accounts.map(\.id)
+        let orderedIDs = AccountOrder.moving(
+            currentIDs,
+            fromOffsets: source,
+            toOffset: destination,
+        )
+        guard orderedIDs != currentIDs else {
+            return
+        }
+        Task {
+            try? await model.reorderAccounts(
+                provider: provider,
+                orderedIDs: orderedIDs,
             )
         }
     }
@@ -162,6 +258,7 @@ public struct AccountListView: View {
 
 private struct AccountSettingsRow: View {
     let state: AccountViewState
+    @Binding var editingAccountID: UUID?
     let canMoveUp: Bool
     let canMoveDown: Bool
     let onRefresh: () -> Void
@@ -170,20 +267,58 @@ private struct AccountSettingsRow: View {
     let onRename: (String) async throws -> Void
     let onRemove: () -> Void
 
-    @State private var isRenaming = false
-    @State private var name = ""
+    @State private var draftName = ""
+    @State private var renameError: String?
+    @State private var isSavingName = false
+    @State private var isCancellingName = false
+    @FocusState private var isNameFocused: Bool
 
     var body: some View {
         HStack(spacing: 12) {
+            Image(systemName: "line.3.horizontal")
+                .foregroundStyle(.tertiary)
+                .accessibilityLabel(
+                    "Drag to reorder \(state.account.displayName)",
+                )
+
             VStack(alignment: .leading, spacing: 3) {
                 if isRenaming {
-                    TextField("Account name", text: $name)
-                        .onSubmit {
-                            saveName()
+                    TextField(
+                        "Account name",
+                        text: $draftName,
+                    )
+                    .focused($isNameFocused)
+                    .onSubmit {
+                        saveName()
+                    }
+                    .onExitCommand {
+                        cancelName()
+                    }
+                    .onAppear {
+                        Task { @MainActor in
+                            isNameFocused = true
                         }
+                    }
                 } else {
-                    Text(state.account.displayName)
-                        .fontWeight(.medium)
+                    Button(action: beginRename) {
+                        Text(state.account.displayName)
+                            .fontWeight(.medium)
+                    }
+                    .buttonStyle(.plain)
+                    .contentShape(Rectangle())
+                    .accessibilityLabel(
+                        "Rename \(state.account.displayName)",
+                    )
+                    .accessibilityAction(
+                        named: "Rename",
+                        beginRename,
+                    )
+                }
+
+                if let renameError {
+                    Text(renameError)
+                        .font(.caption2)
+                        .foregroundStyle(.red)
                 }
 
                 if let identity =
@@ -202,34 +337,43 @@ private struct AccountSettingsRow: View {
             Spacer()
 
             if isRenaming {
+                if isSavingName {
+                    ProgressView()
+                        .controlSize(.small)
+                }
                 Button("Save") {
                     saveName()
                 }
+                .disabled(isSavingName)
                 Button("Cancel") {
-                    isRenaming = false
+                    cancelName()
                 }
+                .disabled(isSavingName)
             } else {
-                Button {
-                    onMove(-1)
-                } label: {
-                    Image(systemName: "chevron.up")
+                if AccountRowPresentation
+                    .showsReconnectAction(for: state.error)
+                {
+                    Button(
+                        "Reconnect",
+                        action: onReconnect,
+                    )
+                    .buttonStyle(.bordered)
                 }
-                .disabled(!canMoveUp)
-
-                Button {
-                    onMove(1)
-                } label: {
-                    Image(systemName: "chevron.down")
-                }
-                .disabled(!canMoveDown)
 
                 Menu {
                     Button("Refresh", action: onRefresh)
                     Button("Reconnect", action: onReconnect)
                     Button("Rename") {
-                        name = state.account.displayName
-                        isRenaming = true
+                        beginRename()
                     }
+                    Button("Move Up") {
+                        onMove(-1)
+                    }
+                    .disabled(!canMoveUp)
+                    Button("Move Down") {
+                        onMove(1)
+                    }
+                    .disabled(!canMoveDown)
                     Divider()
                     Button(
                         "Remove",
@@ -240,9 +384,30 @@ private struct AccountSettingsRow: View {
                     Image(systemName: "ellipsis.circle")
                 }
                 .menuStyle(.borderlessButton)
+                .accessibilityLabel(
+                    "Actions for \(state.account.displayName)",
+                )
             }
         }
         .padding(.vertical, 4)
+        .onChange(of: isNameFocused) {
+            wasFocused,
+            isFocused in
+            if
+                wasFocused,
+                !isFocused
+            {
+                if isCancellingName {
+                    isCancellingName = false
+                } else {
+                    saveName()
+                }
+            }
+        }
+    }
+
+    private var isRenaming: Bool {
+        editingAccountID == state.id
     }
 
     @ViewBuilder
@@ -265,14 +430,61 @@ private struct AccountSettingsRow: View {
         }
     }
 
+    private func beginRename() {
+        draftName = state.account.displayName
+        renameError = nil
+        isCancellingName = false
+        editingAccountID = state.id
+    }
+
+    private func cancelName() {
+        var edit = AccountNameEdit(
+            originalName: state.account.displayName,
+            draftName: draftName,
+        )
+        edit.cancel()
+        draftName = edit.draftName
+        renameError = nil
+        isCancellingName = true
+        if editingAccountID == state.id {
+            editingAccountID = nil
+        }
+        isNameFocused = false
+    }
+
     private func saveName() {
+        guard !isSavingName else {
+            return
+        }
+        let edit = AccountNameEdit(
+            originalName: state.account.displayName,
+            draftName: draftName,
+        )
+        guard case let .save(displayName) =
+            edit.saveDecision
+        else {
+            renameError = "Enter an account name."
+            editingAccountID = state.id
+            isNameFocused = true
+            return
+        }
+
+        isSavingName = true
+        renameError = nil
         Task {
             do {
-                try await onRename(name)
-                isRenaming = false
+                try await onRename(displayName)
+                draftName = displayName
+                if editingAccountID == state.id {
+                    editingAccountID = nil
+                }
             } catch {
-                return
+                renameError =
+                    "The account name couldn't be saved."
+                editingAccountID = state.id
+                isNameFocused = true
             }
+            isSavingName = false
         }
     }
 }
