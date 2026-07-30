@@ -1,6 +1,25 @@
 import SwiftUI
 import WebKit
 
+struct ClaudeConnectionGuidance {
+    enum SignInMethod {
+        case email
+    }
+
+    let allowsGoogleSignIn: Bool
+    let recommendedSignInMethod: SignInMethod
+
+    static let embeddedBrowser =
+        ClaudeConnectionGuidance(
+            allowsGoogleSignIn: false,
+            recommendedSignInMethod: .email,
+        )
+
+    var message: String {
+        "Use email sign-in here. Continue with Google won't work in this isolated browser."
+    }
+}
+
 public struct ClaudeConnectionView: View {
     private let model: ClaudeConnectionModel
     private let onComplete: () -> Void
@@ -81,6 +100,28 @@ public struct ClaudeConnectionView: View {
             .multilineTextAlignment(.center)
             .foregroundStyle(.secondary)
             .frame(maxWidth: 440)
+
+            Label {
+                Text(
+                    ClaudeConnectionGuidance
+                        .embeddedBrowser.message,
+                )
+                .multilineTextAlignment(.leading)
+            } icon: {
+                Image(
+                    systemName:
+                        "exclamationmark.triangle",
+                )
+            }
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .padding(10)
+            .frame(maxWidth: 440)
+            .background(
+                Color.secondary.opacity(0.08),
+                in: RoundedRectangle(cornerRadius: 10),
+            )
+
             Button("Continue") {
                 Task {
                     await model.start()

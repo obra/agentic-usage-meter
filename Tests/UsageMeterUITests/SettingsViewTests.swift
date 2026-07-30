@@ -92,6 +92,60 @@ func reconnectPresentationCarriesTheSelectedAccount() {
 }
 
 @Test
+func addAccountProviderSelectionCanChangeProviders() {
+    var selection = AccountProviderSelection(
+        route: .add,
+    )
+
+    selection.select(.kimi)
+
+    #expect(selection.provider == .kimi)
+}
+
+@Test
+func reconnectProviderSelectionRemainsLocked() {
+    let account = SubscriptionAccount(
+        provider: .codex,
+        displayName: "Work",
+        displayOrder: 0,
+    )
+    var selection = AccountProviderSelection(
+        route: .reconnect(account),
+    )
+
+    selection.select(.claude)
+
+    #expect(selection.provider == .codex)
+}
+
+@Test
+func providerChoicesMapSubscriptionsToTheirOwnLabels() {
+    #expect(
+        ProviderPresentation(.claude).title
+            == "Claude",
+    )
+    #expect(
+        ProviderPresentation(.codex).title
+            == "Codex",
+    )
+    #expect(
+        ProviderPresentation(.kimi).title
+            == "Kimi",
+    )
+}
+
+@Test
+func claudeEmbeddedBrowserGuidanceRequiresEmailSignIn() {
+    let guidance =
+        ClaudeConnectionGuidance.embeddedBrowser
+
+    #expect(!guidance.allowsGoogleSignIn)
+    #expect(
+        guidance.recommendedSignInMethod == .email,
+    )
+}
+
+@Test
 func completingAccountConnectionStartsFreshProviderModels() {
     let firstAttemptID = UUID(
         uuidString: "11111111-1111-1111-1111-111111111111",

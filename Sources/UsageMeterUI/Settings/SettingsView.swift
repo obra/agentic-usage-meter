@@ -36,6 +36,46 @@ enum AccountSheetRoute: Identifiable {
     }
 }
 
+struct AccountProviderSelection {
+    private(set) var provider: Provider
+    private let isLocked: Bool
+
+    init(route: AccountSheetRoute) {
+        provider = route.provider
+        isLocked = route.isProviderLocked
+    }
+
+    mutating func select(_ provider: Provider) {
+        guard !isLocked else {
+            return
+        }
+        self.provider = provider
+    }
+}
+
+struct ProviderPresentation {
+    let title: String
+    let detail: String
+    let systemImage: String
+
+    init(_ provider: Provider) {
+        switch provider {
+        case .claude:
+            title = "Claude"
+            detail = "Isolated browser session"
+            systemImage = "globe"
+        case .codex:
+            title = "Codex"
+            detail = "ChatGPT OAuth in your browser"
+            systemImage = "terminal"
+        case .kimi:
+            title = "Kimi"
+            detail = "Device authorization"
+            systemImage = "moon.stars"
+        }
+    }
+}
+
 struct AccountConnectionFormState {
     struct ViewID: Hashable {
         let attemptID: UUID
@@ -125,29 +165,30 @@ public struct SettingsView: View {
     }
 
     public var body: some View {
-        NavigationStack {
-            AccountListView(
-                model: model,
-                onAdd: {
+        AccountListView(
+            model: model,
+            onAdd: {
+                presentation.presentAddAccount()
+            },
+            onReconnect: { account in
+                presentation.presentReconnect(account)
+            },
+        )
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("Accounts")
+                    .font(.headline)
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button {
                     presentation.presentAddAccount()
-                },
-                onReconnect: { account in
-                    presentation.presentReconnect(account)
-                },
-            )
-            .navigationTitle("Accounts")
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        presentation.presentAddAccount()
-                    } label: {
-                        Label(
-                            "Add Account",
-                            systemImage: "plus",
-                        )
-                    }
-                    .buttonStyle(.borderedProminent)
+                } label: {
+                    Label(
+                        "Add Account",
+                        systemImage: "plus",
+                    )
                 }
+                .buttonStyle(.borderedProminent)
             }
         }
         .sheet(item: $presentation.sheetRoute) { route in
@@ -179,7 +220,8 @@ private struct AddAccountView: View {
     let route: AccountSheetRoute
     let onComplete: () -> Void
 
-    @State private var selectedProvider: Provider
+    @State private var providerSelection:
+        AccountProviderSelection
     @State private var claude: ClaudeConnectionModel
     @State private var codex: CodexConnectionModel
     @State private var kimi: KimiConnectionModel
@@ -196,7 +238,11 @@ private struct AddAccountView: View {
         let provider = route.provider
         let reconnectingAccount =
             route.reconnectingAccount
-        _selectedProvider = State(initialValue: provider)
+        _providerSelection = State(
+            initialValue: AccountProviderSelection(
+                route: route,
+            ),
+        )
         _claude = State(
             initialValue: ClaudeConnectionModel(
                 appModel: model,
@@ -229,19 +275,19 @@ private struct AddAccountView: View {
     var body: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 18) {
-                Picker(
-                    "Provider",
-                    selection: $selectedProvider,
-                ) {
-                    Text("Claude").tag(Provider.claude)
-                    Text("Codex").tag(Provider.codex)
-                    Text("Kimi").tag(Provider.kimi)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(sheetTitle)
+                        .font(.title2.weight(.semibold))
+                    Text(sheetDetail)
+                        .foregroundStyle(.secondary)
                 }
-                .pickerStyle(.segmented)
-                .disabled(route.isProviderLocked)
+
+                providerSelector
+
+                Divider()
 
                 Group {
-                    switch selectedProvider {
+                    switch providerSelection.provider {
                     case .claude:
                         ClaudeConnectionView(
                             model: claude,
@@ -277,11 +323,6 @@ private struct AddAccountView: View {
                 )
             }
             .padding(24)
-            .navigationTitle(
-                route.reconnectingAccount == nil
-                    ? "Add an account"
-                    : "Reconnect account",
-            )
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
@@ -296,5 +337,109 @@ private struct AddAccountView: View {
     private func complete() {
         onComplete()
         dismiss()
+    }
+
+    private var sheetTitle: String {
+        if let account = route.reconnectingAccount {
+            return "Reconnect \(account.displayName)"
+        }
+        return "Add an account"
+    }
+
+    private var sheetDetail: String {
+        if route.isProviderLocked {
+            return
+                "Sign in again to restore usage updates for this account."
+        }
+        return
+            "Choose the subscription provider you want to track."
+    }
+
+    @ViewBuilder
+    private var providerSelector: some View {
+        if route.isProviderLocked {
+            providerCard(
+                providerSelection.provider,
+                isSelected: true,
+                action: {},
+            )
+            .disabled(true)
+        } else {
+            HStack(spacing: 12) {
+                ForEach(Provider.allCases, id: \.self) {
+                    provider in
+                    providerCard(
+                        provider,
+                        isSelected:
+                            providerSelection.provider == provider,
+                        action: {
+                            providerSelection.select(provider)
+                        },
+                    )
+                }
+            }
+        }
+    }
+
+    private func providerCard(
+        _ provider: Provider,
+        isSelected: Bool,
+        action: @escaping () -> Void,
+    ) -> some View {
+        let presentation = ProviderPresentation(provider)
+        return Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: presentation.systemImage)
+                    .font(.title2)
+                    .foregroundStyle(
+                        isSelected
+                            ? Color.accentColor
+                            : Color.secondary,
+                    )
+                    .frame(width: 28)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(presentation.title)
+                        .fontWeight(.semibold)
+                    Text(presentation.detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+
+                Spacer(minLength: 0)
+            }
+            .padding(14)
+            .frame(
+                maxWidth: .infinity,
+                minHeight: 76,
+                alignment: .leading,
+            )
+            .contentShape(Rectangle())
+            .background {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(
+                        isSelected
+                            ? Color.accentColor.opacity(0.12)
+                            : Color.secondary.opacity(0.06),
+                    )
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(
+                        isSelected
+                            ? Color.accentColor
+                            : Color.secondary.opacity(0.22),
+                        lineWidth: isSelected ? 2 : 1,
+                    )
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(
+            "\(presentation.title), \(presentation.detail)",
+        )
+        .accessibilityAddTraits(
+            isSelected ? .isSelected : [],
+        )
     }
 }
