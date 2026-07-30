@@ -1,5 +1,35 @@
+import Foundation
 import SwiftUI
 import UsageMeterCore
+
+struct AccountConnectionFormState {
+    struct ViewID: Hashable {
+        let attemptID: UUID
+        let reconnectingAccountID: UUID?
+    }
+
+    private(set) var attemptID: UUID
+
+    init(attemptID: UUID = UUID()) {
+        self.attemptID = attemptID
+    }
+
+    mutating func accountDidConnect(
+        nextAttemptID: UUID = UUID(),
+    ) {
+        attemptID = nextAttemptID
+    }
+
+    func viewID(
+        reconnectingAccountID: UUID?,
+    ) -> ViewID {
+        ViewID(
+            attemptID: attemptID,
+            reconnectingAccountID:
+            reconnectingAccountID,
+        )
+    }
+}
 
 public struct SettingsView: View {
     private enum Tab: Hashable {
@@ -11,6 +41,8 @@ public struct SettingsView: View {
     @State private var selectedTab = Tab.accounts
     @State private var reconnectingAccount:
         SubscriptionAccount?
+    @State private var connectionForm =
+        AccountConnectionFormState()
 
     public init(model: AppModel) {
         self.model = model
@@ -34,11 +66,17 @@ public struct SettingsView: View {
                 model: model,
                 reconnectingAccount: reconnectingAccount,
                 onComplete: {
+                    connectionForm.accountDidConnect()
                     reconnectingAccount = nil
                     selectedTab = .accounts
                 },
             )
-            .id(reconnectingAccount?.id)
+            .id(
+                connectionForm.viewID(
+                    reconnectingAccountID:
+                    reconnectingAccount?.id,
+                ),
+            )
             .tabItem {
                 Label(
                     reconnectingAccount == nil
