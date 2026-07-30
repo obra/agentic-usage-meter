@@ -1,7 +1,9 @@
 # Provider Expansion Design
 
-**Date:** 2026-07-30  
-**Status:** Approved; implementation planning pending  
+**Date:** 2026-07-30
+
+**Status:** Approved; implementation planning pending
+
 **Target:** Provider architecture, account connection, refresh, diagnostics,
 and account dashboards
 
