@@ -632,20 +632,23 @@ Run:
 
 ```bash
 ./Scripts/assemble-app.sh
-./Scripts/verify-release.sh
-codesign --verify --deep --strict .build/AgenticUsageMeter.app
+codesign --force --deep --sign - "build/Agentic Usage Meter.app"
+codesign --verify --deep --strict --verbose=2 \
+  "build/Agentic Usage Meter.app"
 ```
 
-Expected: the app assembles and release/signature verification succeeds.
+Expected: the app assembles and local ad-hoc signature verification succeeds.
+`Scripts/verify-release.sh` remains the separate gate for a real Developer ID
+signed, notarized, and stapled distribution artifact.
 
 ### Step 4: Relaunch the assembled app
 
 Resolve the exact running process for
-`.build/AgenticUsageMeter.app/Contents/MacOS/AgenticUsageMeter`, terminate only
-that process if present, and open the rebuilt bundle:
+`build/Agentic Usage Meter.app/Contents/MacOS/AgenticUsageMeter`, terminate
+only that process if present, and open the rebuilt bundle:
 
 ```bash
-open .build/AgenticUsageMeter.app
+open "build/Agentic Usage Meter.app"
 ```
 
 ### Step 5: Perform live account-management acceptance
