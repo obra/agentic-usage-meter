@@ -4,28 +4,48 @@ import UsageMeterCore
 
 @main
 enum UsageMeterProbe {
-    static func main() async {
-        guard
-            CommandLine.arguments.count == 2,
-            let provider = Provider(rawValue: CommandLine.arguments[1])
-        else {
-            writeError("usage: UsageMeterProbe <claude|codex|kimi>")
-            Darwin.exit(EX_USAGE)
-        }
+    private static let credentialStore = KeychainCredentialStore(
+        service: "com.jesse.agentic-usage-meter.probe.credentials"
+    )
 
+    static func main() async {
         do {
-            switch provider {
+            let command = try UsageMeterProbeCommand.parse(
+                arguments: CommandLine.arguments
+            )
+            switch command {
             case .claude:
                 try await runClaude()
-            case .codex, .kimi:
+            case let .codexLogin(accountID):
+                try await runCodexLogin(accountID: accountID)
+            case let .codexFetch(accountID):
+                try await runCodexFetch(accountID: accountID)
+            case let .codexRefresh(accountID):
+                try await runCodexRefresh(accountID: accountID)
+            case let .codexDelete(accountID):
+                try await credentialStore.delete(for: accountID)
+            case .kimi:
                 writeError(
-                    "\(provider.rawValue) qualification is not implemented in this build."
+                    "kimi qualification is not implemented in this build."
                 )
                 Darwin.exit(EX_UNAVAILABLE)
             }
+        } catch UsageMeterProbeCommandError.invalidArguments {
+            writeError(
+                """
+                usage:
+                  UsageMeterProbe claude
+                  UsageMeterProbe codex-login <account-uuid>
+                  UsageMeterProbe codex-fetch <account-uuid>
+                  UsageMeterProbe codex-refresh <account-uuid>
+                  UsageMeterProbe codex-delete <account-uuid>
+                  UsageMeterProbe kimi
+                """
+            )
+            Darwin.exit(EX_USAGE)
         } catch {
             writeError(
-                "\(provider.rawValue) qualification failed: \(safeDescription(of: error))"
+                "qualification failed: \(safeDescription(of: error))"
             )
             Darwin.exit(EX_UNAVAILABLE)
         }
@@ -54,6 +74,113 @@ enum UsageMeterProbe {
             identity: nil,
             snapshot: snapshot
         )
+        try write(output)
+    }
+
+    private static func runCodexLogin(accountID: UUID) async throws {
+        let result = try await CodexOAuthFlow().authenticate()
+        guard
+            let providerAccountID = result.credential.accountID,
+            !providerAccountID.isEmpty
+        else {
+            throw CodexOAuthFlowError.invalidTokenResponse
+        }
+
+        let identity = displayIdentity(result.identity)
+        writePrompt(
+            "Authenticated Codex account: \(identity). Save and fetch usage? [y/N] "
+        )
+        guard readLine()?.lowercased() == "y" else {
+            writeError("Codex account was not saved.")
+            return
+        }
+
+        try await credentialStore.save(
+            .codex(result.credential),
+            for: accountID
+        )
+        try await fetchCodexUsage(
+            accountID: accountID,
+            credential: result.credential,
+            identity: identity
+        )
+    }
+
+    private static func runCodexFetch(accountID: UUID) async throws {
+        let result = try await storedCodexResult(accountID: accountID)
+        try await fetchCodexUsage(
+            accountID: accountID,
+            credential: result.credential,
+            identity: displayIdentity(result.identity)
+        )
+    }
+
+    private static func runCodexRefresh(accountID: UUID) async throws {
+        let current = try await storedCodexResult(accountID: accountID)
+        let refreshed = try await CodexOAuthFlow().refresh(current)
+        try await credentialStore.save(
+            .codex(refreshed.credential),
+            for: accountID
+        )
+        try await fetchCodexUsage(
+            accountID: accountID,
+            credential: refreshed.credential,
+            identity: displayIdentity(refreshed.identity)
+        )
+    }
+
+    private static func storedCodexResult(
+        accountID: UUID
+    ) async throws -> CodexOAuthResult {
+        guard
+            let stored = try await credentialStore.load(for: accountID),
+            case let .codex(credential) = stored,
+            let idToken = credential.idToken
+        else {
+            throw CodexOAuthFlowError.reauthenticationRequired
+        }
+
+        return CodexOAuthResult(
+            credential: credential,
+            identity: try CodexOAuthIdentity.decode(from: idToken)
+        )
+    }
+
+    private static func fetchCodexUsage(
+        accountID: UUID,
+        credential: OAuthCredential,
+        identity: String
+    ) async throws {
+        let snapshot = try await CodexUsageClient().fetchUsage(
+            accountID: accountID,
+            credential: .codex(credential),
+            now: Date()
+        )
+        try write(
+            ProbeOutput(
+                provider: .codex,
+                identity: identity,
+                snapshot: snapshot
+            )
+        )
+    }
+
+    private static func displayIdentity(
+        _ identity: CodexOAuthIdentity
+    ) -> String {
+        switch (identity.email, identity.plan) {
+        case let (email?, plan?):
+            "\(email) (\(plan))"
+        case let (email?, nil):
+            email
+        case let (nil, plan?):
+            "\(plan) account"
+        case (nil, nil):
+            "unknown account"
+        }
+    }
+
+    private static func write(_ output: ProbeOutput) throws {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -63,11 +190,15 @@ enum UsageMeterProbe {
     }
 
     private static func safeDescription(of error: any Error) -> String {
-        guard let error = error as? ProviderClientError else {
-            return "transport failure"
+        if let error = error as? CodexOAuthFlowError {
+            return error.description
         }
 
-        switch error {
+        guard let providerError = error as? ProviderClientError else {
+            return "credential or transport failure"
+        }
+
+        switch providerError {
         case .credentialMismatch:
             return "credential mismatch"
         case .unsupportedResponse:
@@ -86,5 +217,9 @@ enum UsageMeterProbe {
 
     private static func writeError(_ message: String) {
         FileHandle.standardError.write(Data("\(message)\n".utf8))
+    }
+
+    private static func writePrompt(_ message: String) {
+        FileHandle.standardError.write(Data(message.utf8))
     }
 }

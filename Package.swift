@@ -44,6 +44,10 @@ let package = Package(
         .testTarget(
             name: "ClaudeWebProbeTests",
             dependencies: ["ClaudeWebProbe", "UsageMeterCore"]
+        ),
+        .testTarget(
+            name: "UsageMeterProbeTests",
+            dependencies: ["UsageMeterProbe", "UsageMeterCore"]
         )
     ],
     swiftLanguageModes: [.v6]
