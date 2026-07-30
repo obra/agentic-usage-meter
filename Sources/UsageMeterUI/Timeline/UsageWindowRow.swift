@@ -9,9 +9,14 @@ public struct UsageWindowRow: View {
     static let rowHeight: CGFloat = 29
 
     private let row: UsageTimelineRowPresentation
+    private let onOpenDashboard: (() -> Void)?
 
-    public init(row: UsageTimelineRowPresentation) {
+    public init(
+        row: UsageTimelineRowPresentation,
+        onOpenDashboard: (() -> Void)? = nil
+    ) {
         self.row = row
+        self.onOpenDashboard = onOpenDashboard
     }
 
     public var body: some View {
@@ -108,6 +113,10 @@ public struct UsageWindowRow: View {
         .help("Resets \(presentation.exactResetText)")
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(presentation.accessibilityValue)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onOpenDashboard?()
+        }
     }
 }
 

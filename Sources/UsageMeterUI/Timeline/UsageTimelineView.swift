@@ -5,15 +5,18 @@ public struct UsageTimelineView: View {
     private let accounts: [AccountViewState]
     private let now: Date
     private let timeZone: TimeZone
+    private let onOpenAccount: ((AccountViewState) -> Void)?
 
     public init(
         accounts: [AccountViewState],
         now: Date = Date(),
         timeZone: TimeZone = .autoupdatingCurrent,
+        onOpenAccount: ((AccountViewState) -> Void)? = nil,
     ) {
         self.accounts = accounts
         self.now = now
         self.timeZone = timeZone
+        self.onOpenAccount = onOpenAccount
     }
 
     public var body: some View {
@@ -70,7 +73,13 @@ public struct UsageTimelineView: View {
             }
 
             ForEach(section.rows) {
-                UsageWindowRow(row: $0)
+                let row = $0
+                UsageWindowRow(
+                    row: row,
+                    onOpenDashboard: {
+                        openAccount(id: row.account.id)
+                    }
+                )
             }
         }
     }
@@ -124,8 +133,24 @@ public struct UsageTimelineView: View {
                 }
                 .frame(height: UsageWindowRow.rowHeight)
                 .accessibilityElement(children: .combine)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    openAccount(id: row.account.id)
+                }
             }
         }
+    }
+
+    private func openAccount(id: UUID) {
+        guard
+            let onOpenAccount,
+            let account = accounts.first(where: {
+                $0.id == id
+            })
+        else {
+            return
+        }
+        onOpenAccount(account)
     }
 }
 

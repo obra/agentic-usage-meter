@@ -86,6 +86,7 @@ public struct AccountListView: View {
     private let model: AppModel
     private let onAdd: () -> Void
     private let onReconnect: (SubscriptionAccount) -> Void
+    private let onOpenDashboard: (AccountViewState) -> Void
     @State private var pendingRemoval: SubscriptionAccount?
     @State private var editingAccountID: UUID?
 
@@ -93,10 +94,12 @@ public struct AccountListView: View {
         model: AppModel,
         onAdd: @escaping () -> Void,
         onReconnect: @escaping (SubscriptionAccount) -> Void,
+        onOpenDashboard: @escaping (AccountViewState) -> Void,
     ) {
         self.model = model
         self.onAdd = onAdd
         self.onReconnect = onReconnect
+        self.onOpenDashboard = onOpenDashboard
     }
 
     public var body: some View {
@@ -139,6 +142,9 @@ public struct AccountListView: View {
                                 },
                                 onRemove: {
                                     pendingRemoval = state.account
+                                },
+                                onOpenDashboard: {
+                                    onOpenDashboard(state)
                                 },
                             )
                         }
@@ -267,6 +273,7 @@ private struct AccountSettingsRow: View {
     let onMove: (Int) -> Void
     let onRename: (String) async throws -> Void
     let onRemove: () -> Void
+    let onOpenDashboard: () -> Void
 
     @State private var draftName = ""
     @State private var renameError: String?
@@ -275,119 +282,130 @@ private struct AccountSettingsRow: View {
     @FocusState private var isNameFocused: Bool
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "line.3.horizontal")
-                .foregroundStyle(.tertiary)
-                .accessibilityLabel(
-                    "Drag to reorder \(state.account.displayName)",
-                )
-
-            VStack(alignment: .leading, spacing: 3) {
-                if isRenaming {
-                    TextField(
-                        "Account name",
-                        text: $draftName,
-                    )
-                    .focused($isNameFocused)
-                    .onSubmit {
-                        saveName()
-                    }
-                    .onExitCommand {
-                        cancelName()
-                    }
-                    .onAppear {
-                        Task { @MainActor in
-                            isNameFocused = true
-                        }
-                    }
-                } else {
-                    Button(action: beginRename) {
-                        Text(state.account.displayName)
-                            .fontWeight(.medium)
-                    }
-                    .buttonStyle(.plain)
+        ZStack {
+            Button(action: onOpenDashboard) {
+                Color.clear
                     .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(
+                "Open \(state.account.displayName) dashboard"
+            )
+
+            HStack(spacing: 12) {
+                Image(systemName: "line.3.horizontal")
+                    .foregroundStyle(.tertiary)
                     .accessibilityLabel(
-                        "Rename \(state.account.displayName)",
+                        "Drag to reorder \(state.account.displayName)",
                     )
-                    .accessibilityAction(
-                        named: "Rename",
-                        beginRename,
-                    )
-                }
 
-                if let renameError {
-                    Text(renameError)
+                VStack(alignment: .leading, spacing: 3) {
+                    if isRenaming {
+                        TextField(
+                            "Account name",
+                            text: $draftName,
+                        )
+                        .focused($isNameFocused)
+                        .onSubmit {
+                            saveName()
+                        }
+                        .onExitCommand {
+                            cancelName()
+                        }
+                        .onAppear {
+                            Task { @MainActor in
+                                isNameFocused = true
+                            }
+                        }
+                    } else {
+                        Button(action: beginRename) {
+                            Text(state.account.displayName)
+                                .fontWeight(.medium)
+                        }
+                        .buttonStyle(.plain)
+                        .contentShape(Rectangle())
+                        .accessibilityLabel(
+                            "Rename \(state.account.displayName)",
+                        )
+                        .accessibilityAction(
+                            named: "Rename",
+                            beginRename,
+                        )
+                    }
+
+                    if let renameError {
+                        Text(renameError)
+                            .font(.caption2)
+                            .foregroundStyle(.red)
+                    }
+
+                    if let identity =
+                        state.account.authenticatedIdentity
+                    {
+                        Text(identity)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    statusText
                         .font(.caption2)
-                        .foregroundStyle(.red)
-                }
-
-                if let identity =
-                    state.account.authenticatedIdentity
-                {
-                    Text(identity)
-                        .font(.caption)
                         .foregroundStyle(.secondary)
                 }
 
-                statusText
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
+                Spacer()
 
-            Spacer()
+                if isRenaming {
+                    if isSavingName {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+                    Button("Save") {
+                        saveName()
+                    }
+                    .disabled(isSavingName)
+                    Button("Cancel") {
+                        cancelName()
+                    }
+                    .disabled(isSavingName)
+                } else {
+                    if AccountRowPresentation
+                        .showsReconnectAction(for: state.error)
+                    {
+                        Button(
+                            "Reconnect",
+                            action: onReconnect,
+                        )
+                        .buttonStyle(.bordered)
+                    }
 
-            if isRenaming {
-                if isSavingName {
-                    ProgressView()
-                        .controlSize(.small)
-                }
-                Button("Save") {
-                    saveName()
-                }
-                .disabled(isSavingName)
-                Button("Cancel") {
-                    cancelName()
-                }
-                .disabled(isSavingName)
-            } else {
-                if AccountRowPresentation
-                    .showsReconnectAction(for: state.error)
-                {
-                    Button(
-                        "Reconnect",
-                        action: onReconnect,
+                    Menu {
+                        Button("Refresh", action: onRefresh)
+                        Button("Reconnect", action: onReconnect)
+                        Button("Rename") {
+                            beginRename()
+                        }
+                        Button("Move Up") {
+                            onMove(-1)
+                        }
+                        .disabled(!canMoveUp)
+                        Button("Move Down") {
+                            onMove(1)
+                        }
+                        .disabled(!canMoveDown)
+                        Divider()
+                        Button(
+                            "Remove",
+                            role: .destructive,
+                            action: onRemove,
+                        )
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                    .menuStyle(.borderlessButton)
+                    .accessibilityLabel(
+                        "Actions for \(state.account.displayName)",
                     )
-                    .buttonStyle(.bordered)
                 }
-
-                Menu {
-                    Button("Refresh", action: onRefresh)
-                    Button("Reconnect", action: onReconnect)
-                    Button("Rename") {
-                        beginRename()
-                    }
-                    Button("Move Up") {
-                        onMove(-1)
-                    }
-                    .disabled(!canMoveUp)
-                    Button("Move Down") {
-                        onMove(1)
-                    }
-                    .disabled(!canMoveDown)
-                    Divider()
-                    Button(
-                        "Remove",
-                        role: .destructive,
-                        action: onRemove,
-                    )
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                }
-                .menuStyle(.borderlessButton)
-                .accessibilityLabel(
-                    "Actions for \(state.account.displayName)",
-                )
             }
         }
         .padding(.vertical, 4)

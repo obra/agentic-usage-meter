@@ -41,4 +41,21 @@ struct SettingsWindowPresenterTests {
 
         #expect(policies == [.regular, .accessory])
     }
+
+    @Test
+    func appStaysRegularUntilEveryManagedWindowCloses() {
+        var policies: [NSApplication.ActivationPolicy] = []
+        let activation = SettingsWindowActivation(
+            setActivationPolicy: {
+                policies.append($0)
+            },
+        )
+
+        activation.regularWindowDidAppear()
+        activation.regularWindowDidAppear()
+        activation.regularWindowDidDisappear()
+        activation.regularWindowDidDisappear()
+
+        #expect(policies == [.regular, .accessory])
+    }
 }

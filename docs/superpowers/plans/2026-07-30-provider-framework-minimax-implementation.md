@@ -1303,7 +1303,7 @@ manual-all, and macOS wake demand.
 - Produces: `AccountWebProfileStore`, `AccountDashboardPresenter.open(_:)`,
   native/embedded dashboard views, and row-background dashboard actions.
 
-- [ ] **Step 1: Write failing shared WebKit profile tests**
+- [x] **Step 1: Write failing shared WebKit profile tests**
 
 Add a `UsageMeterWebTests` target and:
 
@@ -1328,7 +1328,7 @@ func accountStoresRemainIndependentWhenOneIsRemoved() async throws {
 
 The break caught is shared cookies or deletion of a sibling account profile.
 
-- [ ] **Step 2: Run tests and verify RED**
+- [x] **Step 2: Run tests and verify RED**
 
 ```bash
 swift test --filter AccountWebProfileStoreTests
@@ -1336,7 +1336,7 @@ swift test --filter AccountWebProfileStoreTests
 
 Expected: the target and type do not exist.
 
-- [ ] **Step 3: Extract the shared profile store**
+- [x] **Step 3: Extract the shared profile store**
 
 Add `UsageMeterWeb` and `UsageMeterWebTests` targets. Move the current
 identifier construction and asynchronous-release wait to:
@@ -1379,7 +1379,7 @@ private enum AccountWebProfileStoreError: Error {
 Make `ClaudeWebProfileStore` a wrapper that passes its existing `profileID` as
 `accountID`. Keep all Claude tests green.
 
-- [ ] **Step 4: Write failing dashboard routing tests**
+- [x] **Step 4: Write failing dashboard routing tests**
 
 Define:
 
@@ -1443,7 +1443,7 @@ Add interaction tests proving name click returns `.rename`, explicit control
 clicks return their control action, and a background click returns
 `.openDashboard`.
 
-- [ ] **Step 5: Implement dashboard windows and row action**
+- [x] **Step 5: Implement dashboard windows and row action**
 
 `AccountDashboardPresenter` owns `[UUID: NSWindowController]`, reuses an
 existing window for repeated opens, and builds:
@@ -1462,7 +1462,7 @@ Settings/dashboard windows. Set `.regular` when the count changes from zero to
 one and `.accessory` when it changes from one to zero, keeping the app in
 Cmd-Tab while any regular window is open.
 
-- [ ] **Step 6: Run focused and full tests and verify GREEN**
+- [x] **Step 6: Run focused and full tests and verify GREEN**
 
 ```bash
 swift test --filter AccountWebProfileStoreTests

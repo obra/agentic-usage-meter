@@ -49,7 +49,12 @@ public struct FloatingWidgetView: View {
     }
 
     private var timeline: some View {
-        UsageTimelineView(accounts: model.accounts)
+        UsageTimelineView(
+            accounts: model.accounts,
+            onOpenAccount: {
+                AccountDashboardPresenter.shared.open($0)
+            }
+        )
             .padding(14)
     }
 

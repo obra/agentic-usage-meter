@@ -154,12 +154,15 @@ public struct SettingsView: View {
     private let model: AppModel
     private let windowActivation:
         SettingsWindowActivation
+    private let dashboardPresenter:
+        AccountDashboardPresenter
     @State private var presentation =
         AccountManagementPresentation()
 
     public init(model: AppModel) {
         self.model = model
-        windowActivation = SettingsWindowActivation()
+        windowActivation = .shared
+        dashboardPresenter = .shared
     }
 
     public var body: some View {
@@ -170,6 +173,9 @@ public struct SettingsView: View {
             },
             onReconnect: { account in
                 presentation.presentReconnect(account)
+            },
+            onOpenDashboard: { state in
+                dashboardPresenter.open(state)
             },
         )
         .toolbar {

@@ -1,9 +1,12 @@
 import AppKit
 
 @MainActor
-struct SettingsWindowActivation {
+final class SettingsWindowActivation {
+    static let shared = SettingsWindowActivation()
+
     private let setActivationPolicy:
         @MainActor (NSApplication.ActivationPolicy) -> Void
+    private var visibleWindowCount = 0
 
     init(
         setActivationPolicy:
@@ -17,11 +20,28 @@ struct SettingsWindowActivation {
     }
 
     func settingsDidAppear() {
-        setActivationPolicy(.regular)
+        regularWindowDidAppear()
     }
 
     func settingsDidDisappear() {
-        setActivationPolicy(.accessory)
+        regularWindowDidDisappear()
+    }
+
+    func regularWindowDidAppear() {
+        visibleWindowCount += 1
+        if visibleWindowCount == 1 {
+            setActivationPolicy(.regular)
+        }
+    }
+
+    func regularWindowDidDisappear() {
+        guard visibleWindowCount > 0 else {
+            return
+        }
+        visibleWindowCount -= 1
+        if visibleWindowCount == 0 {
+            setActivationPolicy(.accessory)
+        }
     }
 }
 

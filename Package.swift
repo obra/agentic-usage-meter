@@ -20,15 +20,17 @@ let package = Package(
     ],
     targets: [
         .target(name: "UsageMeterCore"),
+        .target(name: "UsageMeterWeb"),
         .target(
             name: "UsageMeterClaudeWeb",
-            dependencies: ["UsageMeterCore"]
+            dependencies: ["UsageMeterCore", "UsageMeterWeb"]
         ),
         .target(
             name: "UsageMeterUI",
             dependencies: [
                 "UsageMeterCore",
-                "UsageMeterClaudeWeb"
+                "UsageMeterClaudeWeb",
+                "UsageMeterWeb"
             ]
         ),
         .executableTarget(
@@ -68,6 +70,10 @@ let package = Package(
         .testTarget(
             name: "UsageMeterUITests",
             dependencies: ["UsageMeterUI", "UsageMeterCore"]
+        ),
+        .testTarget(
+            name: "UsageMeterWebTests",
+            dependencies: ["UsageMeterWeb"]
         )
     ],
     swiftLanguageModes: [.v6]
