@@ -2,6 +2,40 @@ import Foundation
 import SwiftUI
 import UsageMeterCore
 
+enum AccountSheetRoute: Identifiable {
+    case add
+    case reconnect(SubscriptionAccount)
+
+    var id: String {
+        switch self {
+        case .add:
+            "add"
+        case let .reconnect(account):
+            "reconnect-\(account.id.uuidString)"
+        }
+    }
+
+    var provider: Provider {
+        switch self {
+        case .add:
+            .claude
+        case let .reconnect(account):
+            account.provider
+        }
+    }
+
+    var reconnectingAccount: SubscriptionAccount? {
+        guard case let .reconnect(account) = self else {
+            return nil
+        }
+        return account
+    }
+
+    var isProviderLocked: Bool {
+        reconnectingAccount != nil
+    }
+}
+
 struct AccountConnectionFormState {
     struct ViewID: Hashable {
         let attemptID: UUID

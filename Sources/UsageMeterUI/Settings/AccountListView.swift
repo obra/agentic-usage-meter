@@ -1,6 +1,27 @@
 import SwiftUI
 import UsageMeterCore
 
+struct AccountNameEdit {
+    enum SaveDecision: Equatable {
+        case save(String)
+        case invalid
+    }
+
+    let originalName: String
+    var draftName: String
+
+    var saveDecision: SaveDecision {
+        let trimmed = draftName.trimmingCharacters(
+            in: .whitespacesAndNewlines,
+        )
+        return trimmed.isEmpty ? .invalid : .save(trimmed)
+    }
+
+    mutating func cancel() {
+        draftName = originalName
+    }
+}
+
 public struct AccountListView: View {
     private let model: AppModel
     private let onReconnect: (SubscriptionAccount) -> Void
