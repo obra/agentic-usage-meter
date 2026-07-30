@@ -24,6 +24,16 @@ public enum AppModelError: Error, Equatable, Sendable {
     case invalidSnapshot
 }
 
+public struct MenuBarSummary: Equatable, Sendable {
+    public let text: String?
+    public let systemImage: String
+
+    public init(text: String?, systemImage: String) {
+        self.text = text
+        self.systemImage = systemImage
+    }
+}
+
 public struct AccountViewState: Equatable, Identifiable, Sendable {
     public var account: SubscriptionAccount
     public var snapshot: UsageSnapshot?
@@ -36,7 +46,7 @@ public struct AccountViewState: Equatable, Identifiable, Sendable {
         snapshot: UsageSnapshot?,
         error: AccountViewError? = nil,
         nextEligibleAt: Date? = nil,
-        isRefreshing: Bool = false
+        isRefreshing: Bool = false,
     ) {
         self.account = account
         self.snapshot = snapshot
@@ -54,6 +64,9 @@ public struct AccountViewState: Equatable, Identifiable, Sendable {
 @Observable
 public final class AppModel {
     public private(set) var accounts: [AccountViewState] = []
+    public private(set) var isFloatingWidgetVisible = false
+    public private(set) var floatingWidgetPlacement:
+        FloatingWidgetPlacement?
 
     @ObservationIgnored
     private let stateStore: any AppStatePersisting
@@ -72,22 +85,39 @@ public final class AppModel {
         stateStore: any AppStatePersisting,
         credentialStore: any CredentialStore,
         clients: [any UsageProviderClient],
-        now: @escaping @Sendable () -> Date = { Date() }
+        now: @escaping @Sendable () -> Date = { Date() },
     ) {
         self.stateStore = stateStore
         self.credentialStore = credentialStore
         clientsByProvider = Dictionary(
             uniqueKeysWithValues: clients.map {
                 ($0.provider, $0)
-            }
+            },
         )
         self.now = now
+    }
+
+    public var menuBarSummary: MenuBarSummary {
+        let tightest = UsageSummary.tightestWindow(
+            in: accounts.compactMap(\.snapshot),
+        )
+        let text = tightest.map {
+            "\(Int(($0.window.remainingFraction * 100).rounded()))%"
+        }
+        return MenuBarSummary(
+            text: text,
+            systemImage: "gauge.with.needle",
+        )
     }
 
     public func start() async {
         do {
             let loaded = try await stateStore.load()
             persistedState = loaded
+            isFloatingWidgetVisible =
+                loaded.isFloatingWidgetVisible
+            floatingWidgetPlacement =
+                loaded.floatingWidgetPlacement
             accounts = loaded.accounts
                 .sorted(by: accountComesBefore)
                 .map {
@@ -98,11 +128,11 @@ public final class AppModel {
                         loaded.refreshStates[$0.id]?
                             .requiresReauthentication == true
                             ? .authenticationRequired
-                            : nil
+                            : nil,
                     )
                 }
 
-            let now = self.now
+            let now = now
             refreshers = Dictionary(
                 uniqueKeysWithValues: loaded.accounts.map { account in
                     (
@@ -113,10 +143,10 @@ public final class AppModel {
                                 ?? .initial,
                             lastGoodSnapshot:
                             loaded.snapshots[account.id],
-                            now: { now() }
-                        )
+                            now: { now() },
+                        ),
                     )
-                }
+                },
             )
 
             for account in accounts {
@@ -124,6 +154,36 @@ public final class AppModel {
             }
         } catch {
             accounts = []
+        }
+    }
+
+    public func setFloatingWidgetVisible(
+        _ isVisible: Bool,
+    ) async throws {
+        let previous = isFloatingWidgetVisible
+        isFloatingWidgetVisible = isVisible
+        persistedState.isFloatingWidgetVisible = isVisible
+        do {
+            try await stateStore.save(persistedState)
+        } catch {
+            isFloatingWidgetVisible = previous
+            persistedState.isFloatingWidgetVisible = previous
+            throw error
+        }
+    }
+
+    public func setFloatingWidgetPlacement(
+        _ placement: FloatingWidgetPlacement,
+    ) async throws {
+        let previous = floatingWidgetPlacement
+        floatingWidgetPlacement = placement
+        persistedState.floatingWidgetPlacement = placement
+        do {
+            try await stateStore.save(persistedState)
+        } catch {
+            floatingWidgetPlacement = previous
+            persistedState.floatingWidgetPlacement = previous
+            throw error
         }
     }
 
@@ -141,12 +201,12 @@ public final class AppModel {
         }
 
         do {
-            let credentialStore = self.credentialStore
-            let now = self.now
+            let credentialStore = credentialStore
+            let now = now
             let outcome = try await refresher.refresh {
                 guard
                     let credential = try await credentialStore.load(
-                        for: id
+                        for: id,
                     )
                 else {
                     throw RefreshFailure.authenticationRequired
@@ -155,7 +215,7 @@ public final class AppModel {
                     return try await client.fetchUsage(
                         accountID: id,
                         credential: credential,
-                        now: now()
+                        now: now(),
                     )
                 } catch let error as ProviderClientError {
                     throw refreshFailure(for: error)
@@ -206,7 +266,7 @@ public final class AppModel {
 
     public func connectAccount(
         _ account: SubscriptionAccount,
-        credential: ProviderCredential
+        credential: ProviderCredential,
     ) async throws {
         guard !accounts.contains(where: { $0.id == account.id }) else {
             throw AppModelError.accountAlreadyExists
@@ -215,13 +275,13 @@ public final class AppModel {
             throw AppModelError.providerUnavailable
         }
 
-        let now = self.now
+        let now = now
         let refresher = AccountRefresher(now: { now() })
         let outcome = try await refresher.refresh {
             try await client.fetchUsage(
                 accountID: account.id,
                 credential: credential,
-                now: now()
+                now: now(),
             )
         }
         guard
@@ -233,7 +293,7 @@ public final class AppModel {
 
         try await credentialStore.save(
             credential,
-            for: account.id
+            for: account.id,
         )
 
         var nextState = persistedState
@@ -253,18 +313,18 @@ public final class AppModel {
         accounts.append(
             AccountViewState(
                 account: account,
-                snapshot: snapshot
-            )
+                snapshot: snapshot,
+            ),
         )
         accounts.sort(by: viewStateComesBefore)
     }
 
     public func renameAccount(
         id: UUID,
-        displayName: String
+        displayName: String,
     ) async throws {
         let displayName = displayName.trimmingCharacters(
-            in: .whitespacesAndNewlines
+            in: .whitespacesAndNewlines,
         )
         guard !displayName.isEmpty else {
             throw AppModelError.emptyDisplayName
@@ -272,7 +332,7 @@ public final class AppModel {
         guard
             let viewIndex = accounts.firstIndex(where: { $0.id == id }),
             let stateIndex = persistedState.accounts.firstIndex(
-                where: { $0.id == id }
+                where: { $0.id == id },
             )
         else {
             throw AppModelError.accountNotFound
@@ -293,7 +353,7 @@ public final class AppModel {
 
     public func reorderAccounts(
         provider: Provider,
-        orderedIDs: [UUID]
+        orderedIDs: [UUID],
     ) async throws {
         let providerIDs = persistedState.accounts
             .filter { $0.provider == provider }
@@ -311,7 +371,7 @@ public final class AppModel {
         let positions = Dictionary(
             uniqueKeysWithValues: orderedIDs.enumerated().map {
                 ($0.element, $0.offset)
-            }
+            },
         )
         for index in persistedState.accounts.indices
             where persistedState.accounts[index].provider == provider
@@ -338,11 +398,11 @@ public final class AppModel {
 
     public func reconnectAccount(
         id: UUID,
-        credential: ProviderCredential
+        credential: ProviderCredential,
     ) async throws {
         guard
             let account = accounts.first(
-                where: { $0.id == id }
+                where: { $0.id == id },
             )?.account
         else {
             throw AppModelError.accountNotFound
@@ -351,13 +411,13 @@ public final class AppModel {
             throw AppModelError.providerUnavailable
         }
 
-        let now = self.now
+        let now = now
         let refresher = AccountRefresher(now: { now() })
         let outcome = try await refresher.refresh {
             try await client.fetchUsage(
                 accountID: id,
                 credential: credential,
-                now: now()
+                now: now(),
             )
         }
         guard
@@ -368,7 +428,7 @@ public final class AppModel {
         }
 
         let previousCredential = try await credentialStore.load(
-            for: id
+            for: id,
         )
         try await credentialStore.save(credential, for: id)
 
@@ -383,7 +443,7 @@ public final class AppModel {
             if let previousCredential {
                 try? await credentialStore.save(
                     previousCredential,
-                    for: id
+                    for: id,
                 )
             } else {
                 try? await credentialStore.delete(for: id)
@@ -401,7 +461,7 @@ public final class AppModel {
 
     private func apply(
         _ outcome: RefreshOutcome,
-        to accountID: UUID
+        to accountID: UUID,
     ) {
         updateAccount(id: accountID) { account in
             switch outcome {
@@ -426,7 +486,7 @@ public final class AppModel {
 
     private func updateAccount(
         id: UUID,
-        _ update: (inout AccountViewState) -> Void
+        _ update: (inout AccountViewState) -> Void,
     ) {
         guard let index = accounts.firstIndex(where: { $0.id == id }) else {
             return
@@ -436,12 +496,12 @@ public final class AppModel {
 
     private func accountComesBefore(
         _ lhs: SubscriptionAccount,
-        _ rhs: SubscriptionAccount
+        _ rhs: SubscriptionAccount,
     ) -> Bool {
         let providers = Dictionary(
             uniqueKeysWithValues: Provider.allCases.enumerated().map {
                 ($0.element, $0.offset)
-            }
+            },
         )
         let lhsProvider = providers[lhs.provider] ?? .max
         let rhsProvider = providers[rhs.provider] ?? .max
@@ -456,14 +516,14 @@ public final class AppModel {
 
     private func viewStateComesBefore(
         _ lhs: AccountViewState,
-        _ rhs: AccountViewState
+        _ rhs: AccountViewState,
     ) -> Bool {
         accountComesBefore(lhs.account, rhs.account)
     }
 }
 
 private func refreshFailure(
-    for error: ProviderClientError
+    for error: ProviderClientError,
 ) -> any Error {
     switch error {
     case .credentialMismatch, .reauthenticationRequired:

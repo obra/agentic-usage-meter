@@ -11,6 +11,10 @@ let package = Package(
         .library(name: "UsageMeterCore", targets: ["UsageMeterCore"]),
         .library(name: "UsageMeterClaudeWeb", targets: ["UsageMeterClaudeWeb"]),
         .library(name: "UsageMeterUI", targets: ["UsageMeterUI"]),
+        .executable(
+            name: "AgenticUsageMeter",
+            targets: ["AgenticUsageMeter"]
+        ),
         .executable(name: "ClaudeWebProbe", targets: ["ClaudeWebProbe"]),
         .executable(name: "UsageMeterProbe", targets: ["UsageMeterProbe"])
     ],
@@ -23,6 +27,10 @@ let package = Package(
         .target(
             name: "UsageMeterUI",
             dependencies: ["UsageMeterCore"]
+        ),
+        .executableTarget(
+            name: "AgenticUsageMeter",
+            dependencies: ["UsageMeterCore", "UsageMeterUI"]
         ),
         .executableTarget(
             name: "ClaudeWebProbe",

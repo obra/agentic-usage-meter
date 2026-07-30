@@ -8,7 +8,7 @@ import UsageMeterCore
 @MainActor
 struct AppModelTests {
     private let reference = Date(
-        timeIntervalSince1970: 2_000_000_000
+        timeIntervalSince1970: 2_000_000_000,
     )
 
     @Test
@@ -16,7 +16,7 @@ struct AppModelTests {
         let account = SubscriptionAccount(
             provider: .codex,
             displayName: "Work",
-            displayOrder: 0
+            displayOrder: 0,
         )
         let cached = UsageSnapshot(
             accountID: account.id,
@@ -25,9 +25,9 @@ struct AppModelTests {
                 makeTestWindow(
                     id: "cached",
                     resetAt: reference.addingTimeInterval(10000),
-                    consumedFraction: 0.2
+                    consumedFraction: 0.2,
                 ),
-            ]
+            ],
         )
         let fresh = UsageSnapshot(
             accountID: account.id,
@@ -36,9 +36,9 @@ struct AppModelTests {
                 makeTestWindow(
                     id: "fresh",
                     resetAt: reference.addingTimeInterval(20000),
-                    consumedFraction: 0.3
+                    consumedFraction: 0.3,
                 ),
-            ]
+            ],
         )
         let stateStore = TestAppStateStore(
             state: PersistedAppState(
@@ -47,30 +47,30 @@ struct AppModelTests {
                 refreshStates: [
                     account.id: AccountRefreshState(
                         lastRequestStartedAt:
-                        reference.addingTimeInterval(-601)
+                        reference.addingTimeInterval(-601),
                     ),
-                ]
-            )
+                ],
+            ),
         )
         let credentials = TestCredentialStore(
             credentials: [
                 account.id: .codex(
                     OAuthCredential(
                         accessToken: "token",
-                        accountID: "provider-account"
-                    )
+                        accountID: "provider-account",
+                    ),
                 ),
-            ]
+            ],
         )
         let provider = TestUsageProviderClient(
             provider: .codex,
-            snapshots: [account.id: fresh]
+            snapshots: [account.id: fresh],
         )
         let model = AppModel(
             stateStore: stateStore,
             credentialStore: credentials,
             clients: [provider],
-            now: { self.reference }
+            now: { reference },
         )
 
         await model.start()
@@ -80,7 +80,7 @@ struct AppModelTests {
         #expect(await provider.requestedAccountIDs == [account.id])
         #expect(
             await stateStore.state.snapshots[account.id]
-                == fresh
+                == fresh,
         )
     }
 
@@ -89,12 +89,12 @@ struct AppModelTests {
         let account = SubscriptionAccount(
             provider: .kimi,
             displayName: "Kimi",
-            displayOrder: 0
+            displayOrder: 0,
         )
         let cached = UsageSnapshot(
             accountID: account.id,
             fetchedAt: reference.addingTimeInterval(-599),
-            windows: []
+            windows: [],
         )
         let stateStore = TestAppStateStore(
             state: PersistedAppState(
@@ -103,20 +103,20 @@ struct AppModelTests {
                 refreshStates: [
                     account.id: AccountRefreshState(
                         lastRequestStartedAt:
-                        reference.addingTimeInterval(-599)
+                        reference.addingTimeInterval(-599),
                     ),
-                ]
-            )
+                ],
+            ),
         )
         let provider = TestUsageProviderClient(
             provider: .kimi,
-            snapshots: [:]
+            snapshots: [:],
         )
         let model = AppModel(
             stateStore: stateStore,
             credentialStore: TestCredentialStore(),
             clients: [provider],
-            now: { self.reference }
+            now: { reference },
         )
 
         await model.start()
@@ -130,31 +130,31 @@ struct AppModelTests {
         let account = SubscriptionAccount(
             provider: .codex,
             displayName: "Old label",
-            displayOrder: 0
+            displayOrder: 0,
         )
         let stateStore = TestAppStateStore(
             state: PersistedAppState(
                 accounts: [account],
-                snapshots: [:]
-            )
+                snapshots: [:],
+            ),
         )
         let model = AppModel(
             stateStore: stateStore,
             credentialStore: TestCredentialStore(),
             clients: [],
-            now: { self.reference }
+            now: { reference },
         )
         await model.start()
 
         try await model.renameAccount(
             id: account.id,
-            displayName: "  Work Codex  "
+            displayName: "  Work Codex  ",
         )
 
         #expect(model.accounts[0].account.displayName == "Work Codex")
         #expect(
             await stateStore.state.accounts[0].displayName
-                == "Work Codex"
+                == "Work Codex",
         )
     }
 
@@ -163,53 +163,53 @@ struct AppModelTests {
         let claude = SubscriptionAccount(
             provider: .claude,
             displayName: "Claude",
-            displayOrder: 0
+            displayOrder: 0,
         )
         let work = SubscriptionAccount(
             provider: .codex,
             displayName: "Work",
-            displayOrder: 0
+            displayOrder: 0,
         )
         let personal = SubscriptionAccount(
             provider: .codex,
             displayName: "Personal",
-            displayOrder: 1
+            displayOrder: 1,
         )
         let stateStore = TestAppStateStore(
             state: PersistedAppState(
                 accounts: [personal, claude, work],
-                snapshots: [:]
-            )
+                snapshots: [:],
+            ),
         )
         let model = AppModel(
             stateStore: stateStore,
             credentialStore: TestCredentialStore(),
             clients: [],
-            now: { self.reference }
+            now: { reference },
         )
         await model.start()
 
         try await model.reorderAccounts(
             provider: .codex,
-            orderedIDs: [personal.id, work.id]
+            orderedIDs: [personal.id, work.id],
         )
 
         #expect(
             model.accounts.map(\.id)
-                == [claude.id, personal.id, work.id]
+                == [claude.id, personal.id, work.id],
         )
         let saved = await stateStore.state.accounts
         #expect(
             saved.first(where: { $0.id == claude.id })?.displayOrder
-                == 0
+                == 0,
         )
         #expect(
             saved.first(where: { $0.id == personal.id })?.displayOrder
-                == 0
+                == 0,
         )
         #expect(
             saved.first(where: { $0.id == work.id })?.displayOrder
-                == 1
+                == 1,
         )
     }
 
@@ -218,43 +218,43 @@ struct AppModelTests {
         let missingCredential = SubscriptionAccount(
             provider: .codex,
             displayName: "Missing",
-            displayOrder: 0
+            displayOrder: 0,
         )
         let connected = SubscriptionAccount(
             provider: .codex,
             displayName: "Connected",
-            displayOrder: 1
+            displayOrder: 1,
         )
         let fresh = UsageSnapshot(
             accountID: connected.id,
             fetchedAt: reference,
-            windows: []
+            windows: [],
         )
         let stateStore = TestAppStateStore(
             state: PersistedAppState(
                 accounts: [missingCredential, connected],
-                snapshots: [:]
-            )
+                snapshots: [:],
+            ),
         )
         let credentials = TestCredentialStore(
             credentials: [
                 connected.id: .codex(
                     OAuthCredential(
                         accessToken: "token",
-                        accountID: "provider-account"
-                    )
+                        accountID: "provider-account",
+                    ),
                 ),
-            ]
+            ],
         )
         let provider = TestUsageProviderClient(
             provider: .codex,
-            snapshots: [connected.id: fresh]
+            snapshots: [connected.id: fresh],
         )
         let model = AppModel(
             stateStore: stateStore,
             credentialStore: credentials,
             clients: [provider],
-            now: { self.reference }
+            now: { reference },
         )
 
         await model.start()
@@ -262,16 +262,114 @@ struct AppModelTests {
         #expect(
             model.accounts.first(where: {
                 $0.id == missingCredential.id
-            })?.error == .authenticationRequired
+            })?.error == .authenticationRequired,
         )
         #expect(
             model.accounts.first(where: {
                 $0.id == connected.id
-            })?.snapshot == fresh
+            })?.snapshot == fresh,
         )
         #expect(
             await provider.requestedAccountIDs
-                == [connected.id]
+                == [connected.id],
+        )
+    }
+
+    @Test
+    func menuBarSummaryUsesTightestRemainingWindow() async throws {
+        let account = SubscriptionAccount(
+            provider: .codex,
+            displayName: "Work",
+            displayOrder: 0,
+        )
+        let weekly = try #require(
+            UsageWindow(
+                id: "weekly",
+                kind: .weekly,
+                duration: 604_800,
+                resetAt: reference.addingTimeInterval(20000),
+                consumedFraction: 0.66,
+            ),
+        )
+        let short = try #require(
+            UsageWindow(
+                id: "short",
+                kind: .short,
+                duration: 18000,
+                resetAt: reference.addingTimeInterval(10000),
+                consumedFraction: 0.42,
+            ),
+        )
+        let model = AppModel(
+            stateStore: TestAppStateStore(
+                state: PersistedAppState(
+                    accounts: [account],
+                    snapshots: [
+                        account.id: UsageSnapshot(
+                            accountID: account.id,
+                            fetchedAt: reference,
+                            windows: [short, weekly],
+                        ),
+                    ],
+                    refreshStates: [
+                        account.id: AccountRefreshState(
+                            lastRequestStartedAt: reference,
+                        ),
+                    ],
+                ),
+            ),
+            credentialStore: TestCredentialStore(),
+            clients: [],
+            now: { reference },
+        )
+
+        await model.start()
+
+        #expect(model.menuBarSummary.text == "34%")
+        #expect(model.menuBarSummary.systemImage == "gauge.with.needle")
+    }
+
+    @Test
+    func menuBarSummaryIsNeutralWithoutUsageData() async {
+        let model = AppModel(
+            stateStore: TestAppStateStore(state: .empty),
+            credentialStore: TestCredentialStore(),
+            clients: [],
+            now: { reference },
+        )
+
+        await model.start()
+
+        #expect(model.menuBarSummary.text == nil)
+        #expect(model.menuBarSummary.systemImage == "gauge.with.needle")
+    }
+
+    @Test
+    func floatingWidgetPreferenceAndPlacementPersist() async throws {
+        let stateStore = TestAppStateStore(state: .empty)
+        let model = AppModel(
+            stateStore: stateStore,
+            credentialStore: TestCredentialStore(),
+            clients: [],
+            now: { reference },
+        )
+        await model.start()
+        let placement = FloatingWidgetPlacement(
+            x: 120,
+            y: 240,
+            width: 520,
+            height: 360,
+        )
+
+        try await model.setFloatingWidgetVisible(true)
+        try await model.setFloatingWidgetPlacement(placement)
+
+        #expect(model.isFloatingWidgetVisible)
+        #expect(model.floatingWidgetPlacement == placement)
+        #expect(await stateStore.state.isFloatingWidgetVisible)
+        #expect(
+            await stateStore.state.floatingWidgetPlacement
+                == placement,
         )
     }
 }

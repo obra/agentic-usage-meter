@@ -35,10 +35,10 @@ func stateStoreAtomicallyReplacesExistingState() async throws {
                 provider: .kimi,
                 displayName: "Kimi",
                 authenticatedIdentity: "kimi@example.com",
-                displayOrder: 0
-            )
+                displayOrder: 0,
+            ),
         ],
-        snapshots: [:]
+        snapshots: [:],
     )
 
     try await store.save(original)
@@ -47,7 +47,7 @@ func stateStoreAtomicallyReplacesExistingState() async throws {
     #expect(try await store.load() == replacement)
     #expect(
         try FileManager.default.contentsOfDirectory(atPath: directory.path)
-            == ["state.json"]
+            == ["state.json"],
     )
 }
 
@@ -71,7 +71,7 @@ private func makeTemporaryDirectory() throws -> URL {
         .appending(path: "AgenticUsageMeterTests-\(UUID().uuidString)", directoryHint: .isDirectory)
     try FileManager.default.createDirectory(
         at: directory,
-        withIntermediateDirectories: false
+        withIntermediateDirectories: false,
     )
     return directory
 }
@@ -81,7 +81,7 @@ private func makePersistedState() throws -> PersistedAppState {
         provider: .codex,
         displayName: "Work Codex",
         authenticatedIdentity: "jesse@example.com",
-        displayOrder: 1
+        displayOrder: 1,
     )
     let window = try #require(
         UsageWindow(
@@ -89,13 +89,13 @@ private func makePersistedState() throws -> PersistedAppState {
             kind: .weekly,
             duration: 604_800,
             resetAt: Date(timeIntervalSince1970: 2_000_000_000),
-            consumedFraction: 0.42
-        )
+            consumedFraction: 0.42,
+        ),
     )
     let snapshot = UsageSnapshot(
         accountID: account.id,
         fetchedAt: Date(timeIntervalSince1970: 1_999_999_000),
-        windows: [window]
+        windows: [window],
     )
 
     return PersistedAppState(
@@ -107,8 +107,15 @@ private func makePersistedState() throws -> PersistedAppState {
                 providerRetryAt: nil,
                 failureBackoffUntil: nil,
                 consecutiveTransientFailures: 0,
-                requiresReauthentication: false
-            )
-        ]
+                requiresReauthentication: false,
+            ),
+        ],
+        isFloatingWidgetVisible: true,
+        floatingWidgetPlacement: FloatingWidgetPlacement(
+            x: 100,
+            y: 200,
+            width: 520,
+            height: 360,
+        ),
     )
 }
