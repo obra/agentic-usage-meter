@@ -113,14 +113,17 @@ public actor AccountRefresher {
         self.now = now
     }
 
-    public func refresh(using fetch: @escaping Fetch) async throws -> RefreshOutcome {
+    public func refresh(
+        retryingAuthentication: Bool = false,
+        using fetch: @escaping Fetch
+    ) async throws -> RefreshOutcome {
         if var inFlightRequest {
             inFlightRequest.waiterCount += 1
             self.inFlightRequest = inFlightRequest
             return try await wait(for: inFlightRequest)
         }
 
-        if state.requiresReauthentication {
+        if state.requiresReauthentication && !retryingAuthentication {
             return .reauthenticationRequired(snapshot: lastGoodSnapshot)
         }
 

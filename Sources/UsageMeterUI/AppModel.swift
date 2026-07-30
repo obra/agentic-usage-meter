@@ -238,7 +238,9 @@ public final class AppModel {
                     }
                     return
                 }
-                outcome = try await refresher.refresh {
+                outcome = try await refresher.refresh(
+                    retryingAuthentication: true
+                ) {
                     do {
                         return try await claudeClient.fetchUsage(
                             accountID: id,

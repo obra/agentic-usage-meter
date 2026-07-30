@@ -127,6 +127,62 @@ struct AppModelTests {
     }
 
     @Test
+    func launchRechecksEligibleClaudeSessionMarkedForReconnect() async {
+        let profileID = UUID()
+        let organizationID = UUID()
+        let account = SubscriptionAccount(
+            provider: .claude,
+            displayName: "Claude",
+            displayOrder: 0,
+            claudeProfileID: profileID,
+            claudeOrganizationID: organizationID,
+        )
+        let cached = UsageSnapshot(
+            accountID: account.id,
+            fetchedAt: reference.addingTimeInterval(-1_000),
+            windows: [],
+        )
+        let fresh = UsageSnapshot(
+            accountID: account.id,
+            fetchedAt: reference,
+            windows: [],
+        )
+        let stateStore = TestAppStateStore(
+            state: PersistedAppState(
+                accounts: [account],
+                snapshots: [account.id: cached],
+                refreshStates: [
+                    account.id: AccountRefreshState(
+                        lastRequestStartedAt:
+                        reference.addingTimeInterval(-600),
+                        requiresReauthentication: true,
+                    ),
+                ],
+            ),
+        )
+        let claudeClient = TestClaudeAccountUsageClient(
+            snapshots: [account.id: fresh],
+        )
+        let model = AppModel(
+            stateStore: stateStore,
+            credentialStore: TestCredentialStore(),
+            clients: [],
+            claudeClient: claudeClient,
+            now: { reference },
+        )
+
+        await model.start()
+
+        #expect(await claudeClient.requestedAccountIDs == [account.id])
+        #expect(model.accounts[0].snapshot == fresh)
+        #expect(model.accounts[0].error == nil)
+        #expect(
+            await stateStore.state.refreshStates[account.id]?
+                .requiresReauthentication == false,
+        )
+    }
+
+    @Test
     func renamePersistsTrimmedAccountLabel() async throws {
         let account = SubscriptionAccount(
             provider: .codex,

@@ -13,6 +13,7 @@ public final class ClaudeWebUsageClient {
     private let transport: any HTTPTransport
     private let cookieSource: any ClaudeWebCookieSource
     private let decoder: ClaudeUsageDecoder
+    private let cookieRetryDelays: [Duration]
 
     public init(
         transport: any HTTPTransport = URLSessionHTTPTransport(),
@@ -22,6 +23,23 @@ public final class ClaudeWebUsageClient {
         self.transport = transport
         self.cookieSource = cookieSource
         self.decoder = decoder
+        cookieRetryDelays = [
+            .milliseconds(250),
+            .milliseconds(500),
+            .seconds(1)
+        ]
+    }
+
+    init(
+        transport: any HTTPTransport,
+        cookieSource: any ClaudeWebCookieSource,
+        decoder: ClaudeUsageDecoder = ClaudeUsageDecoder(),
+        cookieRetryDelays: [Duration]
+    ) {
+        self.transport = transport
+        self.cookieSource = cookieSource
+        self.decoder = decoder
+        self.cookieRetryDelays = cookieRetryDelays
     }
 
     public func authenticated(
@@ -32,7 +50,8 @@ public final class ClaudeWebUsageClient {
             cookieSource: CapturedClaudeCookieSource(
                 cookies: cookies
             ),
-            decoder: decoder
+            decoder: decoder,
+            cookieRetryDelays: cookieRetryDelays
         )
     }
 
@@ -85,18 +104,10 @@ public final class ClaudeWebUsageClient {
         url: URL,
         profileID: UUID
     ) async throws -> HTTPResponse {
-        let availableCookies = await cookieSource.cookies(
+        let selectedCookies = try await apiCookies(
             for: url,
             profileID: profileID
         )
-        guard
-            let selectedCookies =
-                ClaudeLoginCookieDetector.apiCookies(
-                    in: availableCookies
-                )
-        else {
-            throw ProviderClientError.reauthenticationRequired
-        }
 
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
@@ -121,6 +132,36 @@ public final class ClaudeWebUsageClient {
             forHTTPHeaderField: "Referer"
         )
         return try await transport.send(request)
+    }
+
+    private func apiCookies(
+        for url: URL,
+        profileID: UUID
+    ) async throws -> [HTTPCookie] {
+        let availableCookies = await cookieSource.cookies(
+            for: url,
+            profileID: profileID
+        )
+        if let selectedCookies = ClaudeLoginCookieDetector.apiCookies(
+            in: availableCookies
+        ) {
+            return selectedCookies
+        }
+
+        for delay in cookieRetryDelays {
+            try await Task.sleep(for: delay)
+            let availableCookies = await cookieSource.cookies(
+                for: url,
+                profileID: profileID
+            )
+            if let selectedCookies = ClaudeLoginCookieDetector.apiCookies(
+                in: availableCookies
+            ) {
+                return selectedCookies
+            }
+        }
+
+        throw ProviderClientError.reauthenticationRequired
     }
 
     private func validate(

@@ -176,6 +176,47 @@ func authenticationFailureStopsRequestsUntilCredentialsChange() async throws {
 }
 
 @Test
+func authenticationRetryRespectsHardFloorAndCanRecover() async throws {
+    let reference = Date(timeIntervalSince1970: 2_000_000_000)
+    let clock = TestDateSource(now: reference)
+    let snapshot = makeSnapshot(
+        fetchedAt: reference.addingTimeInterval(600)
+    )
+    let fetcher = SequencedUsageFetcher(outcomes: [.success(snapshot)])
+    let refresher = AccountRefresher(
+        state: AccountRefreshState(
+            lastRequestStartedAt: reference,
+            requiresReauthentication: true
+        ),
+        now: { await clock.current() }
+    )
+
+    #expect(
+        try await refresher.refresh(
+            retryingAuthentication: true
+        ) {
+            try await fetcher.fetch()
+        } == .throttled(
+            snapshot: nil,
+            eligibleAt: reference.addingTimeInterval(600)
+        )
+    )
+    #expect(await fetcher.callCount == 0)
+
+    await clock.advance(by: 600)
+
+    #expect(
+        try await refresher.refresh(
+            retryingAuthentication: true
+        ) {
+            try await fetcher.fetch()
+        } == .refreshed(snapshot: snapshot)
+    )
+    #expect(await fetcher.callCount == 1)
+    #expect(await refresher.refreshState().requiresReauthentication == false)
+}
+
+@Test
 func refreshStateDecodingRejectsNegativeFailureCounts() {
     let invalidState = Data(
         """

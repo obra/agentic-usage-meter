@@ -188,13 +188,41 @@ struct ClaudeWebUsageClientTests {
         )
         let client = ClaudeWebUsageClient(
             transport: transport,
-            cookieSource: TestCookieSource(cookiesByProfile: [:])
+            cookieSource: TestCookieSource(cookiesByProfile: [:]),
+            cookieRetryDelays: []
         )
 
         await #expect(throws: ProviderClientError.reauthenticationRequired) {
             _ = try await client.organizations(profileID: firstProfile)
         }
         #expect(await transport.lastRequest == nil)
+    }
+
+    @Test
+    func transientlyMissingSessionCookieIsReadAgainBeforeFailing() async throws {
+        let transport = RecordingHTTPTransport(
+            response: HTTPResponse(
+                data: try fixture(named: "claude-organizations"),
+                statusCode: 200,
+                headers: [:]
+            )
+        )
+        let cookieSource = SequencedCookieSource(
+            results: [
+                [],
+                [cookie(name: "sessionKey", value: "persisted-session")]
+            ]
+        )
+        let client = ClaudeWebUsageClient(
+            transport: transport,
+            cookieSource: cookieSource,
+            cookieRetryDelays: [.zero]
+        )
+
+        _ = try await client.organizations(profileID: firstProfile)
+
+        #expect(cookieSource.requestCount == 2)
+        #expect(await transport.lastRequest != nil)
     }
 
     @Test
@@ -303,6 +331,23 @@ private final class TestCookieSource: ClaudeWebCookieSource {
 
     func cookies(for url: URL, profileID: UUID) async -> [HTTPCookie] {
         cookiesByProfile[profileID] ?? []
+    }
+}
+
+@MainActor
+private final class SequencedCookieSource: ClaudeWebCookieSource {
+    private let results: [[HTTPCookie]]
+    private(set) var requestCount = 0
+
+    init(results: [[HTTPCookie]]) {
+        self.results = results
+    }
+
+    func cookies(for url: URL, profileID: UUID) async -> [HTTPCookie] {
+        defer {
+            requestCount += 1
+        }
+        return results[min(requestCount, results.count - 1)]
     }
 }
 
