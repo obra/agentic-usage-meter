@@ -100,6 +100,15 @@ private func makePersistedState() throws -> PersistedAppState {
 
     return PersistedAppState(
         accounts: [account],
-        snapshots: [account.id: snapshot]
+        snapshots: [account.id: snapshot],
+        refreshStates: [
+            account.id: AccountRefreshState(
+                lastRequestStartedAt: snapshot.fetchedAt,
+                providerRetryAt: nil,
+                failureBackoffUntil: nil,
+                consecutiveTransientFailures: 0,
+                requiresReauthentication: false
+            )
+        ]
     )
 }
