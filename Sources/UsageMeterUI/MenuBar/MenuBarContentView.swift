@@ -3,6 +3,7 @@ import SwiftUI
 
 public struct MenuBarContentView: View {
     private let model: AppModel
+    @Environment(\.openSettings) private var openSettings
 
     public init(model: AppModel) {
         self.model = model
@@ -58,7 +59,11 @@ public struct MenuBarContentView: View {
 
                 Spacer()
 
-                SettingsLink {
+                Button {
+                    SettingsWindowPresenter().present {
+                        openSettings()
+                    }
+                } label: {
                     Label("Settings", systemImage: "gear")
                 }
 
