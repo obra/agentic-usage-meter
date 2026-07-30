@@ -85,9 +85,7 @@ public struct MenuBarContentView: View {
 
     private func refreshAllAccounts() {
         Task {
-            for account in model.accounts {
-                await model.refreshAccount(id: account.id)
-            }
+            await model.refreshAllAccounts()
         }
     }
 

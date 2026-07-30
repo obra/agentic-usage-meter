@@ -128,6 +128,69 @@ struct AppModelTests {
     }
 
     @Test
+    func automaticRefreshRunsAfterTenMinutes() async {
+        let account = SubscriptionAccount(
+            provider: .codex,
+            displayName: "Work",
+            displayOrder: 0,
+        )
+        let snapshot = UsageSnapshot(
+            accountID: account.id,
+            fetchedAt: reference,
+            windows: [
+                makeTestWindow(
+                    id: "weekly",
+                    resetAt: reference.addingTimeInterval(10_000),
+                    consumedFraction: 0.2,
+                ),
+            ],
+        )
+        let provider = TestUsageProviderClient(
+            provider: .codex,
+            snapshots: [account.id: snapshot],
+        )
+        let clock = TestMutableDate(reference)
+        let sleeper = TestAutomaticRefreshSleeper(clock: clock)
+        let model = AppModel(
+            stateStore: TestAppStateStore(
+                state: PersistedAppState(
+                    accounts: [account],
+                    snapshots: [:],
+                    refreshStates: [
+                        account.id: AccountRefreshState(
+                            lastRequestStartedAt:
+                                reference.addingTimeInterval(-600),
+                        ),
+                    ],
+                ),
+            ),
+            credentialStore: TestCredentialStore(
+                credentials: [
+                    account.id: .codex(
+                        OAuthCredential(
+                            accessToken: "token",
+                            accountID: "provider-account",
+                        ),
+                    ),
+                ],
+            ),
+            clients: [provider],
+            now: { clock.current },
+        )
+        await model.start()
+
+        await model.runAutomaticRefresh { interval in
+            try await sleeper.sleep(interval: interval)
+        }
+
+        #expect(
+            await provider.requestedAccountIDs
+                == [account.id, account.id],
+        )
+        #expect(await sleeper.intervals.first == 600)
+    }
+
+    @Test
     func launchRechecksEligibleClaudeSessionMarkedForReconnect() async {
         let profileID = UUID()
         let organizationID = UUID()
@@ -177,6 +240,102 @@ struct AppModelTests {
         #expect(await claudeClient.requestedAccountIDs == [account.id])
         #expect(model.accounts[0].snapshot == fresh)
         #expect(model.accounts[0].error == nil)
+        #expect(
+            await stateStore.state.refreshStates[account.id]?
+                .requiresReauthentication == false,
+        )
+    }
+
+    @Test
+    func launchRefreshesKimiCredentialInsteadOfRequiringReconnect()
+        async throws
+    {
+        let account = SubscriptionAccount(
+            provider: .kimi,
+            displayName: "Kimi",
+            displayOrder: 0,
+        )
+        let cached = UsageSnapshot(
+            accountID: account.id,
+            fetchedAt: reference.addingTimeInterval(-1_000),
+            windows: [],
+        )
+        let fresh = UsageSnapshot(
+            accountID: account.id,
+            fetchedAt: reference,
+            windows: [
+                makeTestWindow(
+                    id: "weekly",
+                    resetAt: reference.addingTimeInterval(10_000),
+                    consumedFraction: 0.2,
+                ),
+            ],
+        )
+        let expired = OAuthCredential(
+            accessToken: "expired",
+            refreshToken: "refresh",
+            expiresAt: reference.addingTimeInterval(-1),
+        )
+        let replacement = OAuthCredential(
+            accessToken: "replacement",
+            refreshToken: "rotated-refresh",
+            expiresAt: reference.addingTimeInterval(3_600),
+        )
+        let stateStore = TestAppStateStore(
+            state: PersistedAppState(
+                accounts: [account],
+                snapshots: [account.id: cached],
+                refreshStates: [
+                    account.id: AccountRefreshState(
+                        lastRequestStartedAt:
+                            reference.addingTimeInterval(-600),
+                        requiresReauthentication: true,
+                    ),
+                ],
+            ),
+        )
+        let credentialStore = TestCredentialStore(
+            credentials: [account.id: .kimi(expired)],
+        )
+        let provider = TestUsageProviderClient(
+            provider: .kimi,
+            snapshots: [account.id: fresh],
+        )
+        let refreshRecorder = TestCredentialRefreshRecorder(
+            replacement: .kimi(replacement),
+        )
+        let model = AppModel(
+            stateStore: stateStore,
+            credentialStore: credentialStore,
+            clients: [provider],
+            credentialRefreshers: [
+                .kimi: { accountID, credential in
+                    try await refreshRecorder.refresh(
+                        accountID: accountID,
+                        credential: credential,
+                    )
+                },
+            ],
+            now: { self.reference },
+        )
+
+        await model.start()
+
+        #expect(model.accounts[0].snapshot == fresh)
+        #expect(model.accounts[0].error == nil)
+        #expect(
+            await refreshRecorder.requests
+                == [
+                    CredentialRefreshRequest(
+                        accountID: account.id,
+                        credential: .kimi(expired),
+                    ),
+                ],
+        )
+        #expect(
+            await credentialStore.load(for: account.id)
+                == .kimi(replacement),
+        )
         #expect(
             await stateStore.state.refreshStates[account.id]?
                 .requiresReauthentication == false,

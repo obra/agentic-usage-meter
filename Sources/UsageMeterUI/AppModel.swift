@@ -74,6 +74,13 @@ public struct AccountViewState: Equatable, Identifiable, Sendable {
 public final class AppModel {
     public typealias ClaudeProfileRemover =
         @MainActor @Sendable (UUID) async throws -> Void
+    public typealias CredentialRefresh =
+        @Sendable (
+            UUID,
+            ProviderCredential
+        ) async throws -> ProviderCredential
+    public typealias RefreshSleep =
+        @Sendable (TimeInterval) async throws -> Void
 
     public private(set) var accounts: [AccountViewState] = []
     public private(set) var isFloatingWidgetVisible = false
@@ -87,6 +94,8 @@ public final class AppModel {
     private let credentialStore: any CredentialStore
     @ObservationIgnored
     private let clientsByProvider: [Provider: any UsageProviderClient]
+    @ObservationIgnored
+    private let credentialRefreshers: [Provider: CredentialRefresh]
     @ObservationIgnored
     private let claudeClient: (any ClaudeAccountUsageFetching)?
     @ObservationIgnored
@@ -102,6 +111,7 @@ public final class AppModel {
         stateStore: any AppStatePersisting,
         credentialStore: any CredentialStore,
         clients: [any UsageProviderClient],
+        credentialRefreshers: [Provider: CredentialRefresh] = [:],
         claudeClient: (any ClaudeAccountUsageFetching)? = nil,
         claudeProfileRemover: ClaudeProfileRemover? = nil,
         isSampleData: Bool = false,
@@ -114,6 +124,7 @@ public final class AppModel {
                 ($0.provider, $0)
             },
         )
+        self.credentialRefreshers = credentialRefreshers
         self.claudeClient = claudeClient
         self.claudeProfileRemover = claudeProfileRemover
         self.isSampleData = isSampleData
@@ -177,6 +188,36 @@ public final class AppModel {
             }
         } catch {
             accounts = []
+        }
+    }
+
+    public func refreshAllAccounts() async {
+        for id in accounts.map(\.id) {
+            await refreshAccount(id: id)
+        }
+    }
+
+    public func runAutomaticRefresh(
+        interval: TimeInterval = 600,
+        sleep: @escaping RefreshSleep = { interval in
+            try await Task.sleep(
+                for: .milliseconds(
+                    Int64((interval * 1_000).rounded()),
+                ),
+            )
+        },
+    ) async {
+        precondition(interval.isFinite && interval > 0)
+        while !Task.isCancelled {
+            do {
+                try await sleep(interval)
+            } catch {
+                return
+            }
+            guard !Task.isCancelled else {
+                return
+            }
+            await refreshAllAccounts()
         }
     }
 
@@ -261,13 +302,32 @@ public final class AppModel {
                     return
                 }
                 let credentialStore = credentialStore
-                outcome = try await refresher.refresh {
-                    guard
-                        let credential = try await credentialStore.load(
+                let credentialRefresh =
+                    credentialRefreshers[account.provider]
+                outcome = try await refresher.refresh(
+                    retryingAuthentication: credentialRefresh != nil
+                ) {
+                    guard var credential =
+                        try await credentialStore.load(for: id)
+                    else {
+                        throw RefreshFailure
+                            .authenticationRequired
+                    }
+                    var didRefreshCredential = false
+                    if
+                        let credentialRefresh,
+                        credential.isExpired(at: now())
+                    {
+                        credential = try await refreshedCredential(
+                            accountID: id,
+                            credential: credential,
+                            using: credentialRefresh,
+                        )
+                        try await credentialStore.save(
+                            credential,
                             for: id,
                         )
-                    else {
-                        throw RefreshFailure.authenticationRequired
+                        didRefreshCredential = true
                     }
                     do {
                         return try await client.fetchUsage(
@@ -276,6 +336,34 @@ public final class AppModel {
                             now: now(),
                         )
                     } catch let error as ProviderClientError {
+                        if
+                            error == .reauthenticationRequired,
+                            !didRefreshCredential,
+                            let credentialRefresh
+                        {
+                            credential = try await refreshedCredential(
+                                accountID: id,
+                                credential: credential,
+                                using: credentialRefresh,
+                            )
+                            try await credentialStore.save(
+                                credential,
+                                for: id,
+                            )
+                            do {
+                                return try await client.fetchUsage(
+                                    accountID: id,
+                                    credential: credential,
+                                    now: now(),
+                                )
+                            } catch let retryError
+                                as ProviderClientError
+                            {
+                                throw refreshFailure(
+                                    for: retryError,
+                                )
+                            }
+                        }
                         throw refreshFailure(for: error)
                     }
                 }
@@ -748,5 +836,28 @@ private func refreshFailure(
         RefreshFailure.transient(providerRetryAt: nil)
     case .unsupportedResponse:
         error
+    }
+}
+
+private func refreshedCredential(
+    accountID: UUID,
+    credential: ProviderCredential,
+    using refresh: AppModel.CredentialRefresh,
+) async throws -> ProviderCredential {
+    do {
+        return try await refresh(accountID, credential)
+    } catch let error as ProviderClientError {
+        throw refreshFailure(for: error)
+    }
+}
+
+private extension ProviderCredential {
+    func isExpired(at date: Date) -> Bool {
+        switch self {
+        case .claude:
+            false
+        case let .codex(credential), let .kimi(credential):
+            credential.expiresAt.map { $0 <= date } ?? false
+        }
     }
 }

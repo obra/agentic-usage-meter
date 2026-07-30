@@ -52,6 +52,7 @@ private struct MenuBarLabel: View {
             NSApplication.shared.setActivationPolicy(.accessory)
             await model.start()
             widgetController.synchronize()
+            await model.runAutomaticRefresh()
         }
         .onChange(of: model.isFloatingWidgetVisible) {
             widgetController.synchronize()
@@ -86,6 +87,9 @@ private enum AppEnvironment {
                 CodexUsageClient(),
                 KimiUsageClient(),
             ],
+            credentialRefreshers: [
+                .kimi: refreshKimiCredential,
+            ],
             claudeClient: ClaudeWebAccountUsageClient(),
             claudeProfileRemover: {
                 try await ClaudeWebAccountUsageClient.removeProfile(
@@ -94,6 +98,32 @@ private enum AppEnvironment {
             },
             isSampleData: sampleData,
         )
+    }
+
+    private static func refreshKimiCredential(
+        accountID: UUID,
+        credential: ProviderCredential,
+    ) async throws -> ProviderCredential {
+        guard case let .kimi(oauth) = credential else {
+            throw ProviderClientError.credentialMismatch
+        }
+        do {
+            return .kimi(
+                try await KimiOAuthFlow(
+                    device: .currentMac(accountID: accountID),
+                ).refresh(oauth),
+            )
+        } catch let error as KimiOAuthFlowError {
+            switch error {
+            case .reauthenticationRequired:
+                throw ProviderClientError.reauthenticationRequired
+            case .invalidResponse:
+                throw ProviderClientError.unsupportedResponse
+            case .browserOpenFailed, .authorizationFailed,
+                .temporaryFailure:
+                throw ProviderClientError.temporaryFailure
+            }
+        }
     }
 
     private static func stateFileURL() -> URL {

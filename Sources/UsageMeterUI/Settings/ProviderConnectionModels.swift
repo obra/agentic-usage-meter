@@ -183,20 +183,9 @@ public final class KimiConnectionModel {
         appModel: AppModel,
         reconnectingAccount: SubscriptionAccount? = nil,
     ) -> KimiConnectionModel {
-        let accountID = UUID()
-        let device = KimiDeviceInfo(
-            name: Host.current().localizedName ?? "Mac",
-            model: "macOS",
-            osVersion:
-            ProcessInfo.processInfo
-                .operatingSystemVersionString,
-            id: accountID.uuidString.lowercased(),
-            clientVersion:
-            Bundle.main.object(
-                forInfoDictionaryKey:
-                "CFBundleShortVersionString",
-            ) as? String
-                ?? "0.1.0",
+        let accountID = reconnectingAccount?.id ?? UUID()
+        let device = KimiDeviceInfo.currentMac(
+            accountID: accountID,
         )
         return KimiConnectionModel(
             appModel: appModel,

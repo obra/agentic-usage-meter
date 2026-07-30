@@ -87,6 +87,69 @@ actor TestClaudeAccountUsageClient: ClaudeAccountUsageFetching {
     }
 }
 
+struct CredentialRefreshRequest: Equatable, Sendable {
+    let accountID: UUID
+    let credential: ProviderCredential
+}
+
+actor TestCredentialRefreshRecorder {
+    private let replacement: ProviderCredential
+    private(set) var requests: [CredentialRefreshRequest] = []
+
+    init(replacement: ProviderCredential) {
+        self.replacement = replacement
+    }
+
+    func refresh(
+        accountID: UUID,
+        credential: ProviderCredential,
+    ) throws -> ProviderCredential {
+        requests.append(
+            CredentialRefreshRequest(
+                accountID: accountID,
+                credential: credential,
+            ),
+        )
+        return replacement
+    }
+}
+
+final class TestMutableDate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: Date
+
+    init(_ value: Date) {
+        self.value = value
+    }
+
+    var current: Date {
+        lock.withLock { value }
+    }
+
+    func advance(by interval: TimeInterval) {
+        lock.withLock {
+            value = value.addingTimeInterval(interval)
+        }
+    }
+}
+
+actor TestAutomaticRefreshSleeper {
+    private let clock: TestMutableDate
+    private(set) var intervals: [TimeInterval] = []
+
+    init(clock: TestMutableDate) {
+        self.clock = clock
+    }
+
+    func sleep(interval: TimeInterval) throws {
+        intervals.append(interval)
+        guard intervals.count == 1 else {
+            throw CancellationError()
+        }
+        clock.advance(by: interval)
+    }
+}
+
 func makeTestWindow(
     id: String,
     resetAt: Date,
