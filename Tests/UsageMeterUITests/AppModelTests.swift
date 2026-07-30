@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import SwiftUI
 import Testing
 import UsageMeterCore
 
@@ -445,83 +446,8 @@ struct AppModelTests {
 
     @Test
     func floatingWidgetOpensAtItsIntendedSize() async throws {
-        let accounts = [
-            SubscriptionAccount(
-                provider: .claude,
-                displayName: "Work",
-                displayOrder: 0,
-            ),
-            SubscriptionAccount(
-                provider: .claude,
-                displayName: "Personal",
-                displayOrder: 1,
-            ),
-            SubscriptionAccount(
-                provider: .codex,
-                displayName: "Work",
-                displayOrder: 0,
-            ),
-            SubscriptionAccount(
-                provider: .codex,
-                displayName: "Personal",
-                displayOrder: 1,
-            ),
-            SubscriptionAccount(
-                provider: .kimi,
-                displayName: "Kimi",
-                displayOrder: 0,
-            ),
-        ]
-        var snapshots: [UUID: UsageSnapshot] = [:]
-        for (index, account) in accounts.enumerated() {
-            let weekly = try #require(
-                UsageWindow(
-                    id: "weekly",
-                    kind: .weekly,
-                    duration: 604_800,
-                    resetAt: reference.addingTimeInterval(
-                        Double(180_000 + index * 72000),
-                    ),
-                    consumedFraction: 0.31,
-                ),
-            )
-            var windows = [weekly]
-            if account.provider == .claude {
-                windows.insert(
-                    try #require(
-                        UsageWindow(
-                            id: "short",
-                            kind: .short,
-                            duration: 18000,
-                            resetAt: reference.addingTimeInterval(
-                                Double(3000 + index * 1500),
-                            ),
-                            consumedFraction: 0.22,
-                        ),
-                    ),
-                    at: 0,
-                )
-            }
-            snapshots[account.id] = UsageSnapshot(
-                accountID: account.id,
-                fetchedAt: reference,
-                windows: windows,
-            )
-        }
         let stateStore = TestAppStateStore(
-            state: PersistedAppState(
-                accounts: accounts,
-                snapshots: snapshots,
-                refreshStates: Dictionary(
-                    uniqueKeysWithValues: accounts.map {
-                        (
-                            $0.id,
-                            AccountRefreshState(
-                                lastRequestStartedAt: reference,
-                            ),
-                        )
-                    },
-                ),
+            state: try populatedState(
                 isFloatingWidgetVisible: true,
             ),
         )
@@ -560,6 +486,44 @@ struct AppModelTests {
     }
 
     @Test
+    func menuBarContentExpandsWhenAccountsFinishLoading() async throws {
+        let model = AppModel(
+            stateStore: TestAppStateStore(
+                state: try populatedState(),
+            ),
+            credentialStore: TestCredentialStore(),
+            clients: [],
+            now: { self.reference },
+        )
+        let emptyHostingView = NSHostingView(
+            rootView: MenuBarContentView(model: model),
+        )
+        let emptyHeight = emptyHostingView.fittingSize.height
+
+        await model.start()
+        var renderedHeight: CGFloat = 0
+        let hostingView = NSHostingView(
+            rootView: MenuBarContentView(model: model)
+                .onGeometryChange(for: CGFloat.self) {
+                    $0.size.height
+                } action: {
+                    renderedHeight = $0
+                }
+                .frame(height: emptyHeight),
+        )
+        hostingView.frame = NSRect(
+            x: 0,
+            y: 0,
+            width: 520,
+            height: emptyHeight,
+        )
+        hostingView.layoutSubtreeIfNeeded()
+        await Task.yield()
+
+        #expect(renderedHeight > 350)
+    }
+
+    @Test
     func launchRefreshesClaudeFromItsIsolatedProfile() async {
         let account = SubscriptionAccount(
             provider: .claude,
@@ -595,6 +559,89 @@ struct AppModelTests {
         #expect(
             await claudeClient.requestedAccountIDs
                 == [account.id],
+        )
+    }
+
+    private func populatedState(
+        isFloatingWidgetVisible: Bool = false,
+    ) throws -> PersistedAppState {
+        let accounts = [
+            SubscriptionAccount(
+                provider: .claude,
+                displayName: "Work",
+                displayOrder: 0,
+            ),
+            SubscriptionAccount(
+                provider: .claude,
+                displayName: "Personal",
+                displayOrder: 1,
+            ),
+            SubscriptionAccount(
+                provider: .codex,
+                displayName: "Work",
+                displayOrder: 0,
+            ),
+            SubscriptionAccount(
+                provider: .codex,
+                displayName: "Personal",
+                displayOrder: 1,
+            ),
+            SubscriptionAccount(
+                provider: .kimi,
+                displayName: "Kimi",
+                displayOrder: 0,
+            ),
+        ]
+        var snapshots: [UUID: UsageSnapshot] = [:]
+        for (index, account) in accounts.enumerated() {
+            let weekly = try #require(
+                UsageWindow(
+                    id: "weekly",
+                    kind: .weekly,
+                    duration: 604_800,
+                    resetAt: reference.addingTimeInterval(
+                        Double(180_000 + index * 72_000),
+                    ),
+                    consumedFraction: 0.31,
+                ),
+            )
+            var windows = [weekly]
+            if account.provider == .claude {
+                windows.insert(
+                    try #require(
+                        UsageWindow(
+                            id: "short",
+                            kind: .short,
+                            duration: 18_000,
+                            resetAt: reference.addingTimeInterval(
+                                Double(3_000 + index * 1_500),
+                            ),
+                            consumedFraction: 0.22,
+                        ),
+                    ),
+                    at: 0,
+                )
+            }
+            snapshots[account.id] = UsageSnapshot(
+                accountID: account.id,
+                fetchedAt: reference,
+                windows: windows,
+            )
+        }
+        return PersistedAppState(
+            accounts: accounts,
+            snapshots: snapshots,
+            refreshStates: Dictionary(
+                uniqueKeysWithValues: accounts.map {
+                    (
+                        $0.id,
+                        AccountRefreshState(
+                            lastRequestStartedAt: reference,
+                        ),
+                    )
+                },
+            ),
+            isFloatingWidgetVisible: isFloatingWidgetVisible,
         )
     }
 }

@@ -80,6 +80,7 @@ public struct MenuBarContentView: View {
             .padding()
         }
         .frame(width: 520)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private func refreshAllAccounts() {
