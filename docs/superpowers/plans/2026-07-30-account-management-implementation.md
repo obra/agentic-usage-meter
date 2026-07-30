@@ -679,4 +679,3 @@ git log --oneline -8
 If verification required an additional fix, commit it with a focused message
 that names the root cause and evidence. Otherwise, leave the task at the four
 implementation commits plus this plan commit.
-
