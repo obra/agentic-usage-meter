@@ -53,6 +53,17 @@ func usageWindowRejectsInvalidProviderValues() {
 }
 
 @Test
+func usageWindowDecodingRejectsInvalidPersistedValues() {
+    let invalidWindow = Data(
+        #"{"id":"invalid","kind":"short","duration":0,"resetAt":0,"consumedFraction":0.5}"#.utf8
+    )
+
+    #expect(throws: DecodingError.self) {
+        _ = try JSONDecoder().decode(UsageWindow.self, from: invalidWindow)
+    }
+}
+
+@Test
 func snapshotKeepsIndependentAccountIdentity() throws {
     let accountID = UUID()
     let window = try #require(

@@ -64,12 +64,46 @@ public struct UsageWindow: Codable, Equatable, Identifiable, Sendable {
         self.consumedFraction = consumedFraction
     }
 
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let id = try container.decode(String.self, forKey: .id)
+        let kind = try container.decode(UsageWindowKind.self, forKey: .kind)
+        let duration = try container.decode(TimeInterval.self, forKey: .duration)
+        let resetAt = try container.decode(Date.self, forKey: .resetAt)
+        let consumedFraction = try container.decode(Double.self, forKey: .consumedFraction)
+
+        guard let window = UsageWindow(
+            id: id,
+            kind: kind,
+            duration: duration,
+            resetAt: resetAt,
+            consumedFraction: consumedFraction
+        ) else {
+            throw DecodingError.dataCorrupted(
+                .init(
+                    codingPath: decoder.codingPath,
+                    debugDescription: "Usage window contains invalid values."
+                )
+            )
+        }
+
+        self = window
+    }
+
     public var startAt: Date {
         resetAt.addingTimeInterval(-duration)
     }
 
     public var remainingFraction: Double {
         1 - consumedFraction
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case kind
+        case duration
+        case resetAt
+        case consumedFraction
     }
 }
 
