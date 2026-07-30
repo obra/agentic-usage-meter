@@ -1,7 +1,7 @@
 # Agentic Usage Meter Design
 
 **Date:** 2026-07-29
-**Status:** Approved; Claude web-session amendment pending written review
+**Status:** Approved, including Claude web-session amendment
 **Target:** macOS 26, Swift 6, SwiftUI
 **Distribution:** Direct download, Developer ID signed, hardened, and notarized
 
