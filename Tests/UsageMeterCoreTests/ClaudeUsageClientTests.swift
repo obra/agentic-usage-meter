@@ -6,7 +6,7 @@ import Testing
 struct ClaudeUsageClientTests {
     @Test
     func requestAndResponseMapToNormalizedUsageWindows() async throws {
-        let responseData = try fixture(named: "claude-usage")
+        let responseData = try usageFixture(named: "claude-usage")
         let transport = RecordingHTTPTransport(
             response: HTTPResponse(
                 data: responseData,
@@ -167,15 +167,4 @@ private actor RecordingHTTPTransport: HTTPTransport {
         lastRequest = request
         return response
     }
-}
-
-private func fixture(named name: String) throws -> Data {
-    let url = try #require(
-        Bundle.module.url(
-            forResource: name,
-            withExtension: "json",
-            subdirectory: "Fixtures"
-        )
-    )
-    return try Data(contentsOf: url)
 }

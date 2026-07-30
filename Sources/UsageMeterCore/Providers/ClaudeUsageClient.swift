@@ -45,28 +45,10 @@ public struct ClaudeUsageClient: UsageProviderClient {
             throw ProviderClientError.reauthenticationRequired
         case 429:
             throw ProviderClientError.retryAfter(
-                retryDate(from: response, relativeTo: now)
+                response.retryDate(relativeTo: now)
             )
         default:
             throw ProviderClientError.temporaryFailure
         }
-    }
-
-    private func retryDate(
-        from response: HTTPResponse,
-        relativeTo now: Date
-    ) -> Date? {
-        guard let value = response.header(named: "Retry-After") else {
-            return nil
-        }
-        if let seconds = TimeInterval(value), seconds.isFinite, seconds >= 0 {
-            return now.addingTimeInterval(seconds)
-        }
-
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        formatter.dateFormat = "EEE',' dd MMM yyyy HH':'mm':'ss z"
-        return formatter.date(from: value)
     }
 }

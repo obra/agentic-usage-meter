@@ -59,3 +59,20 @@ public struct URLSessionHTTPTransport: HTTPTransport {
         )
     }
 }
+
+extension HTTPResponse {
+    func retryDate(relativeTo now: Date) -> Date? {
+        guard let value = header(named: "Retry-After") else {
+            return nil
+        }
+        if let seconds = TimeInterval(value), seconds.isFinite, seconds >= 0 {
+            return now.addingTimeInterval(seconds)
+        }
+
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "EEE',' dd MMM yyyy HH':'mm':'ss z"
+        return formatter.date(from: value)
+    }
+}
