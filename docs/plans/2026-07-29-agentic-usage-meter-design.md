@@ -1,7 +1,7 @@
 # Agentic Usage Meter Design
 
 **Date:** 2026-07-29
-**Status:** Approved
+**Status:** Approved; Claude web-session amendment pending written review
 **Target:** macOS 26, Swift 6, SwiftUI
 **Distribution:** Direct download, Developer ID signed, hardened, and notarized
 
@@ -14,8 +14,9 @@ remaining capacity and reset times. An optional floating widget presents the
 same information without opening the menu-bar popover.
 
 The app communicates directly with each provider. It has no relay service,
-cloud sync, analytics, or telemetry. Credentials are kept in Keychain and
-non-secret normalized snapshots are cached locally.
+cloud sync, analytics, or telemetry. OAuth credentials are kept in Keychain,
+Claude web sessions are kept in isolated WebKit data stores, and non-secret
+normalized snapshots are cached locally.
 
 The provider usage interfaces are not stable public APIs. Provider
 qualification against real accounts is therefore a prerequisite to building
@@ -30,7 +31,8 @@ the full product, not a step that can be replaced by mocked tests.
 - Support multiple independently authenticated accounts from the same
   provider, including separate work and personal Codex accounts.
 - Support Claude Code, Codex, and Kimi Code in v1.
-- Use regular browser authentication rather than embedded web views.
+- Use isolated embedded web sessions for Claude and regular browser
+  authentication for Codex and Kimi.
 - Keep provider requests infrequent and deterministic.
 - Remain useful through transient network and provider failures.
 
@@ -76,9 +78,10 @@ consume that store. The floating panel is an AppKit presentation shell around
 the same SwiftUI timeline components used by the popover; it is not a separate
 data path.
 
-Provider-specific actors own authentication, decoding, and token refresh.
-Provider response types stop at the adapter boundary. The rest of the app sees
-only normalized accounts, windows, snapshots, and errors.
+Provider-specific components own authentication, decoding, and token refresh.
+Claude's WebKit session manager is main-actor isolated; the remaining provider
+adapters are actors. Provider response types stop at the adapter boundary. The
+rest of the app sees only normalized accounts, windows, snapshots, and errors.
 
 ## Domain Model
 
@@ -174,21 +177,32 @@ menu-bar app remains running.
 
 ### Claude
 
-The app instructs the user to run:
+The app opens a visible embedded Claude login window. Each connection attempt
+uses a new persistent `WKWebsiteDataStore` identified by a random UUID. The
+login window and that account's usage fetcher use only that data store, so
+work, personal, and other Claude sessions remain independent.
 
-```bash
-claude setup-token
-```
+After the user completes login, the app uses the same WebKit profile to fetch
+the authenticated identity and subscription-usage response. The account is
+saved only after both requests succeed. Cancelling or failing a new connection
+releases its web views and deletes the provisional data store.
 
-The user pastes the resulting token into a secure field. The app does not
-launch Claude Code, inspect its configuration, read the pasteboard
-automatically, or capture terminal output. It immediately tests the usage
-endpoint and saves the token to Keychain only after successful validation.
-The field is cleared when the operation completes or is cancelled.
+The account record retains the non-secret WebKit data-store identifier. Session
+cookies and other browser state remain inside WebKit; they are never copied
+into application settings, Keychain, logs, fixtures, or diagnostics. Removing
+or reconnecting an account first releases every web view using its data store
+and then removes the complete identified store.
 
-The current implementation hypothesis is that a setup token can authorize
-Claude's `/api/oauth/usage` endpoint. This must be proven by the Claude
-qualification spike before product code relies on it.
+Scheduled refreshes use a minimal WebKit-backed request with the account's
+profile rather than loading the full Claude application UI. The Claude
+qualification spike must identify the current web usage and identity endpoints,
+prove that the request works from two isolated stores, and capture only a
+sanitized response fixture.
+
+`claude setup-token` is not used. Live qualification showed that it grants
+inference scope but cannot call the profile-scoped usage endpoint. Claude Code
+status-line data is also not authoritative because it updates only after the
+corresponding Claude Code session makes an inference request.
 
 ### Codex
 
@@ -252,9 +266,13 @@ real waits.
 
 ## Persistence and Security
 
-Keychain stores all bearer tokens, refresh tokens, and device-flow
-credentials. Each account has a separate Keychain item. Rotated refresh
-credentials replace the previous value atomically.
+Keychain stores all Codex and Kimi bearer tokens, refresh tokens, and
+device-flow credentials. Each account has a separate Keychain item. Rotated
+refresh credentials replace the previous value atomically.
+
+Every Claude account has a separate persistent WebKit data store. WebKit owns
+its cookies, local storage, caches, and related browser state. The app stores
+only the data-store UUID and sanitized account identity outside that store.
 
 Application Support stores:
 
@@ -264,8 +282,9 @@ Application Support stores:
 - Last successful normalized snapshots
 - Refresh timestamps and non-secret backoff state
 
-Cache writes are atomic. Removing an account deletes both its local data and
-its Keychain item.
+Cache writes are atomic. Removing an account deletes its local data and its
+Keychain item, if any. Removing a Claude account also releases its web views
+and deletes its identified WebKit data store.
 
 Logs must never include authorization headers, token values, callback query
 parameters, pasted secure-field contents, or complete raw provider responses.
@@ -295,8 +314,10 @@ and time-zone changes recompute presentation geometry from absolute dates.
 
 These three spikes precede the full application implementation:
 
-1. **Claude:** Prove that a real `claude setup-token` credential can call the
-   usage endpoint and returns both required window types.
+1. **Claude:** Prove that two persistent WebKit data stores can remain signed
+   into different Claude accounts simultaneously, retrieve the correct
+   identity for each store, and return both required usage window types without
+   loading the full Claude application during refresh.
 2. **Codex:** Prove native PKCE login from the app, direct usage retrieval, token
    refresh, and two independently authenticated accounts.
 3. **Kimi:** Prove device authorization, token refresh where applicable, and
@@ -307,7 +328,7 @@ refresh behavior, and avoid committing credentials or personal account data.
 
 Failure of a gate stops implementation of that provider. The connection design
 must be revised explicitly; the app will not conceal a CLI subprocess,
-credential scraping, or browser-cookie workaround behind the adapter.
+credential scraping, or browser-extension workaround behind the adapter.
 
 ## Testing
 
@@ -326,6 +347,8 @@ Automated tests cover real domain contracts rather than rendered strings:
 - Persist and reload normalized snapshots.
 - Exercise credential storage through a Keychain abstraction with an in-memory
   test implementation.
+- Exercise Claude profile creation, isolation, provisional cleanup, reconnect,
+  and deletion through a WebKit session-store abstraction.
 
 Focused SwiftUI tests verify that normalized presentation states expose the
 correct accessibility values and actions. They do not assert large rendered
@@ -350,7 +373,9 @@ inspected on 2026-07-29:
 - [OpenAI Codex app-server account and rate-limit interfaces](https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md)
 - [OpenAI Codex native login implementation](https://github.com/openai/codex/blob/main/codex-rs/login/src/server.rs)
 - [Claude Code authentication documentation](https://code.claude.com/docs/en/authentication)
+- [Claude Code error reference](https://code.claude.com/docs/en/errors)
 - [Claude Code CLI reference](https://code.claude.com/docs/en/cli-reference)
+- [WebKit website data stores](https://developer.apple.com/documentation/webkit/wkwebsitedatastore)
 - [Kimi Code membership and usage documentation](https://www.kimi.com/code/docs/en/kimi-code/membership.html)
 
 These references establish feasibility, not a compatibility promise. The
