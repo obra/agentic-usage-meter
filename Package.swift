@@ -10,6 +10,7 @@ let package = Package(
     products: [
         .library(name: "UsageMeterCore", targets: ["UsageMeterCore"]),
         .library(name: "UsageMeterClaudeWeb", targets: ["UsageMeterClaudeWeb"]),
+        .library(name: "UsageMeterUI", targets: ["UsageMeterUI"]),
         .executable(name: "ClaudeWebProbe", targets: ["ClaudeWebProbe"]),
         .executable(name: "UsageMeterProbe", targets: ["UsageMeterProbe"])
     ],
@@ -17,6 +18,10 @@ let package = Package(
         .target(name: "UsageMeterCore"),
         .target(
             name: "UsageMeterClaudeWeb",
+            dependencies: ["UsageMeterCore"]
+        ),
+        .target(
+            name: "UsageMeterUI",
             dependencies: ["UsageMeterCore"]
         ),
         .executableTarget(
@@ -48,6 +53,10 @@ let package = Package(
         .testTarget(
             name: "UsageMeterProbeTests",
             dependencies: ["UsageMeterProbe", "UsageMeterCore"]
+        ),
+        .testTarget(
+            name: "UsageMeterUITests",
+            dependencies: ["UsageMeterUI", "UsageMeterCore"]
         )
     ],
     swiftLanguageModes: [.v6]
