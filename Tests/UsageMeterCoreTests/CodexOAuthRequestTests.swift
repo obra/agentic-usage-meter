@@ -65,7 +65,7 @@ struct CodexOAuthRequestTests {
             redirectURL: redirectURL,
             verifier: "code verifier"
         )
-        let form = try formValues(from: request)
+        let form = try oauthFormValues(from: request)
 
         #expect(request.url?.absoluteString == "https://auth.openai.com/oauth/token")
         #expect(request.httpMethod == "POST")
@@ -99,17 +99,5 @@ struct CodexOAuthRequestTests {
         #expect(body["client_id"] == CodexOAuthRequests.clientID)
         #expect(body["grant_type"] == "refresh_token")
         #expect(body["refresh_token"] == "refresh-secret")
-    }
-
-    private func formValues(from request: URLRequest) throws -> [String: String] {
-        let data = try #require(request.httpBody)
-        let body = try #require(String(data: data, encoding: .utf8))
-        var components = URLComponents()
-        components.percentEncodedQuery = body
-        return Dictionary(
-            uniqueKeysWithValues: (components.queryItems ?? []).compactMap {
-                item in item.value.map { (item.name, $0) }
-            }
-        )
     }
 }

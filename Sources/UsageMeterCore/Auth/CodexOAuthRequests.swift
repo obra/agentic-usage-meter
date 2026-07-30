@@ -77,7 +77,7 @@ public enum CodexOAuthRequests {
             "application/x-www-form-urlencoded",
             forHTTPHeaderField: "Content-Type"
         )
-        request.httpBody = try formData(
+        request.httpBody = try oauthFormData(
             [
                 URLQueryItem(
                     name: "grant_type",
@@ -114,16 +114,6 @@ public enum CodexOAuthRequests {
         return request
     }
 
-    private static func formData(
-        _ queryItems: [URLQueryItem]
-    ) throws -> Data {
-        var components = URLComponents()
-        components.queryItems = queryItems
-        guard let query = components.percentEncodedQuery else {
-            throw CodexOAuthRequestError.invalidURL
-        }
-        return Data(query.utf8)
-    }
 }
 
 private struct RefreshRequest: Encodable {
