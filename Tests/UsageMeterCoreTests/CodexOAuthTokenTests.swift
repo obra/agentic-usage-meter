@@ -6,12 +6,12 @@ import Testing
 struct CodexOAuthTokenTests {
     @Test
     func decodesCredentialAndIdentityFromInitialTokenResponse() throws {
-        let accessToken = try jwt(
+        let accessToken = try makeTestJWT(
             payload: [
                 "exp": 2_000_000_000
             ]
         )
-        let idToken = try jwt(
+        let idToken = try makeTestJWT(
             payload: [
                 "email": "work@example.com",
                 "https://api.openai.com/auth": [
@@ -49,7 +49,7 @@ struct CodexOAuthTokenTests {
 
     @Test
     func identityFallsBackToProfileEmailAndLegacyUserID() throws {
-        let idToken = try jwt(
+        let idToken = try makeTestJWT(
             payload: [
                 "https://api.openai.com/profile": [
                     "email": "personal@example.com"
@@ -71,7 +71,7 @@ struct CodexOAuthTokenTests {
 
     @Test
     func refreshRotatesPresentTokensAndPreservesOmittedTokens() throws {
-        let originalIDToken = try jwt(
+        let originalIDToken = try makeTestJWT(
             payload: [
                 "email": "original@example.com",
                 "https://api.openai.com/auth": [
@@ -89,7 +89,7 @@ struct CodexOAuthTokenTests {
             ),
             identity: try CodexOAuthIdentity.decode(from: originalIDToken)
         )
-        let refreshedAccessToken = try jwt(
+        let refreshedAccessToken = try makeTestJWT(
             payload: [
                 "exp": 2_000_003_600
             ]
@@ -130,17 +130,5 @@ struct CodexOAuthTokenTests {
         } catch {
             #expect(!String(describing: error).contains(secret))
         }
-    }
-
-    private func jwt(payload: [String: Any]) throws -> String {
-        let header = try JSONSerialization.data(
-            withJSONObject: ["alg": "none"]
-        )
-        let payload = try JSONSerialization.data(withJSONObject: payload)
-        return [
-            header.base64URLEncodedString(),
-            payload.base64URLEncodedString(),
-            "signature"
-        ].joined(separator: ".")
     }
 }
