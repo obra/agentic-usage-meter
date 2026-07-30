@@ -79,24 +79,27 @@ private enum AppEnvironment {
                     ),
                 )
                 : AppStateStore(fileURL: stateFileURL())
+        let credentialStore = KeychainCredentialStore()
+        let adapters: [any ProviderAccountAdapter] = [
+            ClaudeWebAccountUsageClient(),
+            CredentialUsageAdapter(
+                provider: .codex,
+                credentialStore: credentialStore,
+                client: CodexUsageClient()
+            ),
+            CredentialUsageAdapter(
+                provider: .kimi,
+                credentialStore: credentialStore,
+                client: KimiUsageClient(),
+                refreshCredential: refreshKimiCredential
+            ),
+        ]
 
         return AppModel(
             stateStore: stateStore,
-            credentialStore: KeychainCredentialStore(),
-            clients: [
-                CodexUsageClient(),
-                KimiUsageClient(),
-            ],
-            credentialRefreshers: [
-                .kimi: refreshKimiCredential,
-            ],
-            claudeClient: ClaudeWebAccountUsageClient(),
-            claudeProfileRemover: {
-                try await ClaudeWebAccountUsageClient.removeProfile(
-                    $0,
-                )
-            },
-            isSampleData: sampleData,
+            credentialStore: credentialStore,
+            adapters: adapters,
+            isSampleData: sampleData
         )
     }
 

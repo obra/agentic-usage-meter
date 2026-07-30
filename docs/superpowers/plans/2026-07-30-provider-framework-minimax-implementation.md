@@ -768,7 +768,7 @@ JSON payloads, service name, and account UUID addressing.
   adapter-driven `AppModel`, and persisted-before-validation connection
   behavior.
 
-- [ ] **Step 1: Write failing adapter-delegation tests**
+- [x] **Step 1: Write failing adapter-delegation tests**
 
 Add this test adapter to `TestSupport.swift`:
 
@@ -899,7 +899,7 @@ func failedFirstUsageKeepsSuccessfulAuthenticationAndAccount() async throws {
 
 The break caught is the existing validate-before-save behavior.
 
-- [ ] **Step 2: Run tests and verify RED**
+- [x] **Step 2: Run tests and verify RED**
 
 ```bash
 swift test --filter AppModelTests
@@ -910,7 +910,7 @@ Expected: compilation fails because `ProviderAccountAdapter` and adapter-based
 test construction do not exist; the connection behavior test fails against the
 current all-or-nothing flow.
 
-- [ ] **Step 3: Add the adapter interface**
+- [x] **Step 3: Add the adapter interface**
 
 Create:
 
@@ -1040,7 +1040,7 @@ IDs from `SubscriptionAccount`, delegates to `ClaudeWebUsageClient`, and
 deletes the profile. Set its recovery flag to `true` to retain the already
 qualified transient-cookie recovery behavior.
 
-- [ ] **Step 4: Refactor `AppModel` to the adapter map**
+- [x] **Step 4: Refactor `AppModel` to the adapter map**
 
 Change initialization to:
 
@@ -1073,7 +1073,7 @@ In `removeAccount`, call `adapter.removeAuthentication(for:)`. Delete
 `clientsByProvider`, `credentialRefreshers`, `claudeClient`,
 `claudeProfileRemover`, and their provider branches.
 
-- [ ] **Step 5: Persist connection state before fetching usage**
+- [x] **Step 5: Persist connection state before fetching usage**
 
 Change generic connection to:
 
@@ -1122,7 +1122,7 @@ identity has been discovered. Accept an optional already-fetched snapshot so a
 successful validation avoids a duplicate contact, while a failed validation
 still leaves a reconnectable account.
 
-- [ ] **Step 6: Rewire the live environment**
+- [x] **Step 6: Rewire the live environment**
 
 Construct:
 
@@ -1146,7 +1146,7 @@ let adapters: [any ProviderAccountAdapter] = [
 
 Pass the same store and adapters to `AppModel`.
 
-- [ ] **Step 7: Run focused and full tests and verify GREEN**
+- [x] **Step 7: Run focused and full tests and verify GREEN**
 
 ```bash
 swift test --filter AppModelTests
@@ -1155,7 +1155,7 @@ swift test --filter ClaudeConnectionQualificationTests
 swift test
 ```
 
-- [ ] **Step 8: Commit adapter delegation**
+- [x] **Step 8: Commit adapter delegation**
 
 Commit with:
 

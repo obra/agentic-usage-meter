@@ -100,7 +100,7 @@ public final class CodexConnectionModel {
             if let reconnectingAccount {
                 try await appModel.reconnectAccount(
                     id: reconnectingAccount.id,
-                    credential: .codex(
+                    credential: ProviderCredential.codex(
                         pendingResult.credential,
                     ),
                     authenticatedIdentity: identity,
@@ -116,7 +116,7 @@ public final class CodexConnectionModel {
                             $0.account.provider == .codex
                         },
                     ),
-                    credential: .codex(
+                    credential: ProviderCredential.codex(
                         pendingResult.credential,
                     ),
                 )
@@ -232,7 +232,7 @@ public final class KimiConnectionModel {
             if let reconnectingAccount {
                 try await appModel.reconnectAccount(
                     id: reconnectingAccount.id,
-                    credential: .kimi(pendingCredential),
+                    credential: ProviderCredential.kimi(pendingCredential),
                 )
             } else {
                 try await appModel.connectAccount(
@@ -244,7 +244,7 @@ public final class KimiConnectionModel {
                             $0.account.provider == .kimi
                         },
                     ),
-                    credential: .kimi(pendingCredential),
+                    credential: ProviderCredential.kimi(pendingCredential),
                 )
             }
             self.pendingCredential = nil

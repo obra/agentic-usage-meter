@@ -11,13 +11,13 @@ public struct ClaudeQualifiedConnection:
     public let organizationID: UUID
     public let organizationName: String
     public let organizationCount: Int
-    public let snapshot: UsageSnapshot
+    public let snapshot: UsageSnapshot?
 
     public init(
         organizationID: UUID,
         organizationName: String,
         organizationCount: Int,
-        snapshot: UsageSnapshot,
+        snapshot: UsageSnapshot?,
     ) {
         self.organizationID = organizationID
         self.organizationName = organizationName
@@ -348,13 +348,18 @@ public final class ClaudeConnectionModel {
 
                 stage = .usage
                 phase = .loadingUsage
-                let snapshot = try await retrier.run {
-                    try await usageClient.fetchUsage(
-                        accountID: accountID,
-                        profileID: profileID,
-                        organizationID: organization.id,
-                        now: Date(),
-                    )
+                let snapshot: UsageSnapshot?
+                do {
+                    snapshot = try await retrier.run {
+                        try await usageClient.fetchUsage(
+                            accountID: accountID,
+                            profileID: profileID,
+                            organizationID: organization.id,
+                            now: Date(),
+                        )
+                    }
+                } catch {
+                    snapshot = nil
                 }
                 loginSession?.close()
                 loginSession = nil
@@ -382,7 +387,10 @@ public final class ClaudeConnectionModel {
     private func accept(
         _ connection: ClaudeQualifiedConnection,
     ) throws {
-        guard connection.snapshot.accountID == accountID else {
+        guard
+            connection.snapshot?.accountID == accountID
+                || connection.snapshot == nil
+        else {
             throw AppModelError.invalidSnapshot
         }
         pendingConnection = connection

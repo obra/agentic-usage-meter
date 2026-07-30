@@ -31,7 +31,16 @@ func removingAccountDeletesCredentialAndState() async throws {
     let model = AppModel(
         stateStore: stateStore,
         credentialStore: credentials,
-        clients: [],
+        adapters: [
+            CredentialUsageAdapter(
+                provider: .codex,
+                credentialStore: credentials,
+                client: TestUsageProviderClient(
+                    provider: .codex,
+                    snapshots: [:]
+                )
+            ),
+        ],
         now: { Date(timeIntervalSince1970: 2_000_000_000) },
     )
     await model.start()
@@ -41,6 +50,33 @@ func removingAccountDeletesCredentialAndState() async throws {
     #expect(model.accounts.isEmpty)
     #expect(await credentials.loadCredential(for: account.id) == nil)
     #expect(await stateStore.state.accounts.isEmpty)
+}
+
+@Test
+@MainActor
+func removingAccountDelegatesAuthenticationCleanup() async throws {
+    let account = SubscriptionAccount(
+        provider: .minimax,
+        displayName: "MiniMax",
+        displayOrder: 0,
+    )
+    let adapter = TestProviderAccountAdapter(provider: .minimax)
+    let model = AppModel(
+        stateStore: TestAppStateStore(
+            state: PersistedAppState(
+                accounts: [account],
+                snapshots: [:],
+            ),
+        ),
+        credentialStore: TestCredentialStore(),
+        adapters: [adapter],
+        now: { Date(timeIntervalSince1970: 2_000_000_000) },
+    )
+    await model.start()
+
+    try await model.removeAccount(id: account.id)
+
+    #expect(await adapter.removedAccountIDs == [account.id])
 }
 
 @Test
@@ -72,7 +108,13 @@ func connectingAccountValidatesBeforePersisting() async throws {
     let model = AppModel(
         stateStore: stateStore,
         credentialStore: credentials,
-        clients: [provider],
+        adapters: [
+            CredentialUsageAdapter(
+                provider: .kimi,
+                credentialStore: credentials,
+                client: provider
+            ),
+        ],
         now: { reference },
     )
     await model.start()
@@ -97,7 +139,7 @@ func connectingAccountValidatesBeforePersisting() async throws {
 
 @Test
 @MainActor
-func failedConnectionLeavesNoCredentialOrMetadata() async {
+func failedFirstUsageKeepsSuccessfulAuthenticationAndAccount() async throws {
     let reference = Date(timeIntervalSince1970: 2_000_000_000)
     let account = SubscriptionAccount(
         provider: .codex,
@@ -106,34 +148,31 @@ func failedConnectionLeavesNoCredentialOrMetadata() async {
     )
     let stateStore = TestAppStateStore(state: .empty)
     let credentials = TestCredentialStore()
+    let adapter = TestProviderAccountAdapter(
+        provider: .codex,
+        result: .failure(ProviderClientError.temporaryFailure),
+    )
     let model = AppModel(
         stateStore: stateStore,
         credentialStore: credentials,
-        clients: [
-            TestUsageProviderClient(
-                provider: .codex,
-                snapshots: [:],
-            ),
-        ],
+        adapters: [adapter],
         now: { reference },
     )
     await model.start()
+    let credential = ProviderCredential.codex(
+        OAuthCredential(
+            accessToken: "access",
+            accountID: "provider-account",
+        ),
+    )
 
-    await #expect(throws: ProviderClientError.temporaryFailure) {
-        try await model.connectAccount(
-            account,
-            credential: .codex(
-                OAuthCredential(
-                    accessToken: "access",
-                    accountID: "provider-account",
-                ),
-            ),
-        )
-    }
+    try await model.connectAccount(account, credential: credential)
 
-    #expect(model.accounts.isEmpty)
-    #expect(await credentials.loadCredential(for: account.id) == nil)
-    #expect(await stateStore.state == .empty)
+    #expect(model.accounts.map(\.account) == [account])
+    #expect(model.accounts[0].snapshot == nil)
+    #expect(model.accounts[0].error == .temporarilyUnavailable)
+    #expect(await credentials.loadCredential(for: account.id) == credential)
+    #expect(await stateStore.state.accounts == [account])
 }
 
 @Test
@@ -169,7 +208,13 @@ func reconnectValidatesReplacementBeforeClearingError() async throws {
     let model = AppModel(
         stateStore: stateStore,
         credentialStore: credentials,
-        clients: [provider],
+        adapters: [
+            CredentialUsageAdapter(
+                provider: .codex,
+                credentialStore: credentials,
+                client: provider
+            ),
+        ],
         now: { reference },
     )
     await model.start()
@@ -220,10 +265,7 @@ func claudeConnectionPersistsProfileAndRemovalDeletesIt() async throws {
     let model = AppModel(
         stateStore: stateStore,
         credentialStore: credentials,
-        clients: [],
-        claudeProfileRemover: { profileID in
-            profileRemover.remove(profileID)
-        },
+        adapters: [profileRemover],
         now: { reference },
     )
     await model.start()
@@ -241,6 +283,36 @@ func claudeConnectionPersistsProfileAndRemovalDeletesIt() async throws {
     #expect(profileRemover.removedProfileIDs == [profileID])
     #expect(model.accounts.isEmpty)
     #expect(await stateStore.state.accounts.isEmpty)
+}
+
+@Test
+@MainActor
+func claudeConnectionCanPersistBeforeInitialUsageSucceeds() async throws {
+    let reference = Date(timeIntervalSince1970: 2_000_000_000)
+    let account = SubscriptionAccount(
+        provider: .claude,
+        displayName: "Work Claude",
+        authenticatedIdentity: "Work organization",
+        displayOrder: 0,
+        claudeProfileID: UUID(),
+        claudeOrganizationID: UUID(),
+    )
+    let stateStore = TestAppStateStore(state: .empty)
+    let adapter = TestProviderAccountAdapter(provider: .claude)
+    let model = AppModel(
+        stateStore: stateStore,
+        credentialStore: TestCredentialStore(),
+        adapters: [adapter],
+        now: { reference },
+    )
+    await model.start()
+
+    try await model.connectClaudeAccount(account)
+
+    #expect(model.accounts.map(\.account) == [account])
+    #expect(model.accounts[0].snapshot == nil)
+    #expect(model.accounts[0].error == .temporarilyUnavailable)
+    #expect(await stateStore.state.accounts == [account])
 }
 
 @Test
@@ -286,10 +358,7 @@ func reconnectingClaudeReplacesItsIsolatedBrowserProfile() async throws {
     let model = AppModel(
         stateStore: stateStore,
         credentialStore: TestCredentialStore(),
-        clients: [],
-        claudeProfileRemover: { profileID in
-            profileRemover.remove(profileID)
-        },
+        adapters: [profileRemover],
         now: { reference },
     )
     await model.start()
@@ -321,10 +390,14 @@ func codexConnectionConfirmsIdentityBeforeSavingLabel() async throws {
     let appModel = AppModel(
         stateStore: TestAppStateStore(state: .empty),
         credentialStore: credentials,
-        clients: [
-            TestUsageProviderClient(
+        adapters: [
+            CredentialUsageAdapter(
                 provider: .codex,
-                snapshots: [accountID: snapshot],
+                credentialStore: credentials,
+                client: TestUsageProviderClient(
+                    provider: .codex,
+                    snapshots: [accountID: snapshot]
+                )
             ),
         ],
         now: { reference },
@@ -417,7 +490,13 @@ func codexConnectionBlocksAnAlreadyConnectedIdentity() async throws {
             ),
         ),
         credentialStore: credentials,
-        clients: [provider],
+        adapters: [
+            CredentialUsageAdapter(
+                provider: .codex,
+                credentialStore: credentials,
+                client: provider
+            ),
+        ],
         now: { reference },
     )
     await appModel.start()
@@ -475,16 +554,20 @@ func kimiConnectionPublishesDevicePromptBeforeSaving() async throws {
     let appModel = AppModel(
         stateStore: TestAppStateStore(state: .empty),
         credentialStore: credentials,
-        clients: [
-            TestUsageProviderClient(
+        adapters: [
+            CredentialUsageAdapter(
                 provider: .kimi,
-                snapshots: [
-                    accountID: UsageSnapshot(
-                        accountID: accountID,
-                        fetchedAt: reference,
-                        windows: [],
-                    ),
-                ],
+                credentialStore: credentials,
+                client: TestUsageProviderClient(
+                    provider: .kimi,
+                    snapshots: [
+                        accountID: UsageSnapshot(
+                            accountID: accountID,
+                            fetchedAt: reference,
+                            windows: []
+                        ),
+                    ]
+                )
             ),
         ],
         now: { reference },
@@ -529,8 +612,7 @@ func claudeConnectionQualifiesProfileBeforeSaving() async throws {
     let appModel = AppModel(
         stateStore: TestAppStateStore(state: .empty),
         credentialStore: TestCredentialStore(),
-        clients: [],
-        claudeProfileRemover: { _ in },
+        adapters: [TestClaudeProfileRemover()],
         now: { reference },
     )
     await appModel.start()
@@ -580,7 +662,7 @@ func cancellingClaudeConnectionDeletesProvisionalProfile() async {
     let appModel = AppModel(
         stateStore: TestAppStateStore(state: .empty),
         credentialStore: TestCredentialStore(),
-        clients: [],
+        adapters: [],
     )
     await appModel.start()
     let connection = ClaudeConnectionModel(

@@ -82,25 +82,66 @@ actor TestUsageProviderClient: UsageProviderClient {
     }
 }
 
-actor TestClaudeAccountUsageClient: ClaudeAccountUsageFetching {
+actor TestProviderAccountAdapter: ProviderAccountAdapter {
+    let provider: Provider
+    private let result: Result<UsageSnapshot, any Error>
+    private(set) var fetchedAccountIDs: [UUID] = []
+    private(set) var removedAccountIDs: [UUID] = []
+
+    init(
+        provider: Provider,
+        result: Result<UsageSnapshot, any Error> = .failure(
+            ProviderClientError.temporaryFailure
+        )
+    ) {
+        self.provider = provider
+        self.result = result
+    }
+
+    func fetchUsage(
+        for account: SubscriptionAccount,
+        now _: Date
+    ) throws -> UsageSnapshot {
+        fetchedAccountIDs.append(account.id)
+        return try result.get()
+    }
+
+    func removeAuthentication(
+        for account: SubscriptionAccount
+    ) {
+        removedAccountIDs.append(account.id)
+    }
+}
+
+actor TestClaudeAccountUsageClient: ProviderAccountAdapter {
+    let provider = Provider.claude
     private let snapshots: [UUID: UsageSnapshot]
     private(set) var requestedAccountIDs: [UUID] = []
+    private(set) var removedAccountIDs: [UUID] = []
+
+    nonisolated var canRecoverAuthenticationWithoutReconnect: Bool {
+        true
+    }
 
     init(snapshots: [UUID: UsageSnapshot]) {
         self.snapshots = snapshots
     }
 
     func fetchUsage(
-        accountID: UUID,
-        profileID _: UUID,
-        organizationID _: UUID,
+        for account: SubscriptionAccount,
         now _: Date,
     ) throws -> UsageSnapshot {
-        requestedAccountIDs.append(accountID)
-        guard let snapshot = snapshots[accountID] else {
+        requestedAccountIDs.append(account.id)
+        guard let snapshot = snapshots[account.id] else {
             throw ProviderClientError.temporaryFailure
         }
         return snapshot
+    }
+
+    func removeAuthentication(
+        for account: SubscriptionAccount
+    ) {
+        removedAccountIDs.append(account.id)
     }
 }
 
@@ -182,10 +223,27 @@ func makeTestWindow(
 }
 
 @MainActor
-final class TestClaudeProfileRemover {
+final class TestClaudeProfileRemover: ProviderAccountAdapter {
+    nonisolated let provider = Provider.claude
     private(set) var removedProfileIDs: [UUID] = []
 
     func remove(_ profileID: UUID) {
         removedProfileIDs.append(profileID)
+    }
+
+    func fetchUsage(
+        for _: SubscriptionAccount,
+        now _: Date
+    ) throws -> UsageSnapshot {
+        throw ProviderClientError.temporaryFailure
+    }
+
+    func removeAuthentication(
+        for account: SubscriptionAccount
+    ) throws {
+        guard let profileID = account.claudeProfileID else {
+            throw ProviderClientError.credentialMismatch
+        }
+        remove(profileID)
     }
 }

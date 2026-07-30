@@ -14,6 +14,40 @@ struct AppModelTests {
     )
 
     @Test
+    func refreshUsesTheAccountsAdapterWithoutProviderBranch() async {
+        let account = SubscriptionAccount(
+            provider: .minimax,
+            displayName: "MiniMax",
+            displayOrder: 0,
+        )
+        let snapshot = UsageSnapshot(
+            accountID: account.id,
+            fetchedAt: reference,
+            windows: [],
+        )
+        let adapter = TestProviderAccountAdapter(
+            provider: .minimax,
+            result: .success(snapshot),
+        )
+        let model = AppModel(
+            stateStore: TestAppStateStore(
+                state: PersistedAppState(
+                    accounts: [account],
+                    snapshots: [:],
+                ),
+            ),
+            credentialStore: TestCredentialStore(),
+            adapters: [adapter],
+            now: { self.reference },
+        )
+
+        await model.start()
+
+        #expect(await adapter.fetchedAccountIDs == [account.id])
+        #expect(model.accounts.first?.snapshot == snapshot)
+    }
+
+    @Test
     func launchShowsCacheThenRefreshesEligibleAccount() async throws {
         let account = SubscriptionAccount(
             provider: .codex,
@@ -71,7 +105,13 @@ struct AppModelTests {
         let model = AppModel(
             stateStore: stateStore,
             credentialStore: credentials,
-            clients: [provider],
+            adapters: [
+                CredentialUsageAdapter(
+                    provider: .codex,
+                    credentialStore: credentials,
+                    client: provider
+                ),
+            ],
             now: { reference },
         )
 
@@ -114,10 +154,17 @@ struct AppModelTests {
             provider: .kimi,
             snapshots: [:],
         )
+        let credentials = TestCredentialStore()
         let model = AppModel(
             stateStore: stateStore,
-            credentialStore: TestCredentialStore(),
-            clients: [provider],
+            credentialStore: credentials,
+            adapters: [
+                CredentialUsageAdapter(
+                    provider: .kimi,
+                    credentialStore: credentials,
+                    client: provider
+                ),
+            ],
             now: { reference },
         )
 
@@ -151,6 +198,16 @@ struct AppModelTests {
         )
         let clock = TestMutableDate(reference)
         let sleeper = TestAutomaticRefreshSleeper(clock: clock)
+        let credentials = TestCredentialStore(
+            credentials: [
+                account.id: .codex(
+                    OAuthCredential(
+                        accessToken: "token",
+                        accountID: "provider-account"
+                    )
+                ),
+            ]
+        )
         let model = AppModel(
             stateStore: TestAppStateStore(
                 state: PersistedAppState(
@@ -164,17 +221,14 @@ struct AppModelTests {
                     ],
                 ),
             ),
-            credentialStore: TestCredentialStore(
-                credentials: [
-                    account.id: .codex(
-                        OAuthCredential(
-                            accessToken: "token",
-                            accountID: "provider-account",
-                        ),
-                    ),
-                ],
-            ),
-            clients: [provider],
+            credentialStore: credentials,
+            adapters: [
+                CredentialUsageAdapter(
+                    provider: .codex,
+                    credentialStore: credentials,
+                    client: provider
+                ),
+            ],
             now: { clock.current },
         )
         await model.start()
@@ -230,8 +284,7 @@ struct AppModelTests {
         let model = AppModel(
             stateStore: stateStore,
             credentialStore: TestCredentialStore(),
-            clients: [],
-            claudeClient: claudeClient,
+            adapters: [claudeClient],
             now: { reference },
         )
 
@@ -307,14 +360,18 @@ struct AppModelTests {
         let model = AppModel(
             stateStore: stateStore,
             credentialStore: credentialStore,
-            clients: [provider],
-            credentialRefreshers: [
-                .kimi: { accountID, credential in
+            adapters: [
+                CredentialUsageAdapter(
+                    provider: .kimi,
+                    credentialStore: credentialStore,
+                    client: provider,
+                    refreshCredential: { accountID, credential in
                     try await refreshRecorder.refresh(
                         accountID: accountID,
                         credential: credential,
                     )
-                },
+                    }
+                ),
             ],
             now: { self.reference },
         )
@@ -358,7 +415,7 @@ struct AppModelTests {
         let model = AppModel(
             stateStore: stateStore,
             credentialStore: TestCredentialStore(),
-            clients: [],
+            adapters: [],
             now: { reference },
         )
         await model.start()
@@ -401,7 +458,7 @@ struct AppModelTests {
         let model = AppModel(
             stateStore: stateStore,
             credentialStore: TestCredentialStore(),
-            clients: [],
+            adapters: [],
             now: { reference },
         )
         await model.start()
@@ -470,7 +527,13 @@ struct AppModelTests {
         let model = AppModel(
             stateStore: stateStore,
             credentialStore: credentials,
-            clients: [provider],
+            adapters: [
+                CredentialUsageAdapter(
+                    provider: .codex,
+                    credentialStore: credentials,
+                    client: provider
+                ),
+            ],
             now: { reference },
         )
 
@@ -536,7 +599,7 @@ struct AppModelTests {
                 ),
             ),
             credentialStore: TestCredentialStore(),
-            clients: [],
+            adapters: [],
             now: { reference },
         )
 
@@ -551,7 +614,7 @@ struct AppModelTests {
         let model = AppModel(
             stateStore: TestAppStateStore(state: .empty),
             credentialStore: TestCredentialStore(),
-            clients: [],
+            adapters: [],
             now: { reference },
         )
 
@@ -566,7 +629,7 @@ struct AppModelTests {
         let model = AppModel(
             stateStore: TestAppStateStore(state: .empty),
             credentialStore: TestCredentialStore(),
-            clients: [],
+            adapters: [],
             isSampleData: true,
             now: { reference },
         )
@@ -580,7 +643,7 @@ struct AppModelTests {
         let model = AppModel(
             stateStore: stateStore,
             credentialStore: TestCredentialStore(),
-            clients: [],
+            adapters: [],
             now: { reference },
         )
         await model.start()
@@ -613,7 +676,7 @@ struct AppModelTests {
         let model = AppModel(
             stateStore: stateStore,
             credentialStore: TestCredentialStore(),
-            clients: [],
+            adapters: [],
             now: { reference },
         )
         await model.start()
@@ -651,7 +714,7 @@ struct AppModelTests {
                 state: try populatedState(),
             ),
             credentialStore: TestCredentialStore(),
-            clients: [],
+            adapters: [],
             now: { self.reference },
         )
         let emptyHostingView = NSHostingView(
@@ -707,8 +770,7 @@ struct AppModelTests {
                 ),
             ),
             credentialStore: TestCredentialStore(),
-            clients: [],
-            claudeClient: claudeClient,
+            adapters: [claudeClient],
             now: { reference },
         )
 

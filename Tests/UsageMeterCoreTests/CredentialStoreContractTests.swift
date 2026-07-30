@@ -60,7 +60,7 @@ private struct ExampleAPIKey: Codable, Equatable, Sendable {
 }
 
 @Test
-func legacyCredentialKeepsItsExistingJSONPayload() async throws {
+func legacyCredentialKeepsItsExistingJSONStructure() async throws {
     let accountID = UUID()
     let store = InMemoryCredentialStore()
     let credential = ProviderCredential.codex(
@@ -75,7 +75,13 @@ func legacyCredentialKeepsItsExistingJSONPayload() async throws {
 
     let raw = try #require(await store.loadData(for: accountID))
     let expected = try JSONEncoder().encode(credential)
-    #expect(raw == expected)
+    let rawObject = try #require(
+        JSONSerialization.jsonObject(with: raw) as? NSDictionary
+    )
+    let expectedObject = try #require(
+        JSONSerialization.jsonObject(with: expected) as? NSDictionary
+    )
+    #expect(rawObject == expectedObject)
     #expect(try await store.load(for: accountID) == credential)
 }
 

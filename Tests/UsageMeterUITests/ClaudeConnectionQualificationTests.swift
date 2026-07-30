@@ -73,7 +73,7 @@ struct ClaudeConnectionQualificationTests {
         let appModel = AppModel(
             stateStore: TestAppStateStore(state: .empty),
             credentialStore: TestCredentialStore(),
-            clients: [],
+            adapters: [TestClaudeProfileRemover()],
             now: { reference },
         )
         await appModel.start()
@@ -108,5 +108,38 @@ struct ClaudeConnectionQualificationTests {
                     organizationCount: 1,
                 ),
         )
+    }
+
+    @Test
+    func authenticatedProfileCanBeSavedWithoutInitialUsage() async throws {
+        let accountID = UUID()
+        let organizationID = UUID()
+        let appModel = AppModel(
+            stateStore: TestAppStateStore(state: .empty),
+            credentialStore: TestCredentialStore(),
+            adapters: [TestClaudeProfileRemover()]
+        )
+        await appModel.start()
+        let connection = ClaudeConnectionModel(
+            appModel: appModel,
+            accountID: accountID,
+            qualify: {
+                ClaudeQualifiedConnection(
+                    organizationID: organizationID,
+                    organizationName: "Work",
+                    organizationCount: 1,
+                    snapshot: nil
+                )
+            },
+            removeProfile: { _ in }
+        )
+
+        await connection.start()
+        try await connection.save(displayName: "Work Claude")
+
+        #expect(connection.phase == .complete)
+        #expect(appModel.accounts.count == 1)
+        #expect(appModel.accounts[0].snapshot == nil)
+        #expect(appModel.accounts[0].error == .temporarilyUnavailable)
     }
 }
