@@ -95,4 +95,25 @@ The automated adapter contract follows MoonshotAI Kimi CLI commit
   including a 300-minute rolling window, nested or item-level details,
   remaining quota, reset aliases, and nanosecond ISO timestamps.
 
-Live account qualification is still pending.
+### 2026-07-29 device-OAuth qualification
+
+The probe was run on macOS 26.5.2 with one Kimi Code subscription.
+
+- The device-authorization API returned an HTTPS verification URL on
+  `www.kimi.com`, not `auth.kimi.com`. The original host allowlist rejected
+  that valid response before opening the browser. The qualified flow now
+  accepts the two official Kimi hosts and continues to reject arbitrary hosts.
+- Authorization completed in the regular system browser, and the credential
+  was stored in an isolated Keychain record rather than the existing Kimi CLI
+  login.
+- The initial live usage response contained one 604,800-second weekly window.
+  It did not contain an 18,000-second rolling window.
+- After waiting at least ten minutes, the credential was loaded from Keychain,
+  refreshed with token rotation, and used for one more usage request. The
+  response again contained the weekly window only.
+- The temporary Keychain record was removed after the refresh and persistence
+  check, and lookup confirmed that it no longer existed.
+
+The adapter remains capable of decoding Kimi's documented 300-minute limit
+when the provider supplies it. The UI must preserve the live weekly-only state
+without inventing a five-hour value.
