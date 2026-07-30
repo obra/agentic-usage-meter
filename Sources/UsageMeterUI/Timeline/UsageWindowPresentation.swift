@@ -3,13 +3,15 @@ import UsageMeterCore
 
 public struct UsageWindowPresentation: Equatable, Sendable {
     public let provider: Provider
-    public let accountName: String
+    public let providerText: String
+    public let accountText: String?
     public let outerXFraction: Double
     public let outerWidthFraction: Double
     public let fillFraction: Double
     public let nowXFraction: Double
-    public let remainingText: String
-    public let expiryText: String
+    public let remainingPercentageText: String
+    public let relativeResetText: String
+    public let exactResetText: String
     public let accessibilityValue: String
 
     public init(
@@ -19,7 +21,18 @@ public struct UsageWindowPresentation: Equatable, Sendable {
         timeZone: TimeZone = .autoupdatingCurrent,
     ) {
         provider = account.provider
-        accountName = account.displayName
+        providerText = switch account.provider {
+        case .claude:
+            "Claude"
+        case .codex:
+            "Codex"
+        case .kimi:
+            "Kimi"
+        }
+        accountText =
+            account.displayName == providerText
+                ? nil
+                : account.displayName
 
         let axisDuration: TimeInterval =
             window.kind == .weekly ? 604_800 : 18000
@@ -35,22 +48,18 @@ public struct UsageWindowPresentation: Equatable, Sendable {
         let remainingPercent = Int(
             (window.remainingFraction * 100).rounded(),
         )
-        remainingText = "\(remainingPercent)% left"
+        remainingPercentageText = "\(remainingPercent)%"
+        relativeResetText = Self.relativeResetText(
+            from: now,
+            to: window.resetAt,
+        )
 
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = timeZone
         formatter.dateFormat = "EEE h:mm a"
-        expiryText = formatter.string(from: window.resetAt)
+        exactResetText = formatter.string(from: window.resetAt)
 
-        let providerName = switch account.provider {
-        case .claude:
-            "Claude"
-        case .codex:
-            "Codex"
-        case .kimi:
-            "Kimi"
-        }
         let windowName = switch window.kind {
         case .short:
             "five-hour"
@@ -58,9 +67,34 @@ public struct UsageWindowPresentation: Equatable, Sendable {
             "weekly"
         }
         accessibilityValue =
-            "\(providerName), \(account.displayName), "
+            "\(providerText), \(account.displayName), "
                 + "\(windowName) window, \(remainingPercent) percent remaining, "
-                + "resets \(expiryText)"
+                + "resets \(exactResetText)"
+    }
+
+    private static func relativeResetText(
+        from now: Date,
+        to resetAt: Date,
+    ) -> String {
+        let interval = resetAt.timeIntervalSince(now)
+        guard interval > 0 else {
+            return "Now"
+        }
+
+        let totalMinutes = Int(interval) / 60
+        if totalMinutes < 60 {
+            return "\(totalMinutes)m"
+        }
+
+        let totalHours = totalMinutes / 60
+        let minutes = totalMinutes % 60
+        if totalHours < 24 {
+            return "\(totalHours)h \(minutes)m"
+        }
+
+        let days = totalHours / 24
+        let hours = totalHours % 24
+        return "\(days)d \(hours)h"
     }
 }
 

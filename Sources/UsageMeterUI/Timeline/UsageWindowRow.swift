@@ -56,11 +56,13 @@ public struct UsageWindowRow: View {
 
                         HStack(spacing: 6) {
                             timelinePill(
-                                presentation.remainingText,
+                                presentation
+                                    .remainingPercentageText
+                                    + " left",
                             )
                             Spacer(minLength: 4)
                             timelinePill(
-                                presentation.expiryText,
+                                presentation.exactResetText,
                             )
                         }
                         .padding(.horizontal, 5)

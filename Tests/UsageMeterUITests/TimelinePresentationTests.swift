@@ -6,7 +6,7 @@ import UsageMeterCore
 @Suite
 struct TimelinePresentationTests {
     @Test
-    func weeklyRowContainsApprovedGeometryAndPills() throws {
+    func weeklyRowPresentsAlignedIdentityAndResetValues() throws {
         let account = SubscriptionAccount(
             provider: .codex,
             displayName: "Work",
@@ -33,8 +33,11 @@ struct TimelinePresentationTests {
         #expect(presentation.outerWidthFraction == 0.5)
         #expect(presentation.fillFraction == 0.66)
         #expect(presentation.nowXFraction == 0.5)
-        #expect(presentation.remainingText == "34% left")
-        #expect(presentation.expiryText == "Mon 2:40 PM")
+        #expect(presentation.providerText == "Codex")
+        #expect(presentation.accountText == "Work")
+        #expect(presentation.remainingPercentageText == "34%")
+        #expect(presentation.relativeResetText == "5d 11h")
+        #expect(presentation.exactResetText == "Mon 2:40 PM")
         #expect(
             presentation.accessibilityValue
                 == "Codex, Work, weekly window, 34 percent remaining, resets Mon 2:40 PM",
@@ -68,7 +71,91 @@ struct TimelinePresentationTests {
         #expect(presentation.outerXFraction == 0.25)
         #expect(presentation.outerWidthFraction == 0.5)
         #expect(presentation.fillFraction == 0.25)
-        #expect(presentation.remainingText == "75% left")
+        #expect(presentation.remainingPercentageText == "75%")
+        #expect(presentation.relativeResetText == "2h 30m")
+    }
+
+    @Test
+    func resetUnderOneHourUsesMinutes() throws {
+        let account = SubscriptionAccount(
+            provider: .claude,
+            displayName: "Personal",
+            displayOrder: 0,
+        )
+        let window = try #require(
+            UsageWindow(
+                id: "short",
+                kind: .short,
+                duration: 18000,
+                resetAt: Date(timeIntervalSince1970: 2_000_003_540),
+                consumedFraction: 0.25,
+            ),
+        )
+
+        let presentation = UsageWindowPresentation(
+            account: account,
+            window: window,
+            now: Date(timeIntervalSince1970: 2_000_000_000),
+            timeZone: TimeZone(secondsFromGMT: 0)!,
+        )
+
+        #expect(presentation.relativeResetText == "59m")
+    }
+
+    @Test
+    func expiredWindowResetsNow() throws {
+        let account = SubscriptionAccount(
+            provider: .claude,
+            displayName: "Personal",
+            displayOrder: 0,
+        )
+        let window = try #require(
+            UsageWindow(
+                id: "short",
+                kind: .short,
+                duration: 18000,
+                resetAt: Date(timeIntervalSince1970: 1_999_999_999),
+                consumedFraction: 0.25,
+            ),
+        )
+
+        let presentation = UsageWindowPresentation(
+            account: account,
+            window: window,
+            now: Date(timeIntervalSince1970: 2_000_000_000),
+            timeZone: TimeZone(secondsFromGMT: 0)!,
+        )
+
+        #expect(presentation.relativeResetText == "Now")
+    }
+
+    @Test
+    func repeatedProviderAndAccountNameIsShownOnce() throws {
+        let account = SubscriptionAccount(
+            provider: .kimi,
+            displayName: "Kimi",
+            displayOrder: 0,
+        )
+        let window = try #require(
+            UsageWindow(
+                id: "weekly",
+                kind: .weekly,
+                duration: 604_800,
+                resetAt: Date(timeIntervalSince1970: 2_000_472_000),
+                consumedFraction: 0.27,
+            ),
+        )
+
+        let presentation = UsageWindowPresentation(
+            account: account,
+            window: window,
+            now: Date(timeIntervalSince1970: 2_000_000_000),
+            timeZone: TimeZone(secondsFromGMT: 0)!,
+        )
+
+        #expect(presentation.providerText == "Kimi")
+        #expect(presentation.accountText == nil)
+        #expect(presentation.remainingPercentageText == "73%")
     }
 
     @Test
