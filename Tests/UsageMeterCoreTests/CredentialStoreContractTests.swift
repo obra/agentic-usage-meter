@@ -55,14 +55,52 @@ func credentialStoreReplacesAnAccountsCredential() async throws {
     #expect(try await store.load(for: accountID) == replacement)
 }
 
-private actor InMemoryCredentialStore: CredentialStore {
-    private var credentials: [UUID: ProviderCredential] = [:]
+private struct ExampleAPIKey: Codable, Equatable, Sendable {
+    let value: String
+}
 
-    func save(_ credential: ProviderCredential, for accountID: UUID) {
-        credentials[accountID] = credential
+@Test
+func legacyCredentialKeepsItsExistingJSONPayload() async throws {
+    let accountID = UUID()
+    let store = InMemoryCredentialStore()
+    let credential = ProviderCredential.codex(
+        OAuthCredential(
+            accessToken: "access",
+            refreshToken: "refresh",
+            accountID: "provider-user"
+        )
+    )
+
+    try await store.save(credential, for: accountID)
+
+    let raw = try #require(await store.loadData(for: accountID))
+    let expected = try JSONEncoder().encode(credential)
+    #expect(raw == expected)
+    #expect(try await store.load(for: accountID) == credential)
+}
+
+@Test
+func providerOwnedCredentialRoundTripsWithoutNewEnumCase() async throws {
+    let accountID = UUID()
+    let store = InMemoryCredentialStore()
+    let credential = ExampleAPIKey(value: "secret")
+
+    try await store.save(credential, for: accountID)
+
+    #expect(
+        try await store.load(ExampleAPIKey.self, for: accountID)
+            == credential
+    )
+}
+
+private actor InMemoryCredentialStore: CredentialStore {
+    private var credentials: [UUID: Data] = [:]
+
+    func saveData(_ data: Data, for accountID: UUID) {
+        credentials[accountID] = data
     }
 
-    func load(for accountID: UUID) -> ProviderCredential? {
+    func loadData(for accountID: UUID) -> Data? {
         credentials[accountID]
     }
 

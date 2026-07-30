@@ -626,7 +626,7 @@ and preserve the approved aligned axes for five-hour and weekly windows.
 - Produces: raw `CredentialStore` requirements plus
   `save(_:for:)`, `load(_:for:)`, and legacy `load(for:)` typed conveniences.
 
-- [ ] **Step 1: Write failing raw-store compatibility tests**
+- [x] **Step 1: Write failing raw-store compatibility tests**
 
 In `CredentialStoreContractTests.swift`, change the test in-memory store to
 capture raw `Data`, then add:
@@ -673,7 +673,7 @@ func providerOwnedCredentialRoundTripsWithoutNewEnumCase() async throws {
 The production breaks caught are changed legacy bytes or a store API that
 forces every provider secret into `ProviderCredential`.
 
-- [ ] **Step 2: Run tests and verify RED**
+- [x] **Step 2: Run tests and verify RED**
 
 ```bash
 swift test --filter CredentialStoreContractTests
@@ -682,7 +682,7 @@ swift test --filter CredentialStoreContractTests
 Expected: compilation fails because raw methods and generic typed methods do
 not exist.
 
-- [ ] **Step 3: Change the store protocol to raw data**
+- [x] **Step 3: Change the store protocol to raw data**
 
 Replace requirements with:
 
@@ -725,7 +725,7 @@ Implement `saveData` and `loadData` in `KeychainCredentialStore` without
 changing `service`, `kSecAttrAccount`, accessibility, or synchronizability.
 Update both test stores.
 
-- [ ] **Step 4: Run focused and full tests and verify GREEN**
+- [x] **Step 4: Run focused and full tests and verify GREEN**
 
 ```bash
 swift test --filter CredentialStoreContractTests
@@ -733,7 +733,7 @@ swift test --filter AppModelTests
 swift test
 ```
 
-- [ ] **Step 5: Commit typed credential storage**
+- [x] **Step 5: Commit typed credential storage**
 
 Commit with:
 

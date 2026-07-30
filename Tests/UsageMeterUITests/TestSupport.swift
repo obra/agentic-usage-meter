@@ -20,21 +20,38 @@ actor TestAppStateStore: AppStatePersisting {
 }
 
 actor TestCredentialStore: CredentialStore {
-    private var credentials: [UUID: ProviderCredential]
+    private var credentials: [UUID: Data]
 
     init(credentials: [UUID: ProviderCredential] = [:]) {
-        self.credentials = credentials
+        self.credentials = Dictionary(
+            uniqueKeysWithValues: credentials.map { accountID, credential in
+                (
+                    accountID,
+                    try! JSONEncoder().encode(credential)
+                )
+            }
+        )
     }
 
-    func save(
-        _ credential: ProviderCredential,
+    func saveData(
+        _ data: Data,
         for accountID: UUID,
     ) {
-        credentials[accountID] = credential
+        credentials[accountID] = data
     }
 
-    func load(for accountID: UUID) -> ProviderCredential? {
+    func loadData(for accountID: UUID) -> Data? {
         credentials[accountID]
+    }
+
+    func loadCredential(for accountID: UUID) -> ProviderCredential? {
+        guard let data = credentials[accountID] else {
+            return nil
+        }
+        return try? JSONDecoder().decode(
+            ProviderCredential.self,
+            from: data
+        )
     }
 
     func delete(for accountID: UUID) {

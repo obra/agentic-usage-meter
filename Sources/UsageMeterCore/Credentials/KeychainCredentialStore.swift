@@ -15,11 +15,10 @@ public actor KeychainCredentialStore: CredentialStore {
         self.service = service
     }
 
-    public func save(
-        _ credential: ProviderCredential,
+    public func saveData(
+        _ data: Data,
         for accountID: UUID
     ) throws {
-        let data = try JSONEncoder().encode(credential)
         let query = lookupQuery(for: accountID)
         let status = SecItemUpdate(
             query as CFDictionary,
@@ -43,7 +42,7 @@ public actor KeychainCredentialStore: CredentialStore {
         }
     }
 
-    public func load(for accountID: UUID) throws -> ProviderCredential? {
+    public func loadData(for accountID: UUID) throws -> Data? {
         var query = lookupQuery(for: accountID)
         query[kSecReturnData] = true
         query[kSecMatchLimit] = kSecMatchLimitOne
@@ -61,7 +60,7 @@ public actor KeychainCredentialStore: CredentialStore {
             throw KeychainCredentialStoreError.invalidStoredData
         }
 
-        return try JSONDecoder().decode(ProviderCredential.self, from: data)
+        return data
     }
 
     public func delete(for accountID: UUID) throws {

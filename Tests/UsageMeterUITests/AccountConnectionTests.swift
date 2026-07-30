@@ -39,7 +39,7 @@ func removingAccountDeletesCredentialAndState() async throws {
     try await model.removeAccount(id: account.id)
 
     #expect(model.accounts.isEmpty)
-    #expect(await credentials.load(for: account.id) == nil)
+    #expect(await credentials.loadCredential(for: account.id) == nil)
     #expect(await stateStore.state.accounts.isEmpty)
 }
 
@@ -90,7 +90,7 @@ func connectingAccountValidatesBeforePersisting() async throws {
 
     #expect(model.accounts.map(\.account) == [account])
     #expect(model.accounts.first?.snapshot == snapshot)
-    #expect(await credentials.load(for: account.id) == credential)
+    #expect(await credentials.loadCredential(for: account.id) == credential)
     #expect(await stateStore.state.accounts == [account])
     #expect(await stateStore.state.snapshots[account.id] == snapshot)
 }
@@ -132,7 +132,7 @@ func failedConnectionLeavesNoCredentialOrMetadata() async {
     }
 
     #expect(model.accounts.isEmpty)
-    #expect(await credentials.load(for: account.id) == nil)
+    #expect(await credentials.loadCredential(for: account.id) == nil)
     #expect(await stateStore.state == .empty)
 }
 
@@ -188,7 +188,7 @@ func reconnectValidatesReplacementBeforeClearingError() async throws {
 
     #expect(model.accounts[0].error == nil)
     #expect(model.accounts[0].snapshot == fresh)
-    #expect(await credentials.load(for: account.id) == replacement)
+    #expect(await credentials.loadCredential(for: account.id) == replacement)
     #expect(
         await stateStore.state.refreshStates[account.id]?
             .requiresReauthentication == false,
@@ -234,7 +234,7 @@ func claudeConnectionPersistsProfileAndRemovalDeletesIt() async throws {
     )
 
     #expect(model.accounts.map(\.account) == [account])
-    #expect(await credentials.load(for: account.id) == nil)
+    #expect(await credentials.loadCredential(for: account.id) == nil)
 
     try await model.removeAccount(id: account.id)
 
@@ -368,7 +368,7 @@ func codexConnectionConfirmsIdentityBeforeSavingLabel() async throws {
             == "work@example.com",
     )
     #expect(
-        await credentials.load(for: accountID)
+        await credentials.loadCredential(for: accountID)
             == .codex(result.credential),
     )
 }
@@ -509,7 +509,7 @@ func kimiConnectionPublishesDevicePromptBeforeSaving() async throws {
     #expect(connection.phase == .complete)
     #expect(appModel.accounts[0].account.displayName == "Personal Kimi")
     #expect(
-        await credentials.load(for: accountID)
+        await credentials.loadCredential(for: accountID)
             == .kimi(credential),
     )
 }

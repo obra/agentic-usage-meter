@@ -333,7 +333,7 @@ struct AppModelTests {
                 ],
         )
         #expect(
-            await credentialStore.load(for: account.id)
+            await credentialStore.loadCredential(for: account.id)
                 == .kimi(replacement),
         )
         #expect(
