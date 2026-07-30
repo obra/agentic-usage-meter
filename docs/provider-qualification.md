@@ -12,11 +12,11 @@ OAuth usage hypothesis. A live token created by Claude Code 2.1.220 with
 `claude setup-token` was rejected by that probe. Anthropic documents setup
 tokens as inference-only, while the usage feature requires profile scope.
 
-An embedded Claude.ai login is not being qualified. Anthropic's current Agent
-SDK and legal documentation says third-party developers may not offer
-Claude.ai login or Claude.ai rate limits without prior approval. Claude
-qualification is blocked pending an authorized integration path. No credential
-or account identity was recorded.
+Anthropic's current Agent SDK and legal documentation says third-party
+developers require prior approval to offer Claude.ai login or Claude.ai rate
+limits. The project owner has chosen to proceed with a local embedded-login
+qualification. That gate will use separate identified WebKit data stores and
+will not record credentials or account identity.
 
 ## Codex
 

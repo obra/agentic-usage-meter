@@ -1,8 +1,7 @@
 # Agentic Usage Meter Design
 
 **Date:** 2026-07-29
-**Status:** Approved except Claude integration, which is blocked pending
-Anthropic authorization
+**Status:** Approved, including isolated Claude web sessions
 **Target:** macOS 26, Swift 6, SwiftUI
 **Distribution:** Direct download, Developer ID signed, hardened, and notarized
 
@@ -194,23 +193,23 @@ into application settings, Keychain, logs, fixtures, or diagnostics. Removing
 or reconnecting an account first releases every web view using its data store
 and then removes the complete identified store.
 
-Scheduled refreshes use a minimal WebKit-backed request with the account's
-profile rather than loading the full Claude application UI. The Claude
-qualification spike must identify the current web usage and identity endpoints,
-prove that the request works from two isolated stores, and capture only a
-sanitized response fixture.
+Scheduled refreshes read only the session and Cloudflare cookies required for
+the request from the account's WebKit profile. A browser-shaped `URLSession`
+request then fetches usage without loading the full Claude application UI.
+Cookies exist outside WebKit only in request memory and are never logged or
+persisted separately. The Claude qualification spike must prove that this works
+from two isolated stores and capture only a sanitized response fixture.
 
 `claude setup-token` is not used. Live qualification showed that it grants
 inference scope but cannot call the profile-scoped usage endpoint. Claude Code
 status-line data is also not authoritative because it updates only after the
 corresponding Claude Code session makes an inference request.
 
-Anthropic's current Agent SDK and legal documentation does not permit
-third-party developers to offer Claude.ai login or Claude.ai rate limits
-without prior approval. The embedded WebKit design is therefore a technical
-hypothesis, not an authorized distribution path. No Claude login or
-rate-limit implementation proceeds until Anthropic grants approval or
-documents a supported third-party interface.
+Anthropic's current Agent SDK and legal documentation says third-party
+developers require prior approval to offer Claude.ai login or Claude.ai rate
+limits. The project owner has explicitly chosen to proceed with the local
+WebKit integration. This remains a documented distribution and compatibility
+risk rather than an unmentioned assumption.
 
 ### Codex
 
@@ -322,10 +321,9 @@ and time-zone changes recompute presentation geometry from absolute dates.
 
 These three spikes precede the full application implementation:
 
-1. **Claude:** First obtain Anthropic approval for a third-party rate-limit
-   integration. Then qualify the authorized interface against two different
-   accounts and prove that it returns the correct identity and both required
-   usage window types.
+1. **Claude:** Prove two isolated WebKit profiles can remain signed into
+   different accounts, return both required usage window types, and preserve
+   profile A after profile B authenticates.
 2. **Codex:** Prove native PKCE login from the app, direct usage retrieval, token
    refresh, and two independently authenticated accounts.
 3. **Kimi:** Prove device authorization, token refresh where applicable, and
@@ -386,6 +384,7 @@ inspected on 2026-07-29:
 - [Claude Code legal and compliance documentation](https://code.claude.com/docs/en/legal-and-compliance)
 - [Claude Agent SDK overview](https://code.claude.com/docs/en/agent-sdk/overview)
 - [WebKit website data stores](https://developer.apple.com/documentation/webkit/wkwebsitedatastore)
+- [Claude Usage Tracker](https://github.com/hamed-elfayome/Claude-Usage-Tracker)
 - [Kimi Code membership and usage documentation](https://www.kimi.com/code/docs/en/kimi-code/membership.html)
 
 These references establish feasibility, not a compatibility promise. The
