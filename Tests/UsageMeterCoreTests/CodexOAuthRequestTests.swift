@@ -15,7 +15,7 @@ struct CodexOAuthRequestTests {
     }
 
     @Test
-    func authorizationRequestMatchesCurrentCodexBrowserFlow() throws {
+    func authorizationRequestSupportsMultiAccountCodexBrowserFlow() throws {
         let redirectURL = try #require(
             URL(string: "http://127.0.0.1:1455/auth/callback")
         )
@@ -52,6 +52,7 @@ struct CodexOAuthRequestTests {
         #expect(query["codex_cli_simplified_flow"] == "true")
         #expect(query["state"] == "state")
         #expect(query["originator"] == "codex_cli_rs")
+        #expect(query["prompt"] == "select_account")
     }
 
     @Test

@@ -56,7 +56,8 @@ public enum CodexOAuthRequests {
             URLQueryItem(name: "id_token_add_organizations", value: "true"),
             URLQueryItem(name: "codex_cli_simplified_flow", value: "true"),
             URLQueryItem(name: "state", value: state),
-            URLQueryItem(name: "originator", value: "codex_cli_rs")
+            URLQueryItem(name: "originator", value: "codex_cli_rs"),
+            URLQueryItem(name: "prompt", value: "select_account")
         ]
 
         guard let url = components?.url else {
