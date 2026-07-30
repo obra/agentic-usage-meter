@@ -45,7 +45,7 @@
   `ProviderReleaseState`, `ProviderConnectionStrategy`, and
   `ProviderDashboardStrategy`.
 
-- [ ] **Step 1: Write failing provider-encoding and catalog tests**
+- [x] **Step 1: Write failing provider-encoding and catalog tests**
 
 Create `ProviderCatalogTests.swift`:
 
@@ -112,7 +112,7 @@ struct ProviderCatalogTests {
 The breaks caught are changed persisted IDs, duplicate catalog entries, wrong
 product order, or accidental release exposure.
 
-- [ ] **Step 2: Run the tests and verify RED**
+- [x] **Step 2: Run the tests and verify RED**
 
 Run:
 
@@ -123,7 +123,7 @@ swift test --filter ProviderCatalogTests
 Expected: compilation fails because the new provider cases and catalog types do
 not exist.
 
-- [ ] **Step 3: Add stable cases and catalog value types**
+- [x] **Step 3: Add stable cases and catalog value types**
 
 Add these cases to `Provider` without changing existing raw values:
 
@@ -340,7 +340,7 @@ provider. Define MiniMax as API-key connection with native detail and external
 `https://www.minimax.io/platform` action. Use the display names from the
 approved design.
 
-- [ ] **Step 4: Replace presentation switches with catalog lookups**
+- [x] **Step 4: Replace presentation switches with catalog lookups**
 
 Change `ProviderPresentation` to wrap a `ProviderDefinition`. Change Settings
 provider cards, account sections, timeline labels/colors, empty-state copy, and
@@ -362,7 +362,7 @@ continues to show only the three providers that have connection
 implementations. Task 7 changes MiniMax to `.experimental` in the same commit
 that adds its real connection form.
 
-- [ ] **Step 5: Run focused and full tests and verify GREEN**
+- [x] **Step 5: Run focused and full tests and verify GREEN**
 
 Run:
 
@@ -375,7 +375,7 @@ swift test
 
 Expected: all 150 existing tests plus the new catalog tests pass.
 
-- [ ] **Step 6: Commit the catalog**
+- [x] **Step 6: Commit the catalog**
 
 Run `git status --short`, add only the files listed in this task, and commit:
 

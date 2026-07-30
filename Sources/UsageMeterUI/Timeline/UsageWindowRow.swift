@@ -113,13 +113,18 @@ public struct UsageWindowRow: View {
 
 private extension Provider {
     var timelineColor: Color {
-        switch self {
-        case .claude:
-            Color(red: 0.83, green: 0.43, blue: 0.28)
-        case .codex:
-            Color(red: 0.24, green: 0.66, blue: 0.54)
-        case .kimi:
-            Color(red: 0.48, green: 0.45, blue: 0.90)
-        }
+        let color = ProviderCatalog.live.definition(
+            for: self,
+        )?.color
+            ?? ProviderColor(
+                red: 0.5,
+                green: 0.5,
+                blue: 0.5,
+            )
+        return Color(
+            red: color.red,
+            green: color.green,
+            blue: color.blue,
+        )
     }
 }

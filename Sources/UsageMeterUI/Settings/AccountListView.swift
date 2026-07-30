@@ -101,10 +101,11 @@ public struct AccountListView: View {
 
     public var body: some View {
         List {
-            ForEach(Provider.allCases, id: \.self) { provider in
+            ForEach(ProviderCatalog.live.all) { definition in
+                let provider = definition.provider
                 let accounts = providerAccounts(provider)
                 if !accounts.isEmpty {
-                    Section(providerName(provider)) {
+                    Section(definition.displayName) {
                         ForEach(accounts) { state in
                             AccountSettingsRow(
                                 state: state,
@@ -486,16 +487,5 @@ private struct AccountSettingsRow: View {
             }
             isSavingName = false
         }
-    }
-}
-
-private func providerName(_ provider: Provider) -> String {
-    switch provider {
-    case .claude:
-        "Claude"
-    case .codex:
-        "Codex"
-    case .kimi:
-        "Kimi"
     }
 }

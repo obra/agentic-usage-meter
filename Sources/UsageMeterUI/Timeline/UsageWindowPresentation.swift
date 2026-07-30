@@ -22,14 +22,10 @@ public struct UsageWindowPresentation: Equatable, Sendable {
     ) {
         provider = account.provider
         providerText =
-            switch account.provider {
-            case .claude:
-                "Claude"
-            case .codex:
-                "Codex"
-            case .kimi:
-                "Kimi"
-            }
+            ProviderCatalog.live.definition(
+                for: account.provider,
+            )?.displayName
+            ?? account.provider.rawValue
         let trimmedAccountName = account.displayName.trimmingCharacters(
             in: .whitespacesAndNewlines,
         )
@@ -179,13 +175,12 @@ private func accountStateComesBefore(
     _ lhs: AccountViewState,
     _ rhs: AccountViewState,
 ) -> Bool {
-    let providerOrder = Dictionary(
-        uniqueKeysWithValues: Provider.allCases.enumerated().map {
-            ($0.element, $0.offset)
-        },
+    let lhsProvider = ProviderCatalog.live.sortIndex(
+        for: lhs.account.provider,
     )
-    let lhsProvider = providerOrder[lhs.account.provider] ?? .max
-    let rhsProvider = providerOrder[rhs.account.provider] ?? .max
+    let rhsProvider = ProviderCatalog.live.sortIndex(
+        for: rhs.account.provider,
+    )
     if lhsProvider != rhsProvider {
         return lhsProvider < rhsProvider
     }

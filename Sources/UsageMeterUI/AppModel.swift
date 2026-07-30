@@ -800,13 +800,12 @@ public final class AppModel {
         _ lhs: SubscriptionAccount,
         _ rhs: SubscriptionAccount,
     ) -> Bool {
-        let providers = Dictionary(
-            uniqueKeysWithValues: Provider.allCases.enumerated().map {
-                ($0.element, $0.offset)
-            },
+        let lhsProvider = ProviderCatalog.live.sortIndex(
+            for: lhs.provider,
         )
-        let lhsProvider = providers[lhs.provider] ?? .max
-        let rhsProvider = providers[rhs.provider] ?? .max
+        let rhsProvider = ProviderCatalog.live.sortIndex(
+            for: rhs.provider,
+        )
         if lhsProvider != rhsProvider {
             return lhsProvider < rhsProvider
         }

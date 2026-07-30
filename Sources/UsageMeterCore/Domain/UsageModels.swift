@@ -4,6 +4,13 @@ public enum Provider: String, Codable, CaseIterable, Sendable {
     case claude
     case codex
     case kimi
+    case minimax
+    case githubCopilot = "github-copilot"
+    case antigravity
+    case factory
+    case openCodeGo = "opencode-go"
+    case openCodeZen = "opencode-zen"
+    case superGrok = "supergrok"
 }
 
 public struct SubscriptionAccount: Codable, Equatable, Identifiable, Sendable {

@@ -59,20 +59,18 @@ struct ProviderPresentation {
     let systemImage: String
 
     init(_ provider: Provider) {
-        switch provider {
-        case .claude:
-            title = "Claude"
-            detail = "Isolated browser session"
-            systemImage = "globe"
-        case .codex:
-            title = "Codex"
-            detail = "ChatGPT OAuth in your browser"
-            systemImage = "terminal"
-        case .kimi:
-            title = "Kimi"
-            detail = "Device authorization"
-            systemImage = "moon.stars"
+        guard
+            let definition = ProviderCatalog.live.definition(
+                for: provider,
+            )
+        else {
+            preconditionFailure(
+                "Provider is missing from the catalog.",
+            )
         }
+        title = definition.displayName
+        detail = definition.connectionDetail
+        systemImage = definition.systemImage
     }
 }
 
@@ -315,6 +313,11 @@ private struct AddAccountView: View {
                                 ?? "Kimi",
                             onComplete: complete,
                         )
+                    case .minimax, .githubCopilot,
+                        .antigravity, .factory,
+                        .openCodeGo, .openCodeZen,
+                        .superGrok:
+                        EmptyView()
                     }
                 }
                 .frame(
@@ -366,14 +369,21 @@ private struct AddAccountView: View {
             .disabled(true)
         } else {
             HStack(spacing: 12) {
-                ForEach(Provider.allCases, id: \.self) {
-                    provider in
+                ForEach(
+                    ProviderCatalog.live.visibleDefinitions(
+                        isDevelopmentBuild:
+                        _isDebugAssertConfiguration(),
+                    ),
+                ) { definition in
                     providerCard(
-                        provider,
+                        definition.provider,
                         isSelected:
-                            providerSelection.provider == provider,
+                            providerSelection.provider
+                                == definition.provider,
                         action: {
-                            providerSelection.select(provider)
+                            providerSelection.select(
+                                definition.provider,
+                            )
                         },
                     )
                 }
