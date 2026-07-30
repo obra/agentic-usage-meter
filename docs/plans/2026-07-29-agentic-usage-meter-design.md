@@ -1,7 +1,8 @@
 # Agentic Usage Meter Design
 
 **Date:** 2026-07-29
-**Status:** Approved, including Claude web-session amendment
+**Status:** Approved except Claude integration, which is blocked pending
+Anthropic authorization
 **Target:** macOS 26, Swift 6, SwiftUI
 **Distribution:** Direct download, Developer ID signed, hardened, and notarized
 
@@ -204,6 +205,13 @@ inference scope but cannot call the profile-scoped usage endpoint. Claude Code
 status-line data is also not authoritative because it updates only after the
 corresponding Claude Code session makes an inference request.
 
+Anthropic's current Agent SDK and legal documentation does not permit
+third-party developers to offer Claude.ai login or Claude.ai rate limits
+without prior approval. The embedded WebKit design is therefore a technical
+hypothesis, not an authorized distribution path. No Claude login or
+rate-limit implementation proceeds until Anthropic grants approval or
+documents a supported third-party interface.
+
 ### Codex
 
 The app implements the same native PKCE OAuth protocol used by Codex, opens
@@ -314,10 +322,10 @@ and time-zone changes recompute presentation geometry from absolute dates.
 
 These three spikes precede the full application implementation:
 
-1. **Claude:** Prove that two persistent WebKit data stores can remain signed
-   into different Claude accounts simultaneously, retrieve the correct
-   identity for each store, and return both required usage window types without
-   loading the full Claude application during refresh.
+1. **Claude:** First obtain Anthropic approval for a third-party rate-limit
+   integration. Then qualify the authorized interface against two different
+   accounts and prove that it returns the correct identity and both required
+   usage window types.
 2. **Codex:** Prove native PKCE login from the app, direct usage retrieval, token
    refresh, and two independently authenticated accounts.
 3. **Kimi:** Prove device authorization, token refresh where applicable, and
@@ -375,6 +383,8 @@ inspected on 2026-07-29:
 - [Claude Code authentication documentation](https://code.claude.com/docs/en/authentication)
 - [Claude Code error reference](https://code.claude.com/docs/en/errors)
 - [Claude Code CLI reference](https://code.claude.com/docs/en/cli-reference)
+- [Claude Code legal and compliance documentation](https://code.claude.com/docs/en/legal-and-compliance)
+- [Claude Agent SDK overview](https://code.claude.com/docs/en/agent-sdk/overview)
 - [WebKit website data stores](https://developer.apple.com/documentation/webkit/wkwebsitedatastore)
 - [Kimi Code membership and usage documentation](https://www.kimi.com/code/docs/en/kimi-code/membership.html)
 
