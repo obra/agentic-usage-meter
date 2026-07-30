@@ -25,7 +25,7 @@ public final class LoopbackOAuthCallbackServer: @unchecked Sendable {
 
     public var callbackURL: URL {
         let port = listener.port?.rawValue ?? 0
-        return URL(string: "http://127.0.0.1:\(port)/auth/callback")!
+        return URL(string: "http://localhost:\(port)/auth/callback")!
     }
 
     public static func start(

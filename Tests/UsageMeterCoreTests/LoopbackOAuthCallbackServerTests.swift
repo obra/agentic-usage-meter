@@ -77,7 +77,7 @@ struct LoopbackOAuthCallbackServerTests {
         )
         defer { fallbackServer.cancel() }
 
-        #expect(fallbackServer.callbackURL.host == "127.0.0.1")
+        #expect(fallbackServer.callbackURL.host == "localhost")
         #expect(fallbackServer.callbackURL.port != occupiedPort)
     }
 
