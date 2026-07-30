@@ -50,8 +50,49 @@ callback.
 
 ## Codex
 
-Not yet qualified.
+The implementation follows OpenAI Codex commit
+`406dc9239492aff6d295cca5eebe2a548548d42f`: browser OAuth with PKCE, the
+registered `http://localhost:<port>/auth/callback` redirect, token refresh, and
+the ChatGPT usage endpoint. The local listener binds only to loopback. Tokens
+are stored per app account in Keychain and are never written to the shared
+Codex CLI configuration.
+
+### 2026-07-29 two-account OAuth qualification
+
+The probe was run on macOS 26.5.2 with two separate ChatGPT subscriptions.
+
+- The system browser was activated for each authorization and the request
+  explicitly asked the authorization server to select an account.
+- Using `127.0.0.1` in the redirect URI caused the authorization server to
+  reject the request even though it reaches the same loopback interface.
+  Restoring the registered `localhost` spelling fixed the request. The
+  listener continues to bind to `127.0.0.1`.
+- A repeated authorization initially returned the already-saved identity. The
+  probe's identity gate detected that it was not a distinct account and did
+  not save it as the second subscription.
+- A subsequent authorization returned a distinct personal identity. Both
+  account credentials then existed in separate Keychain records.
+- After waiting at least ten minutes from the initial usage request for each
+  account, both credentials were loaded from Keychain, refreshed independently,
+  and used for one usage request each.
+- The two live responses contained distinct weekly windows. Neither response
+  included a five-hour window, and the decoder preserved the available weekly
+  value rather than inventing the missing window.
+- Both temporary Keychain records were removed after the refresh and
+  persistence check, and lookup confirmed that neither remained.
 
 ## Kimi
 
-Not yet qualified.
+The automated adapter contract follows MoonshotAI Kimi CLI commit
+`4a550effdfcb29a25a5d325bf935296cc50cd417`.
+
+- Authentication uses Kimi's device authorization endpoint and opens the
+  supplied `auth.kimi.com` verification URL in the regular system browser.
+- Credentials are polled and refreshed with the device headers used by the
+  current Kimi CLI.
+- Usage is fetched from `https://api.kimi.com/coding/v1/usages`.
+- The decoder supports the current CLI parser's weekly summary and limit array,
+  including a 300-minute rolling window, nested or item-level details,
+  remaining quota, reset aliases, and nanosecond ISO timestamps.
+
+Live account qualification is still pending.
