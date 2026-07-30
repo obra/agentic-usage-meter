@@ -38,6 +38,8 @@ public struct SettingsView: View {
     }
 
     private let model: AppModel
+    private let windowActivation:
+        SettingsWindowActivation
     @State private var selectedTab = Tab.accounts
     @State private var reconnectingAccount:
         SubscriptionAccount?
@@ -46,6 +48,7 @@ public struct SettingsView: View {
 
     public init(model: AppModel) {
         self.model = model
+        windowActivation = SettingsWindowActivation()
     }
 
     public var body: some View {
@@ -88,6 +91,12 @@ public struct SettingsView: View {
             .tag(Tab.connect)
         }
         .frame(minWidth: 680, minHeight: 560)
+        .onAppear {
+            windowActivation.settingsDidAppear()
+        }
+        .onDisappear {
+            windowActivation.settingsDidDisappear()
+        }
     }
 }
 

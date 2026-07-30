@@ -120,11 +120,21 @@ public struct ClaudeConnectionView: View {
     }
 
     private func failureView(_ message: String) -> some View {
-        ContentUnavailableView(
-            "Claude connection failed",
-            systemImage: "exclamationmark.triangle",
-            description: Text(message),
-        )
+        ContentUnavailableView {
+            Label(
+                "Claude connection failed",
+                systemImage: "exclamationmark.triangle",
+            )
+        } description: {
+            Text(message)
+        } actions: {
+            Button("Try Validation Again") {
+                Task {
+                    await model.retry()
+                }
+            }
+            .buttonStyle(.borderedProminent)
+        }
     }
 
     private func save() {

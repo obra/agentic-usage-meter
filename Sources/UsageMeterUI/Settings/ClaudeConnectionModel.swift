@@ -40,6 +40,97 @@ public enum ClaudeConnectionPhase: Equatable, Sendable {
     case failed(String)
 }
 
+enum ClaudeConnectionStage {
+    case organizations
+    case usage
+}
+
+struct ClaudeConnectionFailureDescription {
+    static func message(
+        for error: any Error,
+        stage: ClaudeConnectionStage,
+    ) -> String {
+        guard let error = error as? ProviderClientError else {
+            return fallbackMessage(for: stage)
+        }
+
+        switch error {
+        case .credentialMismatch:
+            return "Claude returned credentials that do not match this connection."
+        case .unsupportedResponse:
+            switch stage {
+            case .organizations:
+                return "Claude returned an organizations response this app does not understand."
+            case .usage:
+                return "Claude returned a usage response this app does not understand."
+            }
+        case .reauthenticationRequired:
+            return "Claude rejected the signed-in session while loading \(stage.requestName), even after retrying."
+        case .retryAfter:
+            return "Claude rate limited the \(stage.requestName) request. Try again later."
+        case .temporaryFailure:
+            return "Claude encountered a temporary network or provider failure while loading \(stage.requestName)."
+        }
+    }
+
+    private static func fallbackMessage(
+        for stage: ClaudeConnectionStage,
+    ) -> String {
+        "Claude connection failed while loading \(stage.requestName)."
+    }
+}
+
+extension ClaudeConnectionStage {
+    fileprivate var requestName: String {
+        switch self {
+        case .organizations:
+            "organizations"
+        case .usage:
+            "usage"
+        }
+    }
+}
+
+@MainActor
+struct ClaudeFreshSessionRetrier {
+    typealias Sleep = @MainActor (Int) async throws -> Void
+
+    let maximumAttempts: Int
+    private let sleep: Sleep
+
+    init(
+        maximumAttempts: Int = 4,
+        sleep: @escaping Sleep = { attempt in
+            try await Task.sleep(
+                for: .milliseconds(1_500 * attempt),
+            )
+        },
+    ) {
+        self.maximumAttempts = maximumAttempts
+        self.sleep = sleep
+    }
+
+    func run<T>(
+        _ operation: @MainActor () async throws -> T,
+    ) async throws -> T {
+        var attempt = 1
+        while true {
+            do {
+                return try await operation()
+            } catch let error as ProviderClientError {
+                guard
+                    error == .reauthenticationRequired,
+                    attempt < maximumAttempts
+                else {
+                    throw error
+                }
+                try await sleep(attempt)
+                attempt += 1
+            }
+        }
+    }
+}
+
 @MainActor
 @Observable
 public final class ClaudeConnectionModel {
@@ -72,6 +163,8 @@ public final class ClaudeConnectionModel {
     @ObservationIgnored
     private var pendingConnection: ClaudeQualifiedConnection?
     @ObservationIgnored
+    private var authenticatedCookies: [HTTPCookie]?
+    @ObservationIgnored
     private var didSave = false
     @ObservationIgnored
     private var didRemoveProfile = false
@@ -101,6 +194,7 @@ public final class ClaudeConnectionModel {
 
     public func start() async {
         pendingConnection = nil
+        authenticatedCookies = nil
         didSave = false
         if let qualify {
             phase = .loadingUsage
@@ -110,13 +204,28 @@ public final class ClaudeConnectionModel {
                 phase = .idle
             } catch {
                 phase = .failed(
-                    "Claude usage validation failed.",
+                    ClaudeConnectionFailureDescription
+                        .message(
+                            for: error,
+                            stage: .usage,
+                        ),
                 )
             }
             return
         }
 
         startInteractiveLogin()
+    }
+
+    public func retry() async {
+        if let authenticatedCookies {
+            loadQualifiedAccount(
+                authenticatedCookies:
+                authenticatedCookies,
+            )
+        } else {
+            await start()
+        }
     }
 
     public func save(displayName: String) async throws {
@@ -174,6 +283,7 @@ public final class ClaudeConnectionModel {
         }
 
         pendingConnection = nil
+        authenticatedCookies = nil
         if let loginSession {
             try? await loginSession.cancel()
             self.loginSession = nil
@@ -197,38 +307,55 @@ public final class ClaudeConnectionModel {
             onPageReady: { [weak self] in
                 self?.hasRenderedLoginPage = true
             },
-            onAuthenticated: { [weak self] _ in
-                self?.loadQualifiedAccount()
+            onAuthenticated: {
+                [weak self] _,
+                    cookies in
+                self?.authenticatedCookies = cookies
+                self?.loadQualifiedAccount(
+                    authenticatedCookies: cookies,
+                )
             },
         )
         loginSession = session
         webView = session.start()
     }
 
-    private func loadQualifiedAccount() {
+    private func loadQualifiedAccount(
+        authenticatedCookies: [HTTPCookie],
+    ) {
         phase = .loadingOrganizations
+        let usageClient = usageClient.authenticated(
+            with: authenticatedCookies,
+        )
+        let retrier = ClaudeFreshSessionRetrier()
 
         Task { @MainActor [weak self] in
             guard let self else {
                 return
             }
+            var stage = ClaudeConnectionStage.organizations
             do {
                 let organizations =
-                    try await usageClient.organizations(
-                        profileID: profileID,
-                    )
+                    try await retrier.run {
+                        try await usageClient.organizations(
+                            profileID: profileID,
+                        )
+                    }
                 guard let organization = organizations.first else {
                     throw ProviderClientError
                         .unsupportedResponse
                 }
 
+                stage = .usage
                 phase = .loadingUsage
-                let snapshot = try await usageClient.fetchUsage(
-                    accountID: accountID,
-                    profileID: profileID,
-                    organizationID: organization.id,
-                    now: Date(),
-                )
+                let snapshot = try await retrier.run {
+                    try await usageClient.fetchUsage(
+                        accountID: accountID,
+                        profileID: profileID,
+                        organizationID: organization.id,
+                        now: Date(),
+                    )
+                }
                 loginSession?.close()
                 loginSession = nil
                 webView = nil
@@ -242,7 +369,11 @@ public final class ClaudeConnectionModel {
                 )
             } catch {
                 phase = .failed(
-                    "Claude usage validation failed.",
+                    ClaudeConnectionFailureDescription
+                        .message(
+                            for: error,
+                            stage: stage,
+                        ),
                 )
             }
         }

@@ -8,7 +8,8 @@ public final class ClaudeLoginSession: NSObject {
     public private(set) var webView: WKWebView?
 
     private let onPageReady: @MainActor () -> Void
-    private let onAuthenticated: @MainActor (UUID) -> Void
+    private let onAuthenticated:
+        @MainActor (UUID, [HTTPCookie]) -> Void
     private var profileStore: ClaudeWebProfileStore?
     private var cookieStore: WKHTTPCookieStore?
     private var popupPanel: NSPanel?
@@ -21,7 +22,8 @@ public final class ClaudeLoginSession: NSObject {
     public init(
         profileID: UUID,
         onPageReady: @escaping @MainActor () -> Void = {},
-        onAuthenticated: @escaping @MainActor (UUID) -> Void
+        onAuthenticated:
+            @escaping @MainActor (UUID, [HTTPCookie]) -> Void
     ) {
         self.profileID = profileID
         self.onPageReady = onPageReady
@@ -103,21 +105,26 @@ public final class ClaudeLoginSession: NSObject {
             guard let self, !self.isFinished else {
                 return
             }
-            guard ClaudeLoginCookieDetector.hasSession(in: cookies) else {
+            guard
+                let apiCookies =
+                    ClaudeLoginCookieDetector.apiCookies(
+                        in: cookies
+                    )
+            else {
                 return
             }
-            self.completeLogin()
+            self.completeLogin(cookies: apiCookies)
         }
     }
 
-    private func completeLogin() {
+    private func completeLogin(cookies: [HTTPCookie]) {
         guard !isFinished else {
             return
         }
         isFinished = true
         stopMonitoring()
         closePopup()
-        onAuthenticated(profileID)
+        onAuthenticated(profileID, cookies)
     }
 
     private func reloadIfLoggedInWithoutVisibleSession() {

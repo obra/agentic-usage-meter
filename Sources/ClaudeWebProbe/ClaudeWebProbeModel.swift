@@ -110,7 +110,7 @@ final class ClaudeWebProbeModel: ObservableObject {
             onPageReady: { [weak self] in
                 self?.loginPageDidFinish()
             }
-        ) { [weak self] _ in
+        ) { [weak self] _, _ in
             self?.loadOrganizations()
         }
         loginSession = session

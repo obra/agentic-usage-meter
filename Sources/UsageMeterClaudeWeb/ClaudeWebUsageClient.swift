@@ -4,11 +4,6 @@ import UsageMeterCore
 @MainActor
 public final class ClaudeWebUsageClient {
     private static let baseURL = URL(string: "https://claude.ai")!
-    private static let cookieNames = [
-        "sessionKey",
-        "cf_clearance",
-        "__cf_bm"
-    ]
     private static let userAgent = [
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
         "AppleWebKit/605.1.15 (KHTML, like Gecko)",
@@ -27,6 +22,18 @@ public final class ClaudeWebUsageClient {
         self.transport = transport
         self.cookieSource = cookieSource
         self.decoder = decoder
+    }
+
+    public func authenticated(
+        with cookies: [HTTPCookie]
+    ) -> ClaudeWebUsageClient {
+        ClaudeWebUsageClient(
+            transport: transport,
+            cookieSource: CapturedClaudeCookieSource(
+                cookies: cookies
+            ),
+            decoder: decoder
+        )
     }
 
     public func organizations(profileID: UUID) async throws
@@ -82,13 +89,12 @@ public final class ClaudeWebUsageClient {
             for: url,
             profileID: profileID
         )
-        let cookies = Self.cookieNames.compactMap { name in
-            availableCookies.first {
-                $0.name == name
-                    && ClaudeLoginCookieDetector.isClaudeDomain($0.domain)
-            }
-        }
-        guard cookies.contains(where: { $0.name == "sessionKey" }) else {
+        guard
+            let selectedCookies =
+                ClaudeLoginCookieDetector.apiCookies(
+                    in: availableCookies
+                )
+        else {
             throw ProviderClientError.reauthenticationRequired
         }
 
@@ -96,7 +102,7 @@ public final class ClaudeWebUsageClient {
         request.httpMethod = "GET"
         request.timeoutInterval = 30
         request.setValue(
-            cookies
+            selectedCookies
                 .map { "\($0.name)=\($0.value)" }
                 .joined(separator: "; "),
             forHTTPHeaderField: "Cookie"
@@ -151,5 +157,23 @@ public final class ClaudeWebUsageClient {
         formatter.timeZone = TimeZone(secondsFromGMT: 0)
         formatter.dateFormat = "EEE',' dd MMM yyyy HH':'mm':'ss z"
         return formatter.date(from: value)
+    }
+}
+
+@MainActor
+private final class CapturedClaudeCookieSource:
+    ClaudeWebCookieSource
+{
+    private let capturedCookies: [HTTPCookie]
+
+    init(cookies: [HTTPCookie]) {
+        capturedCookies = cookies
+    }
+
+    func cookies(
+        for _: URL,
+        profileID _: UUID
+    ) async -> [HTTPCookie] {
+        capturedCookies
     }
 }

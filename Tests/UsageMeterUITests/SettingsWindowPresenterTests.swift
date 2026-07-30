@@ -1,3 +1,4 @@
+import AppKit
 import Testing
 
 @testable import UsageMeterUI
@@ -24,5 +25,20 @@ struct SettingsWindowPresenterTests {
         }
 
         #expect(events == [.opened, .activated])
+    }
+
+    @Test
+    func settingsWindowIsRegularOnlyWhileItIsVisible() {
+        var policies: [NSApplication.ActivationPolicy] = []
+        let activation = SettingsWindowActivation(
+            setActivationPolicy: {
+                policies.append($0)
+            },
+        )
+
+        activation.settingsDidAppear()
+        activation.settingsDidDisappear()
+
+        #expect(policies == [.regular, .accessory])
     }
 }

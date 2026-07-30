@@ -47,6 +47,41 @@ struct ClaudeLoginCookieDetectorTests {
 
         #expect(!ClaudeLoginCookieDetector.hasSession(in: cookies))
     }
+
+    @Test
+    func capturesOnlyClaudeCookiesNeededForImmediateValidation() throws {
+        let cookies = [
+            try makeLoginCookie(
+                name: "unrelated",
+                value: "ignore",
+                domain: ".claude.ai"
+            ),
+            try makeLoginCookie(
+                name: "sessionKey",
+                value: "session",
+                domain: ".claude.ai"
+            ),
+            try makeLoginCookie(
+                name: "cf_clearance",
+                value: "clearance",
+                domain: ".claude.ai"
+            ),
+            try makeLoginCookie(
+                name: "__cf_bm",
+                value: "challenge",
+                domain: ".example.com"
+            )
+        ]
+
+        let captured = try #require(
+            ClaudeLoginCookieDetector.apiCookies(in: cookies)
+        )
+
+        #expect(
+            captured.map(\.name)
+                == ["sessionKey", "cf_clearance"]
+        )
+    }
 }
 
 private func makeLoginCookie(

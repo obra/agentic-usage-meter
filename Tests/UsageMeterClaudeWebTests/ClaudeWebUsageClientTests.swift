@@ -92,6 +92,42 @@ struct ClaudeWebUsageClientTests {
     }
 
     @Test
+    func freshLoginUsesCookiesCapturedByTheLoginWebView() async throws {
+        let transport = RecordingHTTPTransport(
+            response: HTTPResponse(
+                data: try fixture(named: "claude-organizations"),
+                statusCode: 200,
+                headers: [:]
+            )
+        )
+        let client = ClaudeWebUsageClient(
+            transport: transport,
+            cookieSource: TestCookieSource(cookiesByProfile: [:])
+        ).authenticated(
+            with: [
+                cookie(
+                    name: "sessionKey",
+                    value: "fresh-session"
+                ),
+                cookie(
+                    name: "cf_clearance",
+                    value: "fresh-clearance"
+                )
+            ]
+        )
+
+        _ = try await client.organizations(
+            profileID: firstProfile
+        )
+
+        let request = try #require(await transport.lastRequest)
+        #expect(
+            request.value(forHTTPHeaderField: "Cookie")
+                == "sessionKey=fresh-session; cf_clearance=fresh-clearance"
+        )
+    }
+
+    @Test
     func usageUsesOnlyTheSelectedProfileAndNormalizesWindows() async throws {
         let transport = RecordingHTTPTransport(
             response: HTTPResponse(
