@@ -1,0 +1,30 @@
+{
+  "model_remains": [
+    {
+      "start_time": 1774587600000,
+      "end_time": 1774605600000,
+      "current_interval_total_count": 0,
+      "current_interval_usage_count": 0,
+      "model_name": "MiniMax-V*",
+      "current_weekly_total_count": 0,
+      "current_weekly_usage_count": 0,
+      "weekly_start_time": 1774224000000,
+      "weekly_end_time": 1774828800000
+    },
+    {
+      "start_time": 1774587600000,
+      "end_time": 1774605600000,
+      "current_interval_total_count": 1500,
+      "current_interval_usage_count": 750,
+      "model_name": "MiniMax-M*",
+      "current_weekly_total_count": 15000,
+      "current_weekly_usage_count": 6000,
+      "weekly_start_time": 1774224000000,
+      "weekly_end_time": 1774828800000
+    }
+  ],
+  "base_resp": {
+    "status_code": 0,
+    "status_msg": "success"
+  }
+}

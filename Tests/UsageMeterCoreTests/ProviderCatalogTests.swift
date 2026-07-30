@@ -53,8 +53,8 @@ struct ProviderCatalogTests {
     }
 
     @Test
-    func catalogHidesUnqualifiedProviders() {
-        let expected = [
+    func catalogShowsExperimentalProvidersOnlyInDevelopment() {
+        let qualified = [
             Provider.claude,
             Provider.codex,
             Provider.kimi,
@@ -63,12 +63,12 @@ struct ProviderCatalogTests {
         #expect(
             ProviderCatalog.live
                 .visibleDefinitions(isDevelopmentBuild: false)
-                .map(\.provider) == expected,
+                .map(\.provider) == qualified,
         )
         #expect(
             ProviderCatalog.live
                 .visibleDefinitions(isDevelopmentBuild: true)
-                .map(\.provider) == expected,
+                .map(\.provider) == qualified + [.minimax],
         )
     }
 

@@ -1510,7 +1510,7 @@ dashboard or Settings window is visible.
 - Produces: `MiniMaxCredential`, `MiniMaxUsageDecoder`,
   `MiniMaxUsageAdapter`, and a working API-key Add Account form.
 
-- [ ] **Step 1: Add the sanitized fixture and failing decoder tests**
+- [x] **Step 1: Add the sanitized fixture and failing decoder tests**
 
 Create a fixture with one zero-capacity modality row and this text row:
 
@@ -1600,7 +1600,7 @@ func nonzeroProviderStatusIsRejected() async {
 The production break caught is interpreting the misleading
 `current_*_usage_count` fields as used instead of remaining.
 
-- [ ] **Step 2: Run decoder tests and verify RED**
+- [x] **Step 2: Run decoder tests and verify RED**
 
 ```bash
 swift test --filter MiniMaxUsageDecoderTests
@@ -1608,7 +1608,7 @@ swift test --filter MiniMaxUsageDecoderTests
 
 Expected: compilation fails because the decoder does not exist.
 
-- [ ] **Step 3: Implement the MiniMax decoder**
+- [x] **Step 3: Implement the MiniMax decoder**
 
 Create:
 
@@ -1643,7 +1643,7 @@ with no useful window or nonzero provider status as
 Adapt this narrow response behavior from the pinned OpenCode Bar source and add
 its MIT copyright/license notice to `THIRD_PARTY_NOTICES.md`.
 
-- [ ] **Step 4: Write failing HTTP adapter tests**
+- [x] **Step 4: Write failing HTTP adapter tests**
 
 Use the existing recording transport pattern. Add:
 
@@ -1695,7 +1695,7 @@ Add table cases for 401/403 -> `.reauthenticationRequired`, 429 with
 `Retry-After` -> `.retryAfter`, and 500 -> `.temporaryFailure`. Add a missing or
 wrong typed credential test that makes no request.
 
-- [ ] **Step 5: Run adapter tests and verify RED**
+- [x] **Step 5: Run adapter tests and verify RED**
 
 ```bash
 swift test --filter MiniMaxUsageAdapterTests
@@ -1703,14 +1703,14 @@ swift test --filter MiniMaxUsageAdapterTests
 
 Expected: compilation fails because the adapter does not exist.
 
-- [ ] **Step 6: Implement the adapter**
+- [x] **Step 6: Implement the adapter**
 
 `MiniMaxUsageAdapter` conforms to `ProviderAccountAdapter`, loads
 `MiniMaxCredential.self`, validates provider equality, sends the GET request,
 maps status codes identically to existing clients, decodes the snapshot, and
 deletes only that account's credential.
 
-- [ ] **Step 7: Write failing API-key form behavior tests**
+- [x] **Step 7: Write failing API-key form behavior tests**
 
 Add Settings tests on a value-type `APIKeyConnectionForm`:
 
@@ -1752,7 +1752,7 @@ The API-key field is a `SecureField`. Do not log, trim, or show the secret in an
 error. `MiniMaxCredential` performs only its documented outer-whitespace
 normalization when the user submits.
 
-- [ ] **Step 8: Implement the form and wire the live adapter**
+- [x] **Step 8: Implement the form and wire the live adapter**
 
 Replace MiniMax's temporary connection content with `APIKeyConnectionView`.
 On Connect:
@@ -1765,7 +1765,7 @@ On Connect:
 Add `MiniMaxUsageAdapter` to `AppEnvironment` and keep the catalog release
 state `.experimental`.
 
-- [ ] **Step 9: Run focused and full tests and verify GREEN**
+- [x] **Step 9: Run focused and full tests and verify GREEN**
 
 ```bash
 swift test --filter MiniMaxUsageDecoderTests

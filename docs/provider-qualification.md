@@ -12,7 +12,7 @@ explicitly obtains a safe display identity.
 | Claude | Isolated WebKit session | Qualified with two profiles | Enabled |
 | Codex | Browser OAuth and usage API | Qualified with two accounts | Enabled |
 | Kimi | Device OAuth and usage API | Qualified current flow; second-account gate outstanding | Enabled (existing) |
-| MiniMax Token Plan | API key and documented remains endpoint | Researched | Hidden |
+| MiniMax Token Plan | API key and documented remains endpoint | Automated adapter complete | Experimental builds |
 | GitHub Copilot | GitHub OAuth and billing usage API | Researched | Hidden |
 | Antigravity | Isolated CLI profile and `/usage` | Researched | Hidden |
 | Factory | Isolated Droid profile and `/limits` | Researched | Hidden |
@@ -139,3 +139,18 @@ The probe was run on macOS 26.5.2 with one Kimi Code subscription.
 The adapter remains capable of decoding Kimi's documented 300-minute limit
 when the provider supplies it. The UI must preserve the live weekly-only state
 without inventing a five-hour value.
+
+## MiniMax Token Plan
+
+The automated adapter behavior is adapted from OpenCode Bar commit
+`4c501b3d97f2f88ff5178ec20d4e45fe3108b3fe`.
+
+- Authentication uses an account-scoped API key stored in the macOS Keychain.
+- Usage is fetched from
+  `https://api.minimax.io/v1/api/openplatform/coding_plan/remains`.
+- `current_interval_usage_count` and `current_weekly_usage_count` are treated
+  as remaining counts despite their names.
+- Zero-capacity modalities are ignored, and numeric strings are accepted
+  without rounding the normalized fraction to an integer percentage.
+- The provider is visible only in development builds pending a real
+  two-account qualification and cleanup check.

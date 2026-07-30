@@ -242,3 +242,31 @@ func completingAccountConnectionStartsFreshProviderModels() {
             != firstViewID,
     )
 }
+
+@Test
+func apiKeyFormTrimsNameButPreservesSecretBytes() {
+    let form = APIKeyConnectionForm(
+        displayName: "  MiniMax Work  ",
+        apiKey: " key-with-spaces "
+    )
+
+    #expect(form.validatedDisplayName == "MiniMax Work")
+    #expect(form.apiKey == " key-with-spaces ")
+    #expect(form.canConnect)
+}
+
+@Test
+func apiKeyFormRequiresANameAndNonblankSecret() {
+    #expect(
+        !APIKeyConnectionForm(
+            displayName: " ",
+            apiKey: "key"
+        ).canConnect
+    )
+    #expect(
+        !APIKeyConnectionForm(
+            displayName: "MiniMax",
+            apiKey: "\n\t"
+        ).canConnect
+    )
+}

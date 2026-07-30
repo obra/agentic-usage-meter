@@ -102,6 +102,9 @@ private enum AppEnvironment {
                 client: KimiUsageClient(),
                 refreshCredential: refreshKimiCredential
             ),
+            MiniMaxUsageAdapter(
+                credentialStore: credentialStore
+            ),
         ]
 
         return AppModel(

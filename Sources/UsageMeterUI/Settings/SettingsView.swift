@@ -319,7 +319,19 @@ private struct AddAccountView: View {
                                 ?? "Kimi",
                             onComplete: complete,
                         )
-                    case .minimax, .githubCopilot,
+                    case .minimax:
+                        APIKeyConnectionView(
+                            model: model,
+                            provider: .minimax,
+                            reconnectingAccount:
+                                route.reconnectingAccount,
+                            suggestedName:
+                                route.reconnectingAccount?
+                                    .displayName
+                                    ?? "MiniMax",
+                            onComplete: complete
+                        )
+                    case .githubCopilot,
                         .antigravity, .factory,
                         .openCodeGo, .openCodeZen,
                         .superGrok:
