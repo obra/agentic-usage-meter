@@ -65,20 +65,59 @@ struct AccountConnectionFormState {
     }
 }
 
-public struct SettingsView: View {
-    private enum Tab: Hashable {
-        case accounts
-        case connect
+struct AccountManagementPresentation {
+    var sheetRoute: AccountSheetRoute?
+    private(set) var connectionForm:
+        AccountConnectionFormState
+
+    init(
+        sheetRoute: AccountSheetRoute? = nil,
+        connectionForm: AccountConnectionFormState =
+            AccountConnectionFormState(),
+    ) {
+        self.sheetRoute = sheetRoute
+        self.connectionForm = connectionForm
     }
 
+    var connectionViewID:
+        AccountConnectionFormState.ViewID
+    {
+        connectionForm.viewID(
+            reconnectingAccountID:
+            sheetRoute?.reconnectingAccount?.id,
+        )
+    }
+
+    mutating func presentAddAccount() {
+        sheetRoute = .add
+    }
+
+    mutating func presentReconnect(
+        _ account: SubscriptionAccount,
+    ) {
+        sheetRoute = .reconnect(account)
+    }
+
+    mutating func dismissSheet() {
+        sheetRoute = nil
+    }
+
+    mutating func connectionDidComplete(
+        nextAttemptID: UUID = UUID(),
+    ) {
+        connectionForm.accountDidConnect(
+            nextAttemptID: nextAttemptID,
+        )
+        dismissSheet()
+    }
+}
+
+public struct SettingsView: View {
     private let model: AppModel
     private let windowActivation:
         SettingsWindowActivation
-    @State private var selectedTab = Tab.accounts
-    @State private var reconnectingAccount:
-        SubscriptionAccount?
-    @State private var connectionForm =
-        AccountConnectionFormState()
+    @State private var presentation =
+        AccountManagementPresentation()
 
     public init(model: AppModel) {
         self.model = model
@@ -86,43 +125,42 @@ public struct SettingsView: View {
     }
 
     public var body: some View {
-        TabView(selection: $selectedTab) {
+        NavigationStack {
             AccountListView(
                 model: model,
+                onAdd: {
+                    presentation.presentAddAccount()
+                },
                 onReconnect: { account in
-                    reconnectingAccount = account
-                    selectedTab = .connect
+                    presentation.presentReconnect(account)
                 },
             )
-            .tabItem {
-                Label("Accounts", systemImage: "person.2")
+            .navigationTitle("Accounts")
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        presentation.presentAddAccount()
+                    } label: {
+                        Label(
+                            "Add Account",
+                            systemImage: "plus",
+                        )
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
             }
-            .tag(Tab.accounts)
-
+        }
+        .sheet(item: $presentation.sheetRoute) { route in
             AddAccountView(
                 model: model,
-                reconnectingAccount: reconnectingAccount,
+                route: route,
                 onComplete: {
-                    connectionForm.accountDidConnect()
-                    reconnectingAccount = nil
-                    selectedTab = .accounts
+                    presentation.connectionDidComplete()
                 },
             )
             .id(
-                connectionForm.viewID(
-                    reconnectingAccountID:
-                    reconnectingAccount?.id,
-                ),
+                presentation.connectionViewID,
             )
-            .tabItem {
-                Label(
-                    reconnectingAccount == nil
-                        ? "Add Account"
-                        : "Reconnect",
-                    systemImage: "plus.circle",
-                )
-            }
-            .tag(Tab.connect)
         }
         .frame(minWidth: 680, minHeight: 560)
         .onAppear {
@@ -135,8 +173,10 @@ public struct SettingsView: View {
 }
 
 private struct AddAccountView: View {
+    @Environment(\.dismiss) private var dismiss
+
     let model: AppModel
-    let reconnectingAccount: SubscriptionAccount?
+    let route: AccountSheetRoute
     let onComplete: () -> Void
 
     @State private var selectedProvider: Provider
@@ -146,15 +186,16 @@ private struct AddAccountView: View {
 
     init(
         model: AppModel,
-        reconnectingAccount: SubscriptionAccount?,
+        route: AccountSheetRoute,
         onComplete: @escaping () -> Void,
     ) {
         self.model = model
-        self.reconnectingAccount = reconnectingAccount
+        self.route = route
         self.onComplete = onComplete
 
-        let provider =
-            reconnectingAccount?.provider ?? .claude
+        let provider = route.provider
+        let reconnectingAccount =
+            route.reconnectingAccount
         _selectedProvider = State(initialValue: provider)
         _claude = State(
             initialValue: ClaudeConnectionModel(
@@ -186,48 +227,74 @@ private struct AddAccountView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Picker("Provider", selection: $selectedProvider) {
-                Text("Claude").tag(Provider.claude)
-                Text("Codex").tag(Provider.codex)
-                Text("Kimi").tag(Provider.kimi)
-            }
-            .pickerStyle(.segmented)
-            .disabled(reconnectingAccount != nil)
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 18) {
+                Picker(
+                    "Provider",
+                    selection: $selectedProvider,
+                ) {
+                    Text("Claude").tag(Provider.claude)
+                    Text("Codex").tag(Provider.codex)
+                    Text("Kimi").tag(Provider.kimi)
+                }
+                .pickerStyle(.segmented)
+                .disabled(route.isProviderLocked)
 
-            Group {
-                switch selectedProvider {
-                case .claude:
-                    ClaudeConnectionView(
-                        model: claude,
-                        suggestedName:
-                        reconnectingAccount?.displayName
-                            ?? "Claude",
-                        onComplete: onComplete,
-                    )
-                case .codex:
-                    CodexConnectionView(
-                        model: codex,
-                        suggestedName:
-                        reconnectingAccount?.displayName
-                            ?? "Codex",
-                        onComplete: onComplete,
-                    )
-                case .kimi:
-                    KimiConnectionView(
-                        model: kimi,
-                        suggestedName:
-                        reconnectingAccount?.displayName
-                            ?? "Kimi",
-                        onComplete: onComplete,
-                    )
+                Group {
+                    switch selectedProvider {
+                    case .claude:
+                        ClaudeConnectionView(
+                            model: claude,
+                            suggestedName:
+                            route.reconnectingAccount?
+                                .displayName
+                                ?? "Claude",
+                            onComplete: complete,
+                        )
+                    case .codex:
+                        CodexConnectionView(
+                            model: codex,
+                            suggestedName:
+                            route.reconnectingAccount?
+                                .displayName
+                                ?? "Codex",
+                            onComplete: complete,
+                        )
+                    case .kimi:
+                        KimiConnectionView(
+                            model: kimi,
+                            suggestedName:
+                            route.reconnectingAccount?
+                                .displayName
+                                ?? "Kimi",
+                            onComplete: complete,
+                        )
+                    }
+                }
+                .frame(
+                    maxWidth: .infinity,
+                    maxHeight: .infinity,
+                )
+            }
+            .padding(24)
+            .navigationTitle(
+                route.reconnectingAccount == nil
+                    ? "Add an account"
+                    : "Reconnect account",
+            )
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
                 }
             }
-            .frame(
-                maxWidth: .infinity,
-                maxHeight: .infinity,
-            )
         }
-        .padding(24)
+        .frame(minWidth: 720, minHeight: 620)
+    }
+
+    private func complete() {
+        onComplete()
+        dismiss()
     }
 }

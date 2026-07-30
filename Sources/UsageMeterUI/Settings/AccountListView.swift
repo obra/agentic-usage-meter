@@ -24,14 +24,17 @@ struct AccountNameEdit {
 
 public struct AccountListView: View {
     private let model: AppModel
+    private let onAdd: () -> Void
     private let onReconnect: (SubscriptionAccount) -> Void
     @State private var pendingRemoval: SubscriptionAccount?
 
     public init(
         model: AppModel,
+        onAdd: @escaping () -> Void,
         onReconnect: @escaping (SubscriptionAccount) -> Void,
     ) {
         self.model = model
+        self.onAdd = onAdd
         self.onReconnect = onReconnect
     }
 
@@ -81,13 +84,20 @@ public struct AccountListView: View {
         }
         .overlay {
             if model.accounts.isEmpty {
-                ContentUnavailableView(
-                    "No accounts",
-                    systemImage: "person.crop.circle.badge.plus",
-                    description: Text(
+                ContentUnavailableView {
+                    Label(
+                        "No accounts",
+                        systemImage:
+                            "person.crop.circle.badge.plus",
+                    )
+                } description: {
+                    Text(
                         "Add a Claude, Codex, or Kimi subscription.",
-                    ),
-                )
+                    )
+                } actions: {
+                    Button("Add Account", action: onAdd)
+                        .buttonStyle(.borderedProminent)
+                }
             }
         }
         .alert(

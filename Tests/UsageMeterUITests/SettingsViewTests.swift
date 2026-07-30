@@ -51,6 +51,47 @@ func accountNameEditCanCancelBackToTheOriginalName() {
 }
 
 @Test
+func completingConnectionDismissesSheetAndResetsProviderModels() {
+    let firstAttemptID = UUID(
+        uuidString: "11111111-1111-1111-1111-111111111111",
+    )!
+    let secondAttemptID = UUID(
+        uuidString: "22222222-2222-2222-2222-222222222222",
+    )!
+    var presentation = AccountManagementPresentation(
+        connectionForm: AccountConnectionFormState(
+            attemptID: firstAttemptID,
+        ),
+    )
+    presentation.presentAddAccount()
+    let firstViewID = presentation.connectionViewID
+
+    presentation.connectionDidComplete(
+        nextAttemptID: secondAttemptID,
+    )
+
+    #expect(presentation.sheetRoute == nil)
+    #expect(presentation.connectionViewID != firstViewID)
+}
+
+@Test
+func reconnectPresentationCarriesTheSelectedAccount() {
+    let account = SubscriptionAccount(
+        provider: .kimi,
+        displayName: "Kimi",
+        displayOrder: 0,
+    )
+    var presentation = AccountManagementPresentation()
+
+    presentation.presentReconnect(account)
+
+    #expect(
+        presentation.sheetRoute?.reconnectingAccount?.id
+            == account.id,
+    )
+}
+
+@Test
 func completingAccountConnectionStartsFreshProviderModels() {
     let firstAttemptID = UUID(
         uuidString: "11111111-1111-1111-1111-111111111111",
