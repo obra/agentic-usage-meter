@@ -5,6 +5,28 @@ The probe prints only normalized window data and never prints credentials,
 request headers, raw provider responses, or account identity unless an adapter
 explicitly obtains a safe display identity.
 
+## Qualification matrix
+
+| Product | Integration surface | Status | Release visibility |
+| --- | --- | --- | --- |
+| Claude | Isolated WebKit session | Qualified with two profiles | Enabled |
+| Codex | Browser OAuth and usage API | Qualified with two accounts | Enabled |
+| Kimi | Device OAuth and usage API | Qualified current flow; second-account gate outstanding | Enabled (existing) |
+| MiniMax Token Plan | API key and documented remains endpoint | Researched | Hidden |
+| GitHub Copilot | GitHub OAuth and billing usage API | Researched | Hidden |
+| Antigravity | Isolated CLI profile and `/usage` | Researched | Hidden |
+| Factory | Isolated Droid profile and `/limits` | Researched | Hidden |
+| OpenCode Go | API key plus console/endpoint qualification | Researched | Hidden |
+| OpenCode Zen | API key plus console/endpoint qualification | Researched | Hidden |
+| SuperGrok | Isolated web session and Usage dashboard | Researched | Hidden |
+
+`Researched` means an authoritative usage surface has been identified but no
+real multi-account adapter has passed the qualification gate. Development code
+may mark an in-progress adapter experimental; release builds keep it hidden.
+
+The provider expansion architecture and common release gate are specified in
+`docs/superpowers/specs/2026-07-30-provider-expansion-design.md`.
+
 ## Claude
 
 Automated fixture and request-contract coverage is implemented for the original
