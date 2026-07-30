@@ -9,6 +9,15 @@ public protocol AppStatePersisting: Sendable {
 
 extension AppStateStore: AppStatePersisting {}
 
+public protocol ClaudeAccountUsageFetching: Sendable {
+    func fetchUsage(
+        accountID: UUID,
+        profileID: UUID,
+        organizationID: UUID,
+        now: Date,
+    ) async throws -> UsageSnapshot
+}
+
 public enum AccountViewError: Equatable, Sendable {
     case authenticationRequired
     case temporarilyUnavailable
@@ -63,6 +72,9 @@ public struct AccountViewState: Equatable, Identifiable, Sendable {
 @MainActor
 @Observable
 public final class AppModel {
+    public typealias ClaudeProfileRemover =
+        @MainActor @Sendable (UUID) async throws -> Void
+
     public private(set) var accounts: [AccountViewState] = []
     public private(set) var isFloatingWidgetVisible = false
     public private(set) var floatingWidgetPlacement:
@@ -75,6 +87,10 @@ public final class AppModel {
     @ObservationIgnored
     private let clientsByProvider: [Provider: any UsageProviderClient]
     @ObservationIgnored
+    private let claudeClient: (any ClaudeAccountUsageFetching)?
+    @ObservationIgnored
+    private let claudeProfileRemover: ClaudeProfileRemover?
+    @ObservationIgnored
     private let now: @Sendable () -> Date
     @ObservationIgnored
     private var persistedState = PersistedAppState.empty
@@ -85,6 +101,8 @@ public final class AppModel {
         stateStore: any AppStatePersisting,
         credentialStore: any CredentialStore,
         clients: [any UsageProviderClient],
+        claudeClient: (any ClaudeAccountUsageFetching)? = nil,
+        claudeProfileRemover: ClaudeProfileRemover? = nil,
         now: @escaping @Sendable () -> Date = { Date() },
     ) {
         self.stateStore = stateStore
@@ -94,6 +112,8 @@ public final class AppModel {
                 ($0.provider, $0)
             },
         )
+        self.claudeClient = claudeClient
+        self.claudeProfileRemover = claudeProfileRemover
         self.now = now
     }
 
@@ -190,7 +210,6 @@ public final class AppModel {
     public func refreshAccount(id: UUID) async {
         guard
             let account = accounts.first(where: { $0.id == id })?.account,
-            let client = clientsByProvider[account.provider],
             let refresher = refreshers[id]
         else {
             return
@@ -201,24 +220,59 @@ public final class AppModel {
         }
 
         do {
-            let credentialStore = credentialStore
             let now = now
-            let outcome = try await refresher.refresh {
+            let outcome: RefreshOutcome
+            if account.provider == .claude {
                 guard
-                    let credential = try await credentialStore.load(
-                        for: id,
-                    )
+                    let claudeClient,
+                    let profileID = account.claudeProfileID,
+                    let organizationID =
+                    account.claudeOrganizationID
                 else {
-                    throw RefreshFailure.authenticationRequired
+                    updateAccount(id: id) {
+                        $0.isRefreshing = false
+                        $0.error = .authenticationRequired
+                    }
+                    return
                 }
-                do {
-                    return try await client.fetchUsage(
-                        accountID: id,
-                        credential: credential,
-                        now: now(),
-                    )
-                } catch let error as ProviderClientError {
-                    throw refreshFailure(for: error)
+                outcome = try await refresher.refresh {
+                    do {
+                        return try await claudeClient.fetchUsage(
+                            accountID: id,
+                            profileID: profileID,
+                            organizationID: organizationID,
+                            now: now(),
+                        )
+                    } catch let error as ProviderClientError {
+                        throw refreshFailure(for: error)
+                    }
+                }
+            } else {
+                guard let client = clientsByProvider[account.provider] else {
+                    updateAccount(id: id) {
+                        $0.isRefreshing = false
+                        $0.error = .temporarilyUnavailable
+                    }
+                    return
+                }
+                let credentialStore = credentialStore
+                outcome = try await refresher.refresh {
+                    guard
+                        let credential = try await credentialStore.load(
+                            for: id,
+                        )
+                    else {
+                        throw RefreshFailure.authenticationRequired
+                    }
+                    do {
+                        return try await client.fetchUsage(
+                            accountID: id,
+                            credential: credential,
+                            now: now(),
+                        )
+                    } catch let error as ProviderClientError {
+                        throw refreshFailure(for: error)
+                    }
                 }
             }
             apply(outcome, to: id)
@@ -247,11 +301,25 @@ public final class AppModel {
     }
 
     public func removeAccount(id: UUID) async throws {
-        guard accounts.contains(where: { $0.id == id }) else {
+        guard
+            let account = accounts.first(
+                where: { $0.id == id },
+            )?.account
+        else {
             return
         }
 
-        try await credentialStore.delete(for: id)
+        if account.provider == .claude {
+            guard
+                let profileID = account.claudeProfileID,
+                let claudeProfileRemover
+            else {
+                throw AppModelError.invalidSnapshot
+            }
+            try await claudeProfileRemover(profileID)
+        } else {
+            try await credentialStore.delete(for: id)
+        }
 
         var nextState = persistedState
         nextState.accounts.removeAll { $0.id == id }
@@ -262,6 +330,110 @@ public final class AppModel {
         persistedState = nextState
         accounts.removeAll { $0.id == id }
         refreshers[id] = nil
+    }
+
+    public func connectClaudeAccount(
+        _ account: SubscriptionAccount,
+        snapshot: UsageSnapshot,
+    ) async throws {
+        guard !accounts.contains(where: { $0.id == account.id }) else {
+            throw AppModelError.accountAlreadyExists
+        }
+        guard
+            account.provider == .claude,
+            account.claudeProfileID != nil,
+            account.claudeOrganizationID != nil,
+            snapshot.accountID == account.id
+        else {
+            throw AppModelError.invalidSnapshot
+        }
+
+        let refreshState = AccountRefreshState(
+            lastRequestStartedAt: snapshot.fetchedAt,
+        )
+        var nextState = persistedState
+        nextState.accounts.append(account)
+        nextState.snapshots[account.id] = snapshot
+        nextState.refreshStates[account.id] = refreshState
+        try await stateStore.save(nextState)
+
+        let now = now
+        persistedState = nextState
+        refreshers[account.id] = AccountRefresher(
+            state: refreshState,
+            lastGoodSnapshot: snapshot,
+            now: { now() },
+        )
+        accounts.append(
+            AccountViewState(
+                account: account,
+                snapshot: snapshot,
+            ),
+        )
+        accounts.sort(by: viewStateComesBefore)
+    }
+
+    public func reconnectClaudeAccount(
+        id: UUID,
+        replacement: SubscriptionAccount,
+        snapshot: UsageSnapshot,
+    ) async throws {
+        guard
+            let existing = accounts.first(
+                where: { $0.id == id },
+            )?.account,
+            existing.provider == .claude
+        else {
+            throw AppModelError.accountNotFound
+        }
+        guard
+            replacement.id == id,
+            replacement.provider == .claude,
+            let replacementProfileID =
+            replacement.claudeProfileID,
+            replacement.claudeOrganizationID != nil,
+            snapshot.accountID == id,
+            let existingProfileID =
+            existing.claudeProfileID,
+            let claudeProfileRemover
+        else {
+            throw AppModelError.invalidSnapshot
+        }
+
+        if existingProfileID != replacementProfileID {
+            try await claudeProfileRemover(existingProfileID)
+        }
+
+        let refreshState = AccountRefreshState(
+            lastRequestStartedAt: snapshot.fetchedAt,
+        )
+        var nextState = persistedState
+        guard
+            let stateIndex = nextState.accounts.firstIndex(
+                where: { $0.id == id },
+            )
+        else {
+            throw AppModelError.accountNotFound
+        }
+        nextState.accounts[stateIndex] = replacement
+        nextState.snapshots[id] = snapshot
+        nextState.refreshStates[id] = refreshState
+        try await stateStore.save(nextState)
+
+        let now = now
+        persistedState = nextState
+        refreshers[id] = AccountRefresher(
+            state: refreshState,
+            lastGoodSnapshot: snapshot,
+            now: { now() },
+        )
+        updateAccount(id: id) {
+            $0.account = replacement
+            $0.snapshot = snapshot
+            $0.error = nil
+            $0.nextEligibleAt = nil
+        }
+        accounts.sort(by: viewStateComesBefore)
     }
 
     public func connectAccount(
@@ -317,6 +489,29 @@ public final class AppModel {
             ),
         )
         accounts.sort(by: viewStateComesBefore)
+    }
+
+    public func hasCodexAccount(
+        providerAccountID: String,
+        excluding excludedAccountID: UUID? = nil,
+    ) async -> Bool {
+        for account in accounts
+            where account.account.provider == .codex
+            && account.id != excludedAccountID
+        {
+            guard
+                let credential = try? await credentialStore.load(
+                    for: account.id,
+                ),
+                case let .codex(oauth) = credential
+            else {
+                continue
+            }
+            if oauth.accountID == providerAccountID {
+                return true
+            }
+        }
+        return false
     }
 
     public func renameAccount(
@@ -399,6 +594,7 @@ public final class AppModel {
     public func reconnectAccount(
         id: UUID,
         credential: ProviderCredential,
+        authenticatedIdentity: String? = nil,
     ) async throws {
         guard
             let account = accounts.first(
@@ -436,6 +632,15 @@ public final class AppModel {
         persistedState.snapshots[id] = snapshot
         persistedState.refreshStates[id] =
             await refresher.refreshState()
+        if
+            let authenticatedIdentity,
+            let index = persistedState.accounts.firstIndex(
+                where: { $0.id == id },
+            )
+        {
+            persistedState.accounts[index]
+                .authenticatedIdentity = authenticatedIdentity
+        }
         do {
             try await stateStore.save(persistedState)
         } catch {
@@ -456,6 +661,10 @@ public final class AppModel {
             $0.snapshot = snapshot
             $0.error = nil
             $0.nextEligibleAt = nil
+            if let authenticatedIdentity {
+                $0.account.authenticatedIdentity =
+                    authenticatedIdentity
+            }
         }
     }
 

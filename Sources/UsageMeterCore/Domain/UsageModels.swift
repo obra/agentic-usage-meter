@@ -12,19 +12,25 @@ public struct SubscriptionAccount: Codable, Equatable, Identifiable, Sendable {
     public var displayName: String
     public var authenticatedIdentity: String?
     public var displayOrder: Int
+    public var claudeProfileID: UUID?
+    public var claudeOrganizationID: UUID?
 
     public init(
         id: UUID = UUID(),
         provider: Provider,
         displayName: String,
         authenticatedIdentity: String? = nil,
-        displayOrder: Int
+        displayOrder: Int,
+        claudeProfileID: UUID? = nil,
+        claudeOrganizationID: UUID? = nil,
     ) {
         self.id = id
         self.provider = provider
         self.displayName = displayName
         self.authenticatedIdentity = authenticatedIdentity
         self.displayOrder = displayOrder
+        self.claudeProfileID = claudeProfileID
+        self.claudeOrganizationID = claudeOrganizationID
     }
 }
 
@@ -77,13 +83,13 @@ public struct UsageWindow: Codable, Equatable, Identifiable, Sendable {
             kind: kind,
             duration: duration,
             resetAt: resetAt,
-            consumedFraction: consumedFraction
+            consumedFraction: consumedFraction,
         ) else {
             throw DecodingError.dataCorrupted(
                 .init(
                     codingPath: decoder.codingPath,
-                    debugDescription: "Usage window contains invalid values."
-                )
+                    debugDescription: "Usage window contains invalid values.",
+                ),
             )
         }
 

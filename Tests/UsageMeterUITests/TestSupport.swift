@@ -28,7 +28,7 @@ actor TestCredentialStore: CredentialStore {
 
     func save(
         _ credential: ProviderCredential,
-        for accountID: UUID
+        for accountID: UUID,
     ) {
         credentials[accountID] = credential
     }
@@ -55,7 +55,29 @@ actor TestUsageProviderClient: UsageProviderClient {
     func fetchUsage(
         accountID: UUID,
         credential _: ProviderCredential,
-        now _: Date
+        now _: Date,
+    ) throws -> UsageSnapshot {
+        requestedAccountIDs.append(accountID)
+        guard let snapshot = snapshots[accountID] else {
+            throw ProviderClientError.temporaryFailure
+        }
+        return snapshot
+    }
+}
+
+actor TestClaudeAccountUsageClient: ClaudeAccountUsageFetching {
+    private let snapshots: [UUID: UsageSnapshot]
+    private(set) var requestedAccountIDs: [UUID] = []
+
+    init(snapshots: [UUID: UsageSnapshot]) {
+        self.snapshots = snapshots
+    }
+
+    func fetchUsage(
+        accountID: UUID,
+        profileID _: UUID,
+        organizationID _: UUID,
+        now _: Date,
     ) throws -> UsageSnapshot {
         requestedAccountIDs.append(accountID)
         guard let snapshot = snapshots[accountID] else {
@@ -68,13 +90,22 @@ actor TestUsageProviderClient: UsageProviderClient {
 func makeTestWindow(
     id: String,
     resetAt: Date,
-    consumedFraction: Double
+    consumedFraction: Double,
 ) -> UsageWindow {
     UsageWindow(
         id: id,
         kind: .weekly,
         duration: 604_800,
         resetAt: resetAt,
-        consumedFraction: consumedFraction
+        consumedFraction: consumedFraction,
     )!
+}
+
+@MainActor
+final class TestClaudeProfileRemover {
+    private(set) var removedProfileIDs: [UUID] = []
+
+    func remove(_ profileID: UUID) {
+        removedProfileIDs.append(profileID)
+    }
 }

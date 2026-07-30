@@ -25,8 +25,26 @@ extension KimiOAuthFlowError: CustomStringConvertible {
   }
 }
 
+public struct KimiAuthorizationPrompt: Equatable, Sendable {
+  public let verificationURL: URL
+  public let userCode: String
+  public let expiresAt: Date
+
+  public init(
+    verificationURL: URL,
+    userCode: String,
+    expiresAt: Date,
+  ) {
+    self.verificationURL = verificationURL
+    self.userCode = userCode
+    self.expiresAt = expiresAt
+  }
+}
+
 public struct KimiOAuthFlow: Sendable {
   public typealias Sleep = @Sendable (TimeInterval) async throws -> Void
+  public typealias AuthorizationUpdate =
+    @Sendable (KimiAuthorizationPrompt) async -> Void
 
   private let device: KimiDeviceInfo
   private let transport: any HTTPTransport
@@ -42,10 +60,10 @@ public struct KimiOAuthFlow: Sendable {
     sleep: @escaping Sleep = { seconds in
       try await Task.sleep(
         for: .milliseconds(
-          Int64((seconds * 1_000).rounded())
-        )
+          Int64((seconds * 1000).rounded()),
+        ),
       )
-    }
+    },
   ) {
     self.device = device
     self.transport = transport
@@ -54,10 +72,12 @@ public struct KimiOAuthFlow: Sendable {
     self.sleep = sleep
   }
 
-  public func authenticate() async throws -> OAuthCredential {
+  public func authenticate(
+    onPrompt: @escaping AuthorizationUpdate = { _ in },
+  ) async throws -> OAuthCredential {
     let authorizationRequest =
       try KimiOAuthRequests.deviceAuthorizationRequest(
-        device: device
+        device: device,
       )
     let authorizationResponse = try await send(authorizationRequest)
     guard authorizationResponse.statusCode == 200 else {
@@ -68,37 +88,50 @@ public struct KimiOAuthFlow: Sendable {
     do {
       authorization = try JSONDecoder().decode(
         DeviceAuthorization.self,
-        from: authorizationResponse.data
+        from: authorizationResponse.data,
       )
     } catch {
       throw KimiOAuthFlowError.invalidResponse
     }
     guard
       !authorization.deviceCode.isEmpty,
+      !authorization.userCode.isEmpty,
       let verificationURL = URL(
-        string: authorization.verificationURIComplete
+        string: authorization.verificationURIComplete,
       ),
       verificationURL.scheme == "https",
       ["auth.kimi.com", "www.kimi.com"].contains(
-        verificationURL.host
+        verificationURL.host,
       )
     else {
       throw KimiOAuthFlowError.invalidResponse
     }
+
+    let expiresIn = authorization.expiresIn ?? 900
+    guard expiresIn > 0 else {
+      throw KimiOAuthFlowError.invalidResponse
+    }
+    await onPrompt(
+      KimiAuthorizationPrompt(
+        verificationURL: verificationURL,
+        userCode: authorization.userCode,
+        expiresAt: now().addingTimeInterval(
+          TimeInterval(expiresIn),
+        ),
+      ),
+    )
 
     guard await browser.open(verificationURL) else {
       throw KimiOAuthFlowError.browserOpenFailed
     }
 
     var interval = max(TimeInterval(authorization.interval), 1)
-    var remaining = TimeInterval(
-      authorization.expiresIn ?? 900
-    )
+    var remaining = TimeInterval(expiresIn)
 
     while remaining > 0 {
       let request = try KimiOAuthRequests.deviceTokenRequest(
         deviceCode: authorization.deviceCode,
-        device: device
+        device: device,
       )
       let response = try await send(request)
 
@@ -131,7 +164,7 @@ public struct KimiOAuthFlow: Sendable {
   }
 
   public func refresh(
-    _ credential: OAuthCredential
+    _ credential: OAuthCredential,
   ) async throws -> OAuthCredential {
     guard
       let refreshToken = credential.refreshToken,
@@ -142,7 +175,7 @@ public struct KimiOAuthFlow: Sendable {
 
     let request = try KimiOAuthRequests.refreshRequest(
       refreshToken: refreshToken,
-      device: device
+      device: device,
     )
     let response = try await send(request)
     switch response.statusCode {
@@ -170,7 +203,7 @@ public struct KimiOAuthFlow: Sendable {
     do {
       response = try JSONDecoder().decode(
         TokenResponse.self,
-        from: data
+        from: data,
       )
     } catch {
       throw KimiOAuthFlowError.invalidResponse
@@ -187,25 +220,27 @@ public struct KimiOAuthFlow: Sendable {
     return OAuthCredential(
       accessToken: response.accessToken,
       refreshToken: response.refreshToken,
-      expiresAt: now().addingTimeInterval(response.expiresIn)
+      expiresAt: now().addingTimeInterval(response.expiresIn),
     )
   }
 
   private func tokenErrorCode(from data: Data) -> String? {
     try? JSONDecoder().decode(
       TokenErrorResponse.self,
-      from: data
+      from: data,
     ).error
   }
 }
 
 private struct DeviceAuthorization: Decodable {
+  let userCode: String
   let deviceCode: String
   let verificationURIComplete: String
   let expiresIn: Int?
   let interval: Int
 
   enum CodingKeys: String, CodingKey {
+    case userCode = "user_code"
     case deviceCode = "device_code"
     case verificationURIComplete = "verification_uri_complete"
     case expiresIn = "expires_in"

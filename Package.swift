@@ -26,7 +26,10 @@ let package = Package(
         ),
         .target(
             name: "UsageMeterUI",
-            dependencies: ["UsageMeterCore"]
+            dependencies: [
+                "UsageMeterCore",
+                "UsageMeterClaudeWeb"
+            ]
         ),
         .executableTarget(
             name: "AgenticUsageMeter",

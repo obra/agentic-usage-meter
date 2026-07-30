@@ -372,4 +372,43 @@ struct AppModelTests {
                 == placement,
         )
     }
+
+    @Test
+    func launchRefreshesClaudeFromItsIsolatedProfile() async {
+        let account = SubscriptionAccount(
+            provider: .claude,
+            displayName: "Claude",
+            displayOrder: 0,
+            claudeProfileID: UUID(),
+            claudeOrganizationID: UUID(),
+        )
+        let fresh = UsageSnapshot(
+            accountID: account.id,
+            fetchedAt: reference,
+            windows: [],
+        )
+        let claudeClient = TestClaudeAccountUsageClient(
+            snapshots: [account.id: fresh],
+        )
+        let model = AppModel(
+            stateStore: TestAppStateStore(
+                state: PersistedAppState(
+                    accounts: [account],
+                    snapshots: [:],
+                ),
+            ),
+            credentialStore: TestCredentialStore(),
+            clients: [],
+            claudeClient: claudeClient,
+            now: { reference },
+        )
+
+        await model.start()
+
+        #expect(model.accounts[0].snapshot == fresh)
+        #expect(
+            await claudeClient.requestedAccountIDs
+                == [account.id],
+        )
+    }
 }

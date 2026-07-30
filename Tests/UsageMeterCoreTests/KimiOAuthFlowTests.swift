@@ -10,7 +10,7 @@ struct KimiOAuthFlowTests {
     model: "macOS arm64",
     osVersion: "Version 26",
     id: "device-id",
-    clientVersion: "1.45.0"
+    clientVersion: "1.45.0",
   )
 
   @Test
@@ -27,14 +27,14 @@ struct KimiOAuthFlowTests {
             "expires_in": 600,
             "interval": 5,
           ],
-          status: 200
+          status: 200,
         ),
         jsonResponse(
           [
             "error": "authorization_pending",
             "error_description": "authorization pending",
           ],
-          status: 400
+          status: 400,
         ),
         jsonResponse(
           [
@@ -44,12 +44,13 @@ struct KimiOAuthFlowTests {
             "scope": "openid",
             "token_type": "Bearer",
           ],
-          status: 200
+          status: 200,
         ),
-      ]
+      ],
     )
     let browser = KimiRecordingBrowser(result: true)
     let sleeper = KimiSleepRecorder()
+    let promptRecorder = KimiPromptRecorder()
     let now = Date(timeIntervalSince1970: 2_000_000_000)
     let flow = KimiOAuthFlow(
       device: device,
@@ -58,25 +59,37 @@ struct KimiOAuthFlowTests {
       now: { now },
       sleep: { seconds in
         await sleeper.record(seconds)
-      }
+      },
     )
 
-    let credential = try await flow.authenticate()
+    let credential = try await flow.authenticate { prompt in
+      await promptRecorder.record(prompt)
+    }
 
     #expect(
       credential
         == OAuthCredential(
           accessToken: "access-token",
           refreshToken: "refresh-token",
-          expiresAt: now.addingTimeInterval(3_600)
-        )
+          expiresAt: now.addingTimeInterval(3600),
+        ),
     )
     #expect(
       await browser.lastURL?.absoluteString
-        == "https://www.kimi.com/code/authorize_device?user_code=ABCD-EFGH"
+        == "https://www.kimi.com/code/authorize_device?user_code=ABCD-EFGH",
     )
     #expect(await sleeper.seconds == [5])
     #expect(await transport.requests.count == 3)
+    #expect(
+      await promptRecorder.prompt
+        == KimiAuthorizationPrompt(
+          verificationURL: URL(
+            string: "https://www.kimi.com/code/authorize_device?user_code=ABCD-EFGH",
+          )!,
+          userCode: "ABCD-EFGH",
+          expiresAt: now.addingTimeInterval(600),
+        ),
+    )
   }
 
   @Test
@@ -91,15 +104,15 @@ struct KimiOAuthFlowTests {
               "https://auth.kimi.com/device?user_code=ABCD",
             "interval": 5,
           ],
-          status: 200
+          status: 200,
         )
-      ]
+      ],
     )
     let flow = KimiOAuthFlow(
       device: device,
       transport: transport,
       browser: KimiRecordingBrowser(result: false),
-      sleep: { _ in }
+      sleep: { _ in },
     )
 
     await #expect(throws: KimiOAuthFlowError.browserOpenFailed) {
@@ -121,32 +134,32 @@ struct KimiOAuthFlowTests {
             "scope": "openid",
             "token_type": "Bearer",
           ],
-          status: 200
+          status: 200,
         )
-      ]
+      ],
     )
     let flow = KimiOAuthFlow(
       device: device,
       transport: transport,
       browser: KimiRecordingBrowser(result: false),
       now: { now },
-      sleep: { _ in }
+      sleep: { _ in },
     )
 
     let credential = try await flow.refresh(
       OAuthCredential(
         accessToken: "old-access",
-        refreshToken: "old-refresh"
-      )
+        refreshToken: "old-refresh",
+      ),
     )
 
     #expect(credential.accessToken == "new-access")
     #expect(credential.refreshToken == "new-refresh")
-    #expect(credential.expiresAt == now.addingTimeInterval(7_200))
+    #expect(credential.expiresAt == now.addingTimeInterval(7200))
     let request = try #require(await transport.requests.first)
     #expect(
       try oauthFormValues(from: request)["refresh_token"]
-        == "old-refresh"
+        == "old-refresh",
     )
   }
 
@@ -157,14 +170,14 @@ struct KimiOAuthFlowTests {
       device: device,
       transport: transport,
       browser: KimiRecordingBrowser(result: false),
-      sleep: { _ in }
+      sleep: { _ in },
     )
 
     await #expect(
-      throws: KimiOAuthFlowError.reauthenticationRequired
+      throws: KimiOAuthFlowError.reauthenticationRequired,
     ) {
       _ = try await flow.refresh(
-        OAuthCredential(accessToken: "access")
+        OAuthCredential(accessToken: "access"),
       )
     }
     #expect(await transport.requests.isEmpty)
@@ -172,12 +185,12 @@ struct KimiOAuthFlowTests {
 
   private func jsonResponse(
     _ object: [String: Any],
-    status: Int
+    status: Int,
   ) -> HTTPResponse {
     HTTPResponse(
       data: try! JSONSerialization.data(withJSONObject: object),
       statusCode: status,
-      headers: [:]
+      headers: [:],
     )
   }
 }
@@ -218,6 +231,14 @@ private actor KimiSleepRecorder {
 
   func record(_ seconds: TimeInterval) {
     self.seconds.append(seconds)
+  }
+}
+
+private actor KimiPromptRecorder {
+  private(set) var prompt: KimiAuthorizationPrompt?
+
+  func record(_ prompt: KimiAuthorizationPrompt) {
+    self.prompt = prompt
   }
 }
 

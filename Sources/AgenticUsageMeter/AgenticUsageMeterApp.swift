@@ -28,8 +28,7 @@ struct AgenticUsageMeterApp: App {
         .menuBarExtraStyle(.window)
 
         Settings {
-            Text("Account settings are not implemented yet.")
-                .frame(width: 420, height: 240)
+            SettingsView(model: model)
         }
     }
 }
@@ -78,6 +77,12 @@ private enum AppEnvironment {
                 CodexUsageClient(),
                 KimiUsageClient(),
             ],
+            claudeClient: ClaudeWebAccountUsageClient(),
+            claudeProfileRemover: {
+                try await ClaudeWebAccountUsageClient.removeProfile(
+                    $0,
+                )
+            },
         )
     }
 
