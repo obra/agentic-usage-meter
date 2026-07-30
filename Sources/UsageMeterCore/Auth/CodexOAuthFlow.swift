@@ -9,9 +9,25 @@ public struct SystemBrowserOpening: BrowserOpening {
     public init() {}
 
     public func open(_ url: URL) async -> Bool {
-        await MainActor.run {
-            NSWorkspace.shared.open(url)
+        await withCheckedContinuation { continuation in
+            Task { @MainActor in
+                NSWorkspace.shared.open(
+                    url,
+                    configuration: Self.openConfiguration()
+                ) { application, error in
+                    continuation.resume(
+                        returning: application != nil && error == nil
+                    )
+                }
+            }
         }
+    }
+
+    @MainActor
+    static func openConfiguration() -> NSWorkspace.OpenConfiguration {
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        return configuration
     }
 }
 

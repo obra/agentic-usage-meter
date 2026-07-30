@@ -4,6 +4,11 @@ import Testing
 
 @Suite(.serialized)
 struct CodexOAuthFlowTests {
+    @Test @MainActor
+    func systemBrowserLaunchRequestsApplicationActivation() {
+        #expect(SystemBrowserOpening.openConfiguration().activates)
+    }
+
     @Test
     func regularBrowserLoginCompletesThroughLoopbackAndTokenExchange() async throws {
         let accessToken = try makeTestJWT(
