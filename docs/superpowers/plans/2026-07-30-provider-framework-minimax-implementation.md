@@ -409,7 +409,7 @@ out of release builds.
   `UsageWindow.label`, `UsageWindow.reportedStartAt`, `UsageBalance`, and
   `UsageSnapshot.balances`.
 
-- [ ] **Step 1: Write failing additive-decoding and validation tests**
+- [x] **Step 1: Write failing additive-decoding and validation tests**
 
 Add to `UsageModelsTests.swift`:
 
@@ -477,7 +477,7 @@ Add a `UsageSummaryTests` case proving balances do not affect
 `tightestWindow`. Add timeline presentation tests proving absent kinds produce
 no section and present kinds sort short, daily, weekly, monthly, custom.
 
-- [ ] **Step 2: Run tests and verify RED**
+- [x] **Step 2: Run tests and verify RED**
 
 Run:
 
@@ -488,7 +488,7 @@ swift test --filter TimelinePresentationTests
 
 Expected: compilation fails for the new API.
 
-- [ ] **Step 3: Implement additive domain values**
+- [x] **Step 3: Implement additive domain values**
 
 Extend `UsageWindowKind`:
 
@@ -579,7 +579,7 @@ balances = try container.decodeIfPresent(
 ) ?? []
 ```
 
-- [ ] **Step 4: Generalize section discovery**
+- [x] **Step 4: Generalize section discovery**
 
 Replace the two fixed `shortAccounts`/`weeklyAccounts` branches with an ordered
 array of present kinds. Keep the approved ten-hour short axis and fourteen-day
@@ -588,7 +588,7 @@ custom an axis of twice the longest row duration. Add compact balance rows
 after timed sections; they show label and formatted amount and never use a
 timeline axis.
 
-- [ ] **Step 5: Run focused and full tests and verify GREEN**
+- [x] **Step 5: Run focused and full tests and verify GREEN**
 
 ```bash
 swift test --filter UsageModelsTests
@@ -597,7 +597,7 @@ swift test --filter TimelinePresentationTests
 swift test
 ```
 
-- [ ] **Step 6: Commit normalized limits**
+- [x] **Step 6: Commit normalized limits**
 
 Commit only the files in this task with:
 

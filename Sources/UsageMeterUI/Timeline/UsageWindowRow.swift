@@ -67,7 +67,7 @@ public struct UsageWindowRow: View {
                             )
                             .frame(
                                 width:
-                                    outerWidth
+                                outerWidth
                                     * presentation.fillFraction,
                             )
                     }
@@ -88,7 +88,7 @@ public struct UsageWindowRow: View {
                         .frame(width: 1, height: 22)
                         .offset(
                             x:
-                                width
+                            width
                                 * presentation.nowXFraction,
                         )
                 }
@@ -111,11 +111,12 @@ public struct UsageWindowRow: View {
     }
 }
 
-private extension Provider {
+extension Provider {
     var timelineColor: Color {
-        let color = ProviderCatalog.live.definition(
-            for: self,
-        )?.color
+        let color =
+            ProviderCatalog.live.definition(
+                for: self,
+            )?.color
             ?? ProviderColor(
                 red: 0.5,
                 green: 0.5,

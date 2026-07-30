@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import UsageMeterCore
 
 @Test
@@ -9,13 +10,13 @@ func usageWindowDerivesStartAndRemainingCapacity() throws {
         UsageWindow(
             id: "five-hour",
             kind: .short,
-            duration: 18_000,
+            duration: 18000,
             resetAt: reset,
             consumedFraction: 0.81
         )
     )
 
-    #expect(window.startAt == reset.addingTimeInterval(-18_000))
+    #expect(window.startAt == reset.addingTimeInterval(-18000))
     #expect(abs(window.remainingFraction - 0.19) < 0.000_001)
 }
 
@@ -84,4 +85,66 @@ func snapshotKeepsIndependentAccountIdentity() throws {
 
     #expect(snapshot.accountID == accountID)
     #expect(snapshot.windows == [window])
+}
+
+@Test
+func legacySnapshotWithoutBalancesStillDecodes() throws {
+    let accountID = UUID()
+    let encoded = Data(
+        """
+        {
+          "accountID": "\(accountID.uuidString)",
+          "fetchedAt": 0,
+          "windows": []
+        }
+        """.utf8,
+    )
+
+    let snapshot = try JSONDecoder().decode(
+        UsageSnapshot.self,
+        from: encoded,
+    )
+
+    #expect(snapshot.accountID == accountID)
+    #expect(snapshot.balances.isEmpty)
+}
+
+@Test
+func usageWindowUsesProviderReportedStartWhenAvailable() throws {
+    let resetAt = Date(timeIntervalSince1970: 2_000_000_000)
+    let reportedStartAt = resetAt.addingTimeInterval(-3600)
+    let window = try #require(
+        UsageWindow(
+            id: "custom",
+            kind: .custom,
+            duration: 7200,
+            resetAt: resetAt,
+            consumedFraction: 0.5,
+            label: "Burst",
+            reportedStartAt: reportedStartAt,
+        ),
+    )
+
+    #expect(window.startAt == reportedStartAt)
+    #expect(window.label == "Burst")
+}
+
+@Test
+func usageBalanceRejectsMissingLabelsAndInvalidAmounts() {
+    #expect(
+        UsageBalance(
+            id: "credits",
+            label: "   ",
+            remainingAmount: 100,
+            unit: "credits",
+        ) == nil,
+    )
+    #expect(
+        UsageBalance(
+            id: "credits",
+            label: "AI credits",
+            remainingAmount: .infinity,
+            unit: "credits",
+        ) == nil,
+    )
 }

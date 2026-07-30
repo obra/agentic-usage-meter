@@ -257,4 +257,108 @@ struct TimelinePresentationTests {
         #expect(timeline.sections.map(\.kind) == [.weekly])
         #expect(timeline.sections.first?.rows.count == 1)
     }
+
+    @Test
+    func timelineOrdersEveryOfferedWindowKindAndOmitsAbsentKinds() throws {
+        let account = SubscriptionAccount(
+            provider: .minimax,
+            displayName: "Work",
+            displayOrder: 0,
+        )
+        let resetAt = Date(timeIntervalSince1970: 2_000_472_000)
+        let windows = try [
+            UsageWindow(
+                id: "monthly",
+                kind: .monthly,
+                duration: 2_678_400,
+                resetAt: resetAt,
+                consumedFraction: 0.1,
+            ),
+            UsageWindow(
+                id: "short",
+                kind: .short,
+                duration: 18000,
+                resetAt: resetAt,
+                consumedFraction: 0.2,
+            ),
+            UsageWindow(
+                id: "custom",
+                kind: .custom,
+                duration: 86400,
+                resetAt: resetAt,
+                consumedFraction: 0.3,
+                label: "Burst",
+            ),
+            UsageWindow(
+                id: "daily",
+                kind: .daily,
+                duration: 86400,
+                resetAt: resetAt,
+                consumedFraction: 0.4,
+            ),
+            UsageWindow(
+                id: "weekly",
+                kind: .weekly,
+                duration: 604_800,
+                resetAt: resetAt,
+                consumedFraction: 0.5,
+            ),
+        ].map { try #require($0) }
+        let state = AccountViewState(
+            account: account,
+            snapshot: UsageSnapshot(
+                accountID: account.id,
+                fetchedAt: resetAt,
+                windows: windows,
+            ),
+        )
+
+        let timeline = UsageTimelinePresentation(
+            accounts: [state],
+            now: Date(timeIntervalSince1970: 2_000_000_000),
+        )
+
+        #expect(
+            timeline.sections.map(\.kind)
+                == [.short, .daily, .weekly, .monthly, .custom],
+        )
+    }
+
+    @Test
+    func timelinePresentsBalancesAfterTimedSections() throws {
+        let account = SubscriptionAccount(
+            provider: .minimax,
+            displayName: "Work",
+            displayOrder: 0,
+        )
+        let credits = try #require(
+            UsageBalance(
+                id: "credits",
+                label: "AI credits",
+                remainingAmount: 125.5,
+                unit: "credits",
+                cycleEndsAt: Date(timeIntervalSince1970: 2_000_472_000),
+            ),
+        )
+        let state = AccountViewState(
+            account: account,
+            snapshot: UsageSnapshot(
+                accountID: account.id,
+                fetchedAt: Date(timeIntervalSince1970: 2_000_000_000),
+                windows: [],
+                balances: [credits],
+            ),
+        )
+
+        let timeline = UsageTimelinePresentation(
+            accounts: [state],
+            now: Date(timeIntervalSince1970: 2_000_000_000),
+            timeZone: TimeZone(secondsFromGMT: 0)!,
+        )
+
+        #expect(timeline.sections.isEmpty)
+        #expect(timeline.balanceRows.count == 1)
+        #expect(timeline.balanceRows[0].amountText == "125.5 credits")
+        #expect(timeline.balanceRows[0].cycleEndText == "Mon 2:40 PM")
+    }
 }

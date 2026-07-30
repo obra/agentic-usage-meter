@@ -19,26 +19,18 @@ public struct UsageWindowPresentation: Equatable, Sendable {
         window: UsageWindow,
         now: Date,
         timeZone: TimeZone = .autoupdatingCurrent,
+        axisDuration: TimeInterval? = nil,
     ) {
         provider = account.provider
-        providerText =
-            ProviderCatalog.live.definition(
-                for: account.provider,
-            )?.displayName
-            ?? account.provider.rawValue
-        let trimmedAccountName = account.displayName.trimmingCharacters(
-            in: .whitespacesAndNewlines,
-        )
-        accountText =
-            trimmedAccountName.caseInsensitiveCompare(providerText)
-                == .orderedSame
-            ? nil
-            : trimmedAccountName
+        let identity = usageIdentity(for: account)
+        providerText = identity.providerText
+        accountText = identity.accountText
 
-        let axisDuration: TimeInterval =
-            window.kind == .weekly ? 604_800 : 18000
         let layout = TimelineLayout(
-            duration: axisDuration,
+            duration: axisDuration
+                ?? window.kind.defaultAxisDuration(
+                    customDuration: window.duration,
+                ),
             now: now,
         )!
         outerXFraction = layout.xFraction(for: window)
@@ -65,13 +57,19 @@ public struct UsageWindowPresentation: Equatable, Sendable {
             switch window.kind {
             case .short:
                 "five-hour"
+            case .daily:
+                "daily"
             case .weekly:
                 "weekly"
+            case .monthly:
+                "monthly"
+            case .custom:
+                window.label ?? "custom"
             }
         accessibilityValue =
             "\(providerText), \(account.displayName), "
-            + "\(windowName) window, \(remainingPercent) percent remaining, "
-            + "resets \(exactResetText)"
+                + "\(windowName) window, \(remainingPercent) percent remaining, "
+                + "resets \(exactResetText)"
     }
 
     private static func relativeResetText(
@@ -128,38 +126,96 @@ public struct UsageTimelineSectionPresentation:
         timeZone: TimeZone = .autoupdatingCurrent,
     ) {
         self.kind = kind
-        rows =
+        let matchingWindows =
             accounts
-            .sorted(by: accountStateComesBefore)
-            .flatMap { state in
-                (state.snapshot?.windows ?? [])
-                    .filter { $0.kind == kind }
-                    .map { window in
-                        UsageTimelineRowPresentation(
-                            account: state.account,
-                            window: window,
-                            windowPresentation:
-                                UsageWindowPresentation(
-                                    account: state.account,
-                                    window: window,
-                                    now: now,
-                                    timeZone: timeZone,
-                                ),
-                        )
-                    }
-            }
+                .sorted(by: accountStateComesBefore)
+                .flatMap { state in
+                    (state.snapshot?.windows ?? [])
+                        .filter { $0.kind == kind }
+                        .map { window in
+                            (account: state.account, window: window)
+                        }
+                }
+        let axisDuration = kind.defaultAxisDuration(
+            customDuration:
+            matchingWindows.map { $0.window.duration }.max() ?? 1,
+        )
+        rows = matchingWindows.map { item in
+            UsageTimelineRowPresentation(
+                account: item.account,
+                window: item.window,
+                windowPresentation: UsageWindowPresentation(
+                    account: item.account,
+                    window: item.window,
+                    now: now,
+                    timeZone: timeZone,
+                    axisDuration: axisDuration,
+                ),
+            )
+        }
+    }
+}
+
+public struct UsageBalanceRowPresentation:
+    Equatable,
+    Identifiable,
+    Sendable
+{
+    public let account: SubscriptionAccount
+    public let balance: UsageBalance
+    public let providerText: String
+    public let accountText: String?
+    public let amountText: String
+    public let cycleEndText: String?
+
+    public var id: String {
+        "\(account.id.uuidString):balance:\(balance.id)"
+    }
+
+    public init(
+        account: SubscriptionAccount,
+        balance: UsageBalance,
+        timeZone: TimeZone = .autoupdatingCurrent,
+    ) {
+        self.account = account
+        self.balance = balance
+
+        let identity = usageIdentity(for: account)
+        providerText = identity.providerText
+        accountText = identity.accountText
+
+        let numberFormatter = NumberFormatter()
+        numberFormatter.locale = Locale(identifier: "en_US_POSIX")
+        numberFormatter.numberStyle = .decimal
+        numberFormatter.maximumFractionDigits = 2
+        let amount =
+            numberFormatter.string(
+                from: NSNumber(value: balance.remainingAmount),
+            ) ?? String(balance.remainingAmount)
+        amountText = "\(amount) \(balance.unit)"
+
+        if let cycleEndsAt = balance.cycleEndsAt {
+            let dateFormatter = DateFormatter()
+            dateFormatter.locale = Locale(identifier: "en_US_POSIX")
+            dateFormatter.timeZone = timeZone
+            dateFormatter.dateFormat = "EEE h:mm a"
+            cycleEndText = dateFormatter.string(from: cycleEndsAt)
+        } else {
+            cycleEndText = nil
+        }
     }
 }
 
 public struct UsageTimelinePresentation: Equatable, Sendable {
     public let sections: [UsageTimelineSectionPresentation]
+    public let balanceRows: [UsageBalanceRowPresentation]
 
     public init(
         accounts: [AccountViewState],
         now: Date,
         timeZone: TimeZone = .autoupdatingCurrent,
     ) {
-        sections = [UsageWindowKind.short, .weekly].compactMap { kind in
+        sections = UsageWindowKind.presentationOrder.compactMap { kind in
             let section = UsageTimelineSectionPresentation(
                 kind: kind,
                 accounts: accounts,
@@ -168,7 +224,65 @@ public struct UsageTimelinePresentation: Equatable, Sendable {
             )
             return section.rows.isEmpty ? nil : section
         }
+        balanceRows =
+            accounts
+                .sorted(by: accountStateComesBefore)
+                .flatMap { state in
+                    (state.snapshot?.balances ?? []).map { balance in
+                        UsageBalanceRowPresentation(
+                            account: state.account,
+                            balance: balance,
+                            timeZone: timeZone,
+                        )
+                    }
+                }
     }
+}
+
+private extension UsageWindowKind {
+    static let presentationOrder: [UsageWindowKind] = [
+        .short,
+        .daily,
+        .weekly,
+        .monthly,
+        .custom,
+    ]
+
+    func defaultAxisDuration(
+        customDuration: TimeInterval,
+    ) -> TimeInterval {
+        switch self {
+        case .short:
+            18000
+        case .daily:
+            86400
+        case .weekly:
+            604_800
+        case .monthly:
+            2_678_400
+        case .custom:
+            customDuration
+        }
+    }
+}
+
+private func usageIdentity(
+    for account: SubscriptionAccount,
+) -> (providerText: String, accountText: String?) {
+    let providerText =
+        ProviderCatalog.live.definition(
+            for: account.provider,
+        )?.displayName
+        ?? account.provider.rawValue
+    let trimmedAccountName = account.displayName.trimmingCharacters(
+        in: .whitespacesAndNewlines,
+    )
+    let accountText =
+        trimmedAccountName.caseInsensitiveCompare(providerText)
+            == .orderedSame
+            ? nil
+            : trimmedAccountName
+    return (providerText, accountText)
 }
 
 private func accountStateComesBefore(

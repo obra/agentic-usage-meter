@@ -27,6 +27,9 @@ public struct UsageTimelineView: View {
             ForEach(timeline.sections, id: \.kind) {
                 timelineSection($0)
             }
+            if !timeline.balanceRows.isEmpty {
+                balanceSection(timeline.balanceRows)
+            }
         }
     }
 
@@ -44,13 +47,13 @@ public struct UsageTimelineView: View {
                     Color.clear
                         .frame(
                             width:
-                                UsageWindowRow
+                            UsageWindowRow
                                 .percentageColumnWidth,
                         )
                     Color.clear
                         .frame(
                             width:
-                                UsageWindowRow
+                            UsageWindowRow
                                 .identityColumnWidth,
                         )
                     Text("Now")
@@ -60,7 +63,7 @@ public struct UsageTimelineView: View {
                     Color.clear
                         .frame(
                             width:
-                                UsageWindowRow
+                            UsageWindowRow
                                 .resetColumnWidth,
                         )
                 }
@@ -71,6 +74,59 @@ public struct UsageTimelineView: View {
             }
         }
     }
+
+    private func balanceSection(
+        _ rows: [UsageBalanceRowPresentation],
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text("Balances")
+                .font(.headline)
+
+            ForEach(rows) { row in
+                HStack(spacing: UsageWindowRow.columnSpacing) {
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(row.account.provider.timelineColor)
+                            .frame(width: 7, height: 7)
+                        Text(row.providerText)
+                            .foregroundStyle(.secondary)
+                        if let accountText = row.accountText {
+                            Text("·")
+                                .foregroundStyle(.secondary)
+                            Text(accountText)
+                                .fontWeight(.medium)
+                                .lineLimit(1)
+                        }
+                    }
+                    .frame(
+                        width:
+                        UsageWindowRow.percentageColumnWidth
+                            + UsageWindowRow.identityColumnWidth
+                            + UsageWindowRow.columnSpacing,
+                        alignment: .leading,
+                    )
+
+                    Text(row.balance.label)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Spacer()
+
+                    Text(row.amountText)
+                        .font(.caption.monospacedDigit())
+                        .fontWeight(.semibold)
+
+                    if let cycleEndText = row.cycleEndText {
+                        Text(cycleEndText)
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .frame(height: UsageWindowRow.rowHeight)
+                .accessibilityElement(children: .combine)
+            }
+        }
+    }
 }
 
 private extension UsageTimelineSectionPresentation {
@@ -78,8 +134,14 @@ private extension UsageTimelineSectionPresentation {
         switch kind {
         case .short:
             "5-hour windows"
+        case .daily:
+            "Daily windows"
         case .weekly:
             "Weekly windows"
+        case .monthly:
+            "Monthly windows"
+        case .custom:
+            "Other windows"
         }
     }
 }

@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import UsageMeterCore
 
 @Test
@@ -7,11 +8,11 @@ func tightestWindowUsesLowestRemainingCapacity() throws {
     let now = Date(timeIntervalSince1970: 2_000_000_000)
     let personalID = UUID()
     let workID = UUID()
-    let personal = UsageSnapshot(
+    let personal = try UsageSnapshot(
         accountID: personalID,
         fetchedAt: now,
         windows: [
-            try #require(
+            #require(
                 UsageWindow(
                     id: "personal-weekly",
                     kind: .weekly,
@@ -19,14 +20,14 @@ func tightestWindowUsesLowestRemainingCapacity() throws {
                     resetAt: now.addingTimeInterval(100),
                     consumedFraction: 0.45
                 )
-            )
+            ),
         ]
     )
     let workWindow = try #require(
         UsageWindow(
             id: "work-short",
             kind: .short,
-            duration: 18_000,
+            duration: 18000,
             resetAt: now.addingTimeInterval(200),
             consumedFraction: 0.81
         )
@@ -60,7 +61,7 @@ func tightestWindowBreaksRemainingCapacityTiesByEarliestReset() throws {
         UsageWindow(
             id: "earlier",
             kind: .short,
-            duration: 18_000,
+            duration: 18000,
             resetAt: now.addingTimeInterval(100),
             consumedFraction: 0.75
         )
@@ -69,7 +70,7 @@ func tightestWindowBreaksRemainingCapacityTiesByEarliestReset() throws {
     let result = UsageSummary.tightestWindow(
         in: [
             UsageSnapshot(accountID: laterID, fetchedAt: now, windows: [later]),
-            UsageSnapshot(accountID: earlierID, fetchedAt: now, windows: [earlier])
+            UsageSnapshot(accountID: earlierID, fetchedAt: now, windows: [earlier]),
         ]
     )
 
@@ -79,4 +80,38 @@ func tightestWindowBreaksRemainingCapacityTiesByEarliestReset() throws {
 @Test
 func tightestWindowReturnsNilWithoutWindows() {
     #expect(UsageSummary.tightestWindow(in: []) == nil)
+}
+
+@Test
+func balancesDoNotParticipateInTightestWindowSelection() throws {
+    let now = Date(timeIntervalSince1970: 2_000_000_000)
+    let accountID = UUID()
+    let weekly = try #require(
+        UsageWindow(
+            id: "weekly",
+            kind: .weekly,
+            duration: 604_800,
+            resetAt: now.addingTimeInterval(86400),
+            consumedFraction: 0.4,
+        ),
+    )
+    let credits = try #require(
+        UsageBalance(
+            id: "credits",
+            label: "AI credits",
+            remainingAmount: 0,
+            unit: "credits",
+        ),
+    )
+    let snapshot = UsageSnapshot(
+        accountID: accountID,
+        fetchedAt: now,
+        windows: [weekly],
+        balances: [credits],
+    )
+
+    #expect(
+        UsageSummary.tightestWindow(in: [snapshot])
+            == TightestUsage(accountID: accountID, window: weekly),
+    )
 }
