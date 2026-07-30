@@ -33,12 +33,24 @@ public struct FloatingWidgetView: View {
 
             Divider()
 
-            ScrollView {
-                UsageTimelineView(accounts: model.accounts)
-                    .padding(14)
+            ViewThatFits(in: .vertical) {
+                timeline
+                    .fixedSize(
+                        horizontal: false,
+                        vertical: true,
+                    )
+                ScrollView {
+                    timeline
+                }
             }
         }
+        .frame(width: 520)
         .background(.regularMaterial)
+    }
+
+    private var timeline: some View {
+        UsageTimelineView(accounts: model.accounts)
+            .padding(14)
     }
 
     private var sampleDataBadge: some View {

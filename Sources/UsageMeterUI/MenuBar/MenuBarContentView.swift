@@ -33,11 +33,16 @@ public struct MenuBarContentView: View {
 
             Divider()
 
-            ScrollView {
-                UsageTimelineView(accounts: model.accounts)
-                    .padding()
+            ViewThatFits(in: .vertical) {
+                timeline
+                    .fixedSize(
+                        horizontal: false,
+                        vertical: true,
+                    )
+                ScrollView {
+                    timeline
+                }
             }
-            .frame(minHeight: 280, maxHeight: 520)
 
             Divider()
 
@@ -83,6 +88,11 @@ public struct MenuBarContentView: View {
                 await model.refreshAccount(id: account.id)
             }
         }
+    }
+
+    private var timeline: some View {
+        UsageTimelineView(accounts: model.accounts)
+            .padding()
     }
 
     private var sampleDataBadge: some View {

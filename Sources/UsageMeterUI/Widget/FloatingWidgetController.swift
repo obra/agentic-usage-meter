@@ -10,6 +10,7 @@ public final class FloatingWidgetController:
     private let model: AppModel
     private var panel: NSPanel?
     private var placementTask: Task<Void, Never>?
+    private var isApplyingPlacement = false
 
     public init(model: AppModel) {
         self.model = model
@@ -34,22 +35,42 @@ public final class FloatingWidgetController:
     }
 
     public func windowDidMove(_: Notification) {
+        guard !isApplyingPlacement else {
+            return
+        }
         schedulePlacementSave()
     }
 
     public func windowDidEndLiveResize(
         _: Notification,
     ) {
+        guard !isApplyingPlacement else {
+            return
+        }
         schedulePlacementSave()
     }
 
     private func makePanel() -> NSPanel {
+        let hostingView = NSHostingView(
+            rootView: FloatingWidgetView(model: model),
+        )
+        hostingView.sizingOptions = [.intrinsicContentSize]
+        hostingView.frame.size.width = 520
+        hostingView.layoutSubtreeIfNeeded()
+        let fittingHeight = hostingView.fittingSize.height
+        let screenHeight =
+            NSScreen.main?.visibleFrame.height
+                ?? max(fittingHeight, 360)
+        let initialHeight = min(
+            max(fittingHeight, 240),
+            screenHeight,
+        )
         let panel = NSPanel(
             contentRect: NSRect(
                 x: 0,
                 y: 0,
                 width: 520,
-                height: 360,
+                height: initialHeight,
             ),
             styleMask: [
                 .nonactivatingPanel,
@@ -72,17 +93,16 @@ public final class FloatingWidgetController:
         ]
         panel.hidesOnDeactivate = false
         panel.isMovableByWindowBackground = true
+        panel.minSize = NSSize(width: 360, height: 240)
         panel.delegate = self
-        panel.contentView = NSHostingView(
-            rootView: FloatingWidgetView(model: model),
-        )
+        panel.contentView = hostingView
         self.panel = panel
         return panel
     }
 
     private func applySavedPlacement(to panel: NSPanel) {
         guard let placement = model.floatingWidgetPlacement else {
-            panel.center()
+            applyNaturalPlacement(to: panel)
             return
         }
         guard
@@ -93,8 +113,12 @@ public final class FloatingWidgetController:
             placement.width >= 360,
             placement.height >= 240
         else {
-            panel.center()
+            applyNaturalPlacement(to: panel)
             return
+        }
+        isApplyingPlacement = true
+        defer {
+            isApplyingPlacement = false
         }
         panel.setFrame(
             NSRect(
@@ -105,6 +129,40 @@ public final class FloatingWidgetController:
             ),
             display: false,
         )
+    }
+
+    private func applyNaturalPlacement(to panel: NSPanel) {
+        isApplyingPlacement = true
+        defer {
+            isApplyingPlacement = false
+        }
+        sizeToFitContent(panel)
+        panel.center()
+    }
+
+    private func sizeToFitContent(_ panel: NSPanel) {
+        guard let hostingView = panel.contentView else {
+            return
+        }
+        hostingView.frame.size.width = 520
+        hostingView.layoutSubtreeIfNeeded()
+        let fittingHeight = hostingView.fittingSize.height
+        let screenHeight =
+            panel.screen?.visibleFrame.height
+                ?? NSScreen.main?.visibleFrame.height
+                ?? max(fittingHeight, 360)
+        let height = min(
+            max(fittingHeight, 240),
+            screenHeight,
+        )
+        let topLeft = NSPoint(
+            x: panel.frame.minX,
+            y: panel.frame.maxY,
+        )
+        panel.setContentSize(
+            NSSize(width: 520, height: height),
+        )
+        panel.setFrameTopLeftPoint(topLeft)
     }
 
     private func schedulePlacementSave() {

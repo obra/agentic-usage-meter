@@ -56,6 +56,9 @@ private struct MenuBarLabel: View {
         .onChange(of: model.isFloatingWidgetVisible) {
             widgetController.synchronize()
         }
+        .onChange(of: model.accounts) {
+            widgetController.synchronize()
+        }
     }
 }
 
