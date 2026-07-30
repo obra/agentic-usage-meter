@@ -2,8 +2,11 @@ import SwiftUI
 import UsageMeterCore
 
 public struct UsageWindowRow: View {
-    static let labelColumnWidth: CGFloat = 96
-    static let labelSpacing: CGFloat = 10
+    static let percentageColumnWidth: CGFloat = 42
+    static let identityColumnWidth: CGFloat = 156
+    static let resetColumnWidth: CGFloat = 64
+    static let columnSpacing: CGFloat = 8
+    static let rowHeight: CGFloat = 29
 
     private let row: UsageTimelineRowPresentation
 
@@ -12,27 +15,41 @@ public struct UsageWindowRow: View {
     }
 
     public var body: some View {
-        HStack(spacing: Self.labelSpacing) {
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 5) {
-                    Circle()
-                        .fill(row.account.provider.timelineColor)
-                        .frame(width: 7, height: 7)
-                    Text(row.account.provider.displayName)
+        let presentation = row.windowPresentation
+
+        HStack(spacing: Self.columnSpacing) {
+            Text(presentation.remainingPercentageText)
+                .font(.caption.monospacedDigit())
+                .fontWeight(.semibold)
+                .frame(
+                    width: Self.percentageColumnWidth,
+                    alignment: .trailing,
+                )
+
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(row.account.provider.timelineColor)
+                    .frame(width: 7, height: 7)
+                Text(presentation.providerText)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: true, vertical: false)
+                if let accountText = presentation.accountText {
+                    Text("·")
                         .foregroundStyle(.secondary)
+                    Text(accountText)
+                        .fontWeight(.medium)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
                 }
-                Text(row.account.displayName)
-                    .fontWeight(.medium)
-                    .lineLimit(1)
             }
             .font(.caption)
+            .lineLimit(1)
             .frame(
-                width: Self.labelColumnWidth,
+                width: Self.identityColumnWidth,
                 alignment: .leading,
             )
 
             GeometryReader { geometry in
-                let presentation = row.windowPresentation
                 let width = geometry.size.width
                 let outerX = width * presentation.outerXFraction
                 let outerWidth =
@@ -40,7 +57,7 @@ public struct UsageWindowRow: View {
 
                 ZStack(alignment: .leading) {
                     ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 8)
+                        RoundedRectangle(cornerRadius: 4)
                             .fill(.secondary.opacity(0.12))
 
                         Rectangle()
@@ -50,30 +67,17 @@ public struct UsageWindowRow: View {
                             )
                             .frame(
                                 width:
-                                outerWidth
+                                    outerWidth
                                     * presentation.fillFraction,
                             )
-
-                        HStack(spacing: 6) {
-                            timelinePill(
-                                presentation
-                                    .remainingPercentageText
-                                    + " left",
-                            )
-                            Spacer(minLength: 4)
-                            timelinePill(
-                                presentation.exactResetText,
-                            )
-                        }
-                        .padding(.horizontal, 5)
                     }
-                    .frame(width: outerWidth, height: 30)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .frame(width: outerWidth, height: 14)
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
                     .overlay {
-                        RoundedRectangle(cornerRadius: 8)
+                        RoundedRectangle(cornerRadius: 4)
                             .stroke(
                                 row.account.provider.timelineColor
-                                    .opacity(0.9),
+                                    .opacity(0.8),
                                 lineWidth: 1,
                             )
                     }
@@ -81,30 +85,29 @@ public struct UsageWindowRow: View {
 
                     Rectangle()
                         .fill(.primary.opacity(0.55))
-                        .frame(width: 1, height: 38)
+                        .frame(width: 1, height: 22)
                         .offset(
                             x:
-                            width
+                                width
                                 * presentation.nowXFraction,
                         )
                 }
             }
-            .frame(height: 38)
-        }
-        .frame(height: 38)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(row.windowPresentation.accessibilityValue)
-    }
+            .frame(height: Self.rowHeight)
 
-    private func timelinePill(_ text: String) -> some View {
-        Text(text)
-            .font(.caption2.monospacedDigit())
-            .foregroundStyle(.white)
-            .lineLimit(1)
-            .minimumScaleFactor(0.7)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 3)
-            .background(.black.opacity(0.62), in: Capsule())
+            Text(presentation.relativeResetText)
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .frame(
+                    width: Self.resetColumnWidth,
+                    alignment: .trailing,
+                )
+        }
+        .frame(height: Self.rowHeight)
+        .help("Resets \(presentation.exactResetText)")
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(presentation.accessibilityValue)
     }
 }
 
@@ -117,17 +120,6 @@ private extension Provider {
             Color(red: 0.24, green: 0.66, blue: 0.54)
         case .kimi:
             Color(red: 0.48, green: 0.45, blue: 0.90)
-        }
-    }
-
-    var displayName: String {
-        switch self {
-        case .claude:
-            "Claude"
-        case .codex:
-            "Codex"
-        case .kimi:
-            "Kimi"
         }
     }
 }

@@ -17,56 +17,69 @@ public struct UsageTimelineView: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            timelineSection(
-                title: "5-hour windows",
-                kind: .short,
-            )
-            timelineSection(
-                title: "Weekly windows",
-                kind: .weekly,
-            )
-        }
-    }
-
-    private func timelineSection(
-        title: String,
-        kind: UsageWindowKind,
-    ) -> some View {
-        let section = UsageTimelineSectionPresentation(
-            kind: kind,
+        let timeline = UsageTimelinePresentation(
             accounts: accounts,
             now: now,
             timeZone: timeZone,
         )
 
-        return VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: 14) {
+            ForEach(timeline.sections, id: \.kind) {
+                timelineSection($0)
+            }
+        }
+    }
+
+    private func timelineSection(
+        _ section: UsageTimelineSectionPresentation,
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
             ZStack {
                 HStack {
-                    Text(title)
+                    Text(section.title)
                         .font(.headline)
                     Spacer()
                 }
-                HStack(spacing: UsageWindowRow.labelSpacing) {
+                HStack(spacing: UsageWindowRow.columnSpacing) {
                     Color.clear
-                        .frame(width: UsageWindowRow.labelColumnWidth)
+                        .frame(
+                            width:
+                                UsageWindowRow
+                                .percentageColumnWidth,
+                        )
+                    Color.clear
+                        .frame(
+                            width:
+                                UsageWindowRow
+                                .identityColumnWidth,
+                        )
                     Text("Now")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity)
+                    Color.clear
+                        .frame(
+                            width:
+                                UsageWindowRow
+                                .resetColumnWidth,
+                        )
                 }
             }
 
-            if section.rows.isEmpty {
-                Text("No current data")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, minHeight: 34)
-            } else {
-                ForEach(section.rows) {
-                    UsageWindowRow(row: $0)
-                }
+            ForEach(section.rows) {
+                UsageWindowRow(row: $0)
             }
+        }
+    }
+}
+
+private extension UsageTimelineSectionPresentation {
+    var title: String {
+        switch kind {
+        case .short:
+            "5-hour windows"
+        case .weekly:
+            "Weekly windows"
         }
     }
 }

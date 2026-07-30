@@ -21,18 +21,23 @@ public struct UsageWindowPresentation: Equatable, Sendable {
         timeZone: TimeZone = .autoupdatingCurrent,
     ) {
         provider = account.provider
-        providerText = switch account.provider {
-        case .claude:
-            "Claude"
-        case .codex:
-            "Codex"
-        case .kimi:
-            "Kimi"
-        }
+        providerText =
+            switch account.provider {
+            case .claude:
+                "Claude"
+            case .codex:
+                "Codex"
+            case .kimi:
+                "Kimi"
+            }
+        let trimmedAccountName = account.displayName.trimmingCharacters(
+            in: .whitespacesAndNewlines,
+        )
         accountText =
-            account.displayName == providerText
-                ? nil
-                : account.displayName
+            trimmedAccountName.caseInsensitiveCompare(providerText)
+                == .orderedSame
+            ? nil
+            : trimmedAccountName
 
         let axisDuration: TimeInterval =
             window.kind == .weekly ? 604_800 : 18000
@@ -60,16 +65,17 @@ public struct UsageWindowPresentation: Equatable, Sendable {
         formatter.dateFormat = "EEE h:mm a"
         exactResetText = formatter.string(from: window.resetAt)
 
-        let windowName = switch window.kind {
-        case .short:
-            "five-hour"
-        case .weekly:
-            "weekly"
-        }
+        let windowName =
+            switch window.kind {
+            case .short:
+                "five-hour"
+            case .weekly:
+                "weekly"
+            }
         accessibilityValue =
             "\(providerText), \(account.displayName), "
-                + "\(windowName) window, \(remainingPercent) percent remaining, "
-                + "resets \(exactResetText)"
+            + "\(windowName) window, \(remainingPercent) percent remaining, "
+            + "resets \(exactResetText)"
     }
 
     private static func relativeResetText(
@@ -126,7 +132,8 @@ public struct UsageTimelineSectionPresentation:
         timeZone: TimeZone = .autoupdatingCurrent,
     ) {
         self.kind = kind
-        rows = accounts
+        rows =
+            accounts
             .sorted(by: accountStateComesBefore)
             .flatMap { state in
                 (state.snapshot?.windows ?? [])
@@ -136,15 +143,35 @@ public struct UsageTimelineSectionPresentation:
                             account: state.account,
                             window: window,
                             windowPresentation:
-                            UsageWindowPresentation(
-                                account: state.account,
-                                window: window,
-                                now: now,
-                                timeZone: timeZone,
-                            ),
+                                UsageWindowPresentation(
+                                    account: state.account,
+                                    window: window,
+                                    now: now,
+                                    timeZone: timeZone,
+                                ),
                         )
                     }
             }
+    }
+}
+
+public struct UsageTimelinePresentation: Equatable, Sendable {
+    public let sections: [UsageTimelineSectionPresentation]
+
+    public init(
+        accounts: [AccountViewState],
+        now: Date,
+        timeZone: TimeZone = .autoupdatingCurrent,
+    ) {
+        sections = [UsageWindowKind.short, .weekly].compactMap { kind in
+            let section = UsageTimelineSectionPresentation(
+                kind: kind,
+                accounts: accounts,
+                now: now,
+                timeZone: timeZone,
+            )
+            return section.rows.isEmpty ? nil : section
+        }
     }
 }
 

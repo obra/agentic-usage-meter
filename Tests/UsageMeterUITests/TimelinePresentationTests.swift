@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import UsageMeterCore
+
 @testable import UsageMeterUI
 
 @Suite
@@ -133,7 +134,7 @@ struct TimelinePresentationTests {
     func repeatedProviderAndAccountNameIsShownOnce() throws {
         let account = SubscriptionAccount(
             provider: .kimi,
-            displayName: "Kimi",
+            displayName: "  kImI ",
             displayOrder: 0,
         )
         let window = try #require(
@@ -220,5 +221,40 @@ struct TimelinePresentationTests {
             section.rows.map(\.account.displayName)
                 == ["Claude", "Kimi"],
         )
+    }
+
+    @Test
+    func timelineOmitsWindowKindsThatNoAccountOffers() throws {
+        let account = SubscriptionAccount(
+            provider: .codex,
+            displayName: "Work",
+            displayOrder: 0,
+        )
+        let weekly = try #require(
+            UsageWindow(
+                id: "weekly",
+                kind: .weekly,
+                duration: 604_800,
+                resetAt: Date(timeIntervalSince1970: 2_000_472_000),
+                consumedFraction: 0.5,
+            ),
+        )
+        let state = AccountViewState(
+            account: account,
+            snapshot: UsageSnapshot(
+                accountID: account.id,
+                fetchedAt: Date(timeIntervalSince1970: 2_000_000_000),
+                windows: [weekly],
+            ),
+        )
+
+        let timeline = UsageTimelinePresentation(
+            accounts: [state],
+            now: Date(timeIntervalSince1970: 2_000_000_000),
+            timeZone: TimeZone(secondsFromGMT: 0)!,
+        )
+
+        #expect(timeline.sections.map(\.kind) == [.weekly])
+        #expect(timeline.sections.first?.rows.count == 1)
     }
 }
