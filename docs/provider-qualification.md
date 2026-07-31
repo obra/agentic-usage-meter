@@ -232,9 +232,15 @@ specifies Bearer authentication for Factory API keys, and the application
 stores one API key per local account in the macOS Keychain.
 
 - Standard and Droid Core 5-hour, 7-day, and rolling 30-day pools remain
-  independent.
+  independent in the normalized snapshot. Factory documents Standard as the
+  primary allowance: Core-model usage consumes Standard while it has capacity,
+  then draws from Droid Core's separate fallback limits after Standard is
+  exhausted.
 - A missing pool is omitted rather than inferred. A returned zero-use window
   without `windowEnd` is preserved as an inactive resetless window.
+- The timeline always presents Standard. It hides an entirely unused Droid
+  Core pool until any Core window has positive usage, then presents every
+  returned Core interval with its pool label.
 - `usedPercent` is normalized without integer rounding, and `windowEnd` is
   preserved as the provider reset time.
 - `extraUsageBalanceCents` is presented as an optional USD balance only when
@@ -265,6 +271,9 @@ stores one API key per local account in the macOS Keychain.
   no reset is persisted or described as provider data. A nonzero window
   without an end date remains an unsupported response because the application
   must not invent a reset.
+- The live response therefore remains lossless in persistence while the
+  compact timeline suppresses dormant Droid Core rows. Standard stays visible
+  and Core becomes visible as a complete pool after Core consumption begins.
 
 ## Antigravity
 

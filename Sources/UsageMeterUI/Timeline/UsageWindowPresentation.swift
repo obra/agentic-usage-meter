@@ -21,11 +21,16 @@ public struct UsageWindowPresentation: Equatable, Sendable {
     now: Date,
     timeZone: TimeZone = .autoupdatingCurrent,
     axisDuration: TimeInterval? = nil,
+    showsWindowLabel: Bool = false,
   ) {
     provider = account.provider
     let identity = usageIdentity(for: account)
     providerText = identity.providerText
-    accountText = identity.accountText
+    if showsWindowLabel, let label = window.label {
+      accountText = "\(label) · \(identity.accountText)"
+    } else {
+      accountText = identity.accountText
+    }
 
     let layout = TimelineLayout(
       duration: axisDuration
@@ -65,7 +70,7 @@ public struct UsageWindowPresentation: Equatable, Sendable {
       helpText = "No provider reset reported"
     }
 
-    let windowName =
+    let kindName =
       switch window.kind {
       case .short:
         "five-hour"
@@ -76,8 +81,10 @@ public struct UsageWindowPresentation: Equatable, Sendable {
       case .monthly:
         "monthly"
       case .custom:
-        window.label ?? "custom"
+        "custom"
       }
+    let windowName = window.label.map { "\($0) \(kindName)" }
+      ?? kindName
     let resetAccessibilityText =
       if let exactResetText {
         "resets \(exactResetText)"
@@ -149,8 +156,21 @@ public struct UsageTimelineSectionPresentation:
       accounts
       .sorted(by: accountStateComesBefore)
       .flatMap { state in
-        (state.snapshot?.windows ?? [])
+        let windows = state.snapshot?.windows ?? []
+        let showsFactoryCore =
+          state.account.provider == .factory
+          && windows.contains {
+            $0.label == "Droid Core"
+              && $0.consumedFraction > 0
+          }
+
+        return windows
           .filter { $0.kind == kind }
+          .filter {
+            state.account.provider != .factory
+              || $0.label != "Droid Core"
+              || showsFactoryCore
+          }
           .map { window in
             (account: state.account, window: window)
           }
@@ -159,6 +179,10 @@ public struct UsageTimelineSectionPresentation:
       customDuration:
         matchingWindows.map { $0.window.duration }.max() ?? 1,
     )
+    let windowCounts = Dictionary(
+      grouping: matchingWindows,
+      by: { $0.account.id },
+    ).mapValues(\.count)
     rows = matchingWindows.map { item in
       UsageTimelineRowPresentation(
         account: item.account,
@@ -169,6 +193,8 @@ public struct UsageTimelineSectionPresentation:
           now: now,
           timeZone: timeZone,
           axisDuration: axisDuration,
+          showsWindowLabel:
+            windowCounts[item.account.id, default: 0] > 1,
         ),
       )
     }

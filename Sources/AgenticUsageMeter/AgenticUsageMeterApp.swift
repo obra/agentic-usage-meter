@@ -261,21 +261,36 @@ private enum AppEnvironment {
     ) -> [UsageWindow] {
         if provider == .factory {
             return [
-                UsageWindow(
-                    id: "short",
-                    kind: .short,
-                    duration: 18_000,
-                    resetAt: nil,
-                    consumedFraction: 0,
-                )!,
-                UsageWindow(
-                    id: "weekly",
-                    kind: .weekly,
-                    duration: 604_800,
-                    resetAt: nil,
-                    consumedFraction: 0,
-                )!,
-            ]
+                (id: "standard", label: "Standard"),
+                (id: "core", label: "Droid Core"),
+            ].flatMap { pool in
+                [
+                    UsageWindow(
+                        id: "\(pool.id)-short",
+                        kind: .short,
+                        duration: 18_000,
+                        resetAt: nil,
+                        consumedFraction: 0,
+                        label: pool.label,
+                    )!,
+                    UsageWindow(
+                        id: "\(pool.id)-weekly",
+                        kind: .weekly,
+                        duration: 604_800,
+                        resetAt: nil,
+                        consumedFraction: 0,
+                        label: pool.label,
+                    )!,
+                    UsageWindow(
+                        id: "\(pool.id)-monthly",
+                        kind: .monthly,
+                        duration: 2_592_000,
+                        resetAt: nil,
+                        consumedFraction: 0,
+                        label: pool.label,
+                    )!,
+                ]
+            }
         }
 
         let weeklyConsumed =

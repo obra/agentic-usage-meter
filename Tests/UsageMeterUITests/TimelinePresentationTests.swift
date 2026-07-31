@@ -263,6 +263,153 @@ struct TimelinePresentationTests {
   }
 
   @Test
+  func repeatedAccountWindowsShowTheirPoolLabels() throws {
+    let account = SubscriptionAccount(
+      provider: .factory,
+      displayName: "Work",
+      displayOrder: 0,
+    )
+    let resetAt = Date(timeIntervalSince1970: 2_000_472_000)
+    let standard = try #require(
+      UsageWindow(
+        id: "factory-standard-weekly",
+        kind: .weekly,
+        duration: 604_800,
+        resetAt: resetAt,
+        consumedFraction: 0.2,
+        label: "Standard",
+      ),
+    )
+    let core = try #require(
+      UsageWindow(
+        id: "factory-core-weekly",
+        kind: .weekly,
+        duration: 604_800,
+        resetAt: resetAt,
+        consumedFraction: 0.4,
+        label: "Droid Core",
+      ),
+    )
+    let coreShort = try #require(
+      UsageWindow(
+        id: "factory-core-five-hour",
+        kind: .short,
+        duration: 18_000,
+        resetAt: nil,
+        consumedFraction: 0,
+        label: "Droid Core",
+      ),
+    )
+    let coreMonthly = try #require(
+      UsageWindow(
+        id: "factory-core-monthly",
+        kind: .monthly,
+        duration: 2_592_000,
+        resetAt: nil,
+        consumedFraction: 0,
+        label: "Droid Core",
+      ),
+    )
+    let state = AccountViewState(
+      account: account,
+      snapshot: UsageSnapshot(
+        accountID: account.id,
+        fetchedAt: resetAt,
+        windows: [standard, coreShort, core, coreMonthly],
+      ),
+    )
+
+    let section = UsageTimelineSectionPresentation(
+      kind: .weekly,
+      accounts: [state],
+      now: Date(timeIntervalSince1970: 2_000_000_000),
+      timeZone: TimeZone(secondsFromGMT: 0)!,
+    )
+
+    #expect(
+      section.rows.map(\.windowPresentation.accountText)
+        == ["Standard · Work", "Droid Core · Work"],
+    )
+    #expect(
+      section.rows.map(\.windowPresentation.accessibilityValue)
+        == [
+          "Factory, Work, Standard weekly window, 80 percent remaining, resets Mon 2:40 PM",
+          "Factory, Work, Droid Core weekly window, 60 percent remaining, resets Mon 2:40 PM",
+      ],
+    )
+
+    let timeline = UsageTimelinePresentation(
+      accounts: [state],
+      now: Date(timeIntervalSince1970: 2_000_000_000),
+      timeZone: TimeZone(secondsFromGMT: 0)!,
+    )
+    #expect(
+      timeline.sections.flatMap(\.rows).map(\.window.id)
+        == [
+          "factory-core-five-hour",
+          "factory-standard-weekly",
+          "factory-core-weekly",
+          "factory-core-monthly",
+        ],
+    )
+  }
+
+  @Test
+  func dormantFactoryCoreWindowsStayHidden() throws {
+    let account = SubscriptionAccount(
+      provider: .factory,
+      displayName: "Factory",
+      displayOrder: 0,
+    )
+    let windows = [
+      UsageWindow(
+        id: "factory-standard-weekly",
+        kind: .weekly,
+        duration: 604_800,
+        resetAt: nil,
+        consumedFraction: 0,
+        label: "Standard",
+      ),
+      UsageWindow(
+        id: "factory-core-weekly",
+        kind: .weekly,
+        duration: 604_800,
+        resetAt: nil,
+        consumedFraction: 0,
+        label: "Droid Core",
+      ),
+    ].compactMap { $0 }
+    let state = AccountViewState(
+      account: account,
+      snapshot: UsageSnapshot(
+        accountID: account.id,
+        fetchedAt: Date(timeIntervalSince1970: 2_000_000_000),
+        windows: windows,
+      ),
+    )
+
+    let section = UsageTimelineSectionPresentation(
+      kind: .weekly,
+      accounts: [state],
+      now: Date(timeIntervalSince1970: 2_000_000_000),
+      timeZone: TimeZone(secondsFromGMT: 0)!,
+    )
+
+    #expect(
+      section.rows.map(\.window.id)
+        == ["factory-standard-weekly"],
+    )
+    #expect(
+      section.rows[0].windowPresentation.accountText
+        == "Factory",
+    )
+    #expect(
+      section.rows[0].windowPresentation.accessibilityValue
+        .contains("Standard weekly window"),
+    )
+  }
+
+  @Test
   func timelineOmitsWindowKindsThatNoAccountOffers() throws {
     let account = SubscriptionAccount(
       provider: .codex,
