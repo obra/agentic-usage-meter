@@ -64,10 +64,10 @@ struct FactoryUsageDecoderTests {
             snapshot.windows.map(\.duration) == [
                 18_000,
                 604_800,
-                2_678_400,
+                2_592_000,
                 18_000,
                 604_800,
-                2_678_400,
+                2_592_000,
             ]
         )
         #expect(
@@ -122,7 +122,53 @@ struct FactoryUsageDecoderTests {
     }
 
     @Test
-    func monthlyDurationUsesTheResetCalendarMonth() throws {
+    func inactiveRollingWindowsWithoutEndsStayAbsent() throws {
+        let data = Data(
+            """
+            {
+              "usesTokenRateLimitsBilling": true,
+              "limits": {
+                "standard": {
+                  "fiveHour": { "usedPercent": 0 },
+                  "weekly": { "usedPercent": 0 },
+                  "monthly": { "usedPercent": 0 }
+                },
+                "core": {
+                  "fiveHour": { "usedPercent": 0 },
+                  "weekly": { "usedPercent": 0 },
+                  "monthly": { "usedPercent": 0 }
+                }
+              },
+              "extraUsageBalanceCents": 0,
+              "overagePreference": "droidCore",
+              "extraUsageAllowed": true
+            }
+            """.utf8
+        )
+
+        let snapshot = try FactoryUsageDecoder().decode(
+            data,
+            accountID: UUID(),
+            fetchedAt: Date(
+                timeIntervalSince1970: 1_775_088_000
+            )
+        )
+
+        #expect(snapshot.windows.isEmpty)
+        #expect(
+            snapshot.balances == [
+                UsageBalance(
+                    id: "factory-extra-usage",
+                    label: "Extra usage",
+                    remainingAmount: 0,
+                    unit: "USD"
+                )!
+            ]
+        )
+    }
+
+    @Test
+    func monthlyDurationUsesThirtyDayRollingWindow() throws {
         let data = Data(
             """
             {
@@ -148,7 +194,7 @@ struct FactoryUsageDecoderTests {
         )
 
         #expect(snapshot.windows.count == 1)
-        #expect(snapshot.windows[0].duration == 2_419_200)
+        #expect(snapshot.windows[0].duration == 2_592_000)
     }
 
     @Test
@@ -176,8 +222,26 @@ struct FactoryUsageDecoderTests {
             }
             """.utf8
         )
+        let activeWithoutEnd = Data(
+            """
+            {
+              "usesTokenRateLimitsBilling": true,
+              "limits": {
+                "standard": {
+                  "fiveHour": {
+                    "usedPercent": 1
+                  }
+                }
+              }
+            }
+            """.utf8
+        )
 
-        for data in [unsupported, malformed] {
+        for data in [
+            unsupported,
+            malformed,
+            activeWithoutEnd,
+        ] {
             #expect(
                 throws: ProviderClientError.unsupportedResponse
             ) {

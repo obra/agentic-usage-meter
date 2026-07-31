@@ -208,7 +208,8 @@ The installed Droid CLI 0.120.1 fetches its current token-rate limits from
 specifies Bearer authentication for Factory API keys, and the application
 stores one API key per local account in the macOS Keychain.
 
-- Standard and Droid Core 5-hour, weekly, and monthly pools remain independent.
+- Standard and Droid Core 5-hour, 7-day, and rolling 30-day pools remain
+  independent.
 - A missing pool or window is omitted rather than inferred.
 - `usedPercent` is normalized without integer rounding, and `windowEnd` is
   preserved as the provider reset time.
@@ -228,6 +229,16 @@ stores one API key per local account in the macOS Keychain.
   signature verification with the hardened runtime and Apple timestamp.
 - Gatekeeper correctly rejected the local artifact as `Unnotarized Developer
   ID`; notarization and stapling remain separate distribution gates.
+
+### 2026-07-31 inactive-window qualification
+
+- A live zero-usage response retained all Standard and Droid Core pool objects
+  but omitted `windowEnd` from every rolling window. Factory documents that a
+  rolling window starts when Droid is first used, so no reset exists yet for
+  those inactive windows.
+- The decoder omits a zero-percent window without an end date instead of
+  rejecting the whole account. A nonzero window without an end date remains an
+  unsupported response because the application must not invent a reset.
 
 ## Antigravity
 

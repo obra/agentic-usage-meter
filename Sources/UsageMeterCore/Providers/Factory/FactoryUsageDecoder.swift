@@ -78,12 +78,12 @@ public struct FactoryUsageDecoder: Sendable {
             [(
                 name: String,
                 kind: UsageWindowKind,
-                fixedDuration: TimeInterval?,
+                duration: TimeInterval,
                 value: FactoryLimitsResponse.Window?
             )] = [
                 ("five-hour", .short, 18_000, pool.fiveHour),
                 ("weekly", .weekly, 604_800, pool.weekly),
-                ("monthly", .monthly, nil, pool.monthly),
+                ("monthly", .monthly, 2_592_000, pool.monthly),
             ]
 
         for candidate in candidates {
@@ -92,21 +92,25 @@ public struct FactoryUsageDecoder: Sendable {
             }
             guard
                 value.usedPercent.isFinite,
-                (0...100).contains(value.usedPercent),
-                let resetAt = Self.parseDate(value.windowEnd)
+                (0...100).contains(value.usedPercent)
             else {
                 throw ProviderClientError.unsupportedResponse
             }
-            let duration =
-                candidate.fixedDuration
-                ?? Self.monthlyDuration(endingAt: resetAt)
+            guard let windowEnd = value.windowEnd else {
+                guard value.usedPercent == 0 else {
+                    throw ProviderClientError.unsupportedResponse
+                }
+                continue
+            }
+            guard let resetAt = Self.parseDate(windowEnd) else {
+                throw ProviderClientError.unsupportedResponse
+            }
             guard
-                let duration,
                 let window = UsageWindow(
                     id:
                         "factory-\(poolID)-\(candidate.name)",
                     kind: candidate.kind,
-                    duration: duration,
+                    duration: candidate.duration,
                     resetAt: resetAt,
                     consumedFraction:
                         value.usedPercent / 100,
@@ -132,22 +136,6 @@ public struct FactoryUsageDecoder: Sendable {
         return formatter.date(from: value)
     }
 
-    private static func monthlyDuration(
-        endingAt resetAt: Date
-    ) -> TimeInterval? {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
-        guard
-            let startAt = calendar.date(
-                byAdding: .month,
-                value: -1,
-                to: resetAt
-            )
-        else {
-            return nil
-        }
-        return resetAt.timeIntervalSince(startAt)
-    }
 }
 
 private struct FactoryLimitsResponse: Decodable {
@@ -168,6 +156,6 @@ private struct FactoryLimitsResponse: Decodable {
 
     struct Window: Decodable {
         let usedPercent: Double
-        let windowEnd: String
+        let windowEnd: String?
     }
 }
