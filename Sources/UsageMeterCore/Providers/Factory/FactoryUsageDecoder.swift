@@ -40,8 +40,19 @@ public struct FactoryUsageDecoder: Sendable {
             )
         }
 
-        var balances: [UsageBalance] = []
-        if let cents = response.extraUsageBalanceCents {
+        let balances: [UsageBalance]
+        if response.extraUsageAllowed == false {
+            guard
+                let balance = UsageBalance(
+                    id: "factory-extra-usage",
+                    label: "Extra usage",
+                    value: .disabled,
+                )
+            else {
+                throw ProviderClientError.unsupportedResponse
+            }
+            balances = [balance]
+        } else if let cents = response.extraUsageBalanceCents {
             guard
                 cents.isFinite,
                 cents >= 0,
@@ -54,7 +65,9 @@ public struct FactoryUsageDecoder: Sendable {
             else {
                 throw ProviderClientError.unsupportedResponse
             }
-            balances.append(balance)
+            balances = [balance]
+        } else {
+            balances = []
         }
 
         guard !windows.isEmpty || !balances.isEmpty else {
@@ -96,14 +109,17 @@ public struct FactoryUsageDecoder: Sendable {
             else {
                 throw ProviderClientError.unsupportedResponse
             }
-            guard let windowEnd = value.windowEnd else {
+            let resetAt: Date?
+            if let windowEnd = value.windowEnd {
+                guard let parsedReset = Self.parseDate(windowEnd) else {
+                    throw ProviderClientError.unsupportedResponse
+                }
+                resetAt = parsedReset
+            } else {
                 guard value.usedPercent == 0 else {
                     throw ProviderClientError.unsupportedResponse
                 }
-                continue
-            }
-            guard let resetAt = Self.parseDate(windowEnd) else {
-                throw ProviderClientError.unsupportedResponse
+                resetAt = nil
             }
             guard
                 let window = UsageWindow(
@@ -142,6 +158,7 @@ private struct FactoryLimitsResponse: Decodable {
     let usesTokenRateLimitsBilling: Bool
     let limits: Limits?
     let extraUsageBalanceCents: Double?
+    let extraUsageAllowed: Bool?
 
     struct Limits: Decodable {
         let standard: Pool?

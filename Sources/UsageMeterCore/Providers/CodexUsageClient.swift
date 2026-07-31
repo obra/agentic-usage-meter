@@ -120,12 +120,53 @@ public struct CodexUsageDecoder: Sendable {
         guard !windows.isEmpty else {
             throw ProviderClientError.unsupportedResponse
         }
+        let balances = try normalizedBalances(from: response.credits)
 
         return UsageSnapshot(
             accountID: accountID,
             fetchedAt: fetchedAt,
-            windows: windows
+            windows: windows,
+            balances: balances,
         )
+    }
+
+    private func normalizedBalances(
+        from credits: CodexUsageResponse.Credits?,
+    ) throws -> [UsageBalance] {
+        guard let credits else {
+            return []
+        }
+
+        let value: UsageBalanceValue
+        if credits.unlimited {
+            value = .unlimited
+        } else if !credits.hasCredits {
+            value = .disabled
+        } else {
+            guard
+                let rawBalance = credits.balance,
+                let amount = Decimal(
+                    string: rawBalance,
+                    locale: Locale(identifier: "en_US_POSIX"),
+                ),
+                !amount.isNaN,
+                amount >= 0
+            else {
+                throw ProviderClientError.unsupportedResponse
+            }
+            value = .available(amount: amount, unit: "credits")
+        }
+
+        guard
+            let balance = UsageBalance(
+                id: "codex-chatgpt-credits",
+                label: "ChatGPT credits",
+                value: value,
+            )
+        else {
+            throw ProviderClientError.unsupportedResponse
+        }
+        return [balance]
     }
 
     private func windowKind(
@@ -144,9 +185,11 @@ public struct CodexUsageDecoder: Sendable {
 
 private struct CodexUsageResponse: Decodable {
     let rateLimit: RateLimit
+    let credits: Credits?
 
     enum CodingKeys: String, CodingKey {
         case rateLimit = "rate_limit"
+        case credits
     }
 
     struct RateLimit: Decodable {
@@ -168,6 +211,18 @@ private struct CodexUsageResponse: Decodable {
             case usedPercent = "used_percent"
             case duration = "limit_window_seconds"
             case resetAt = "reset_at"
+        }
+    }
+
+    struct Credits: Decodable {
+        let hasCredits: Bool
+        let unlimited: Bool
+        let balance: String?
+
+        enum CodingKeys: String, CodingKey {
+            case hasCredits = "has_credits"
+            case unlimited
+            case balance
         }
     }
 }

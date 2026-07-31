@@ -122,7 +122,7 @@ struct FactoryUsageDecoderTests {
     }
 
     @Test
-    func inactiveRollingWindowsWithoutEndsStayAbsent() throws {
+    func inactiveRollingWindowsWithoutEndsRemainVisible() throws {
         let data = Data(
             """
             {
@@ -154,17 +154,50 @@ struct FactoryUsageDecoderTests {
             )
         )
 
-        #expect(snapshot.windows.isEmpty)
+        #expect(snapshot.windows.count == 6)
+        #expect(snapshot.windows.allSatisfy { $0.resetAt == nil })
         #expect(
-            snapshot.balances == [
-                UsageBalance(
-                    id: "factory-extra-usage",
-                    label: "Extra usage",
-                    remainingAmount: 0,
-                    unit: "USD"
-                )!
-            ]
+            snapshot.windows.allSatisfy {
+                $0.consumedFraction == 0
+            },
         )
+        #expect(
+            snapshot.balances.map(\.value)
+                == [
+                    .available(
+                        amount: Decimal(string: "0")!,
+                        unit: "USD",
+                    )
+                ],
+        )
+    }
+
+    @Test
+    func explicitlyDisabledExtraUsageRendersOff() throws {
+        let data = Data(
+            """
+            {
+              "usesTokenRateLimitsBilling": true,
+              "limits": {
+                "standard": {
+                  "weekly": {
+                    "usedPercent": 20,
+                    "windowEnd": "2026-08-03T07:00:00Z"
+                  }
+                }
+              },
+              "extraUsageAllowed": false
+            }
+            """.utf8,
+        )
+
+        let snapshot = try FactoryUsageDecoder().decode(
+            data,
+            accountID: UUID(),
+            fetchedAt: Date(timeIntervalSince1970: 1_775_088_000),
+        )
+
+        #expect(snapshot.balances.map(\.value) == [.disabled])
     }
 
     @Test

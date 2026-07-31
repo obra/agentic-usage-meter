@@ -1,5 +1,11 @@
 {
   "plan_type": "plus",
+  "credits": {
+    "has_credits": true,
+    "unlimited": false,
+    "balance": "1240.50",
+    "overage_limit_reached": false
+  },
   "rate_limit": {
     "allowed": true,
     "limit_reached": false,

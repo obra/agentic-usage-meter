@@ -46,6 +46,15 @@ struct CodexUsageClientTests {
             snapshot.windows[1].resetAt
                 == Date(timeIntervalSince1970: 2_000_020_000)
         )
+        #expect(
+            snapshot.balances.map(\.value)
+                == [
+                    .available(
+                        amount: Decimal(string: "1240.50")!,
+                        unit: "credits",
+                    )
+                ],
+        )
 
         let request = try #require(await transport.lastRequest)
         #expect(request.httpMethod == "GET")
@@ -104,6 +113,105 @@ struct CodexUsageClientTests {
         )
 
         #expect(snapshot.windows.map(\.kind) == [.weekly])
+    }
+
+    @Test
+    func explicitUnlimitedAndDisabledCreditsRemainDistinct() throws {
+        let cases: [(String, UsageBalanceValue)] = [
+            (
+                """
+                "has_credits": true,
+                "unlimited": true,
+                "balance": null
+                """,
+                .unlimited
+            ),
+            (
+                """
+                "has_credits": false,
+                "unlimited": false,
+                "balance": "0"
+                """,
+                .disabled
+            ),
+        ]
+
+        for item in cases {
+            let data = Data(
+                """
+                {
+                  "rate_limit": {
+                    "primary_window": {
+                      "used_percent": 10,
+                      "limit_window_seconds": 604800,
+                      "reset_at": 2000020000
+                    }
+                  },
+                  "credits": {
+                    \(item.0)
+                  }
+                }
+                """.utf8,
+            )
+
+            let snapshot = try CodexUsageDecoder().decode(
+                data,
+                accountID: UUID(),
+                fetchedAt: Date(timeIntervalSince1970: 2_000_000_000),
+            )
+
+            #expect(snapshot.balances.map(\.value) == [item.1])
+        }
+    }
+
+    @Test
+    func absentCreditsStayAbsentAndMalformedEnabledBalanceIsRejected() throws {
+        let withoutCredits = Data(
+            """
+            {
+              "rate_limit": {
+                "primary_window": {
+                  "used_percent": 10,
+                  "limit_window_seconds": 604800,
+                  "reset_at": 2000020000
+                }
+              }
+            }
+            """.utf8,
+        )
+        let malformedCredits = Data(
+            """
+            {
+              "rate_limit": {
+                "primary_window": {
+                  "used_percent": 10,
+                  "limit_window_seconds": 604800,
+                  "reset_at": 2000020000
+                }
+              },
+              "credits": {
+                "has_credits": true,
+                "unlimited": false,
+                "balance": "not-a-number"
+              }
+            }
+            """.utf8,
+        )
+
+        let snapshot = try CodexUsageDecoder().decode(
+            withoutCredits,
+            accountID: UUID(),
+            fetchedAt: Date(),
+        )
+        #expect(snapshot.balances.isEmpty)
+
+        #expect(throws: ProviderClientError.unsupportedResponse) {
+            _ = try CodexUsageDecoder().decode(
+                malformedCredits,
+                accountID: UUID(),
+                fetchedAt: Date(),
+            )
+        }
     }
 
     @Test
