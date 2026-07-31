@@ -154,7 +154,7 @@ struct UsageMeterProbeCommandTests {
             timeIntervalSince1970: 2_000_003_600
           ),
           consumedFraction: 0.4
-        )!,
+        )!
       ]
     )
     let output = ProbeOutput(
@@ -177,5 +177,32 @@ struct UsageMeterProbeCommandTests {
     #expect(!text.localizedCaseInsensitiveContains("authorization"))
     #expect(!text.contains("person@example.com"))
     #expect(!text.localizedCaseInsensitiveContains("raw"))
+  }
+
+  @Test
+  func sanitizedOutputPreservesMissingProviderReset() throws {
+    let snapshot = UsageSnapshot(
+      accountID: accountID,
+      fetchedAt: Date(timeIntervalSince1970: 2_000_000_000),
+      windows: [
+        try #require(
+          UsageWindow(
+            id: "inactive",
+            kind: .short,
+            duration: 18_000,
+            resetAt: nil,
+            consumedFraction: 0
+          )
+        )
+      ]
+    )
+
+    let output = ProbeOutput(
+      provider: .factory,
+      identity: nil,
+      snapshot: snapshot
+    )
+
+    #expect(output.windows.first?.resetAt == nil)
   }
 }

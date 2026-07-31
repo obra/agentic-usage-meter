@@ -97,7 +97,7 @@ struct KimiUsageClientTests {
     #expect(window.duration == 18_000)
     #expect(window.consumedFraction == 0.25)
     #expect(
-      window.resetAt.timeIntervalSince1970
+      try #require(window.resetAt).timeIntervalSince1970
         == 2_000_000_000.123456
     )
   }
