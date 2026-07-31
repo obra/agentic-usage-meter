@@ -68,7 +68,9 @@ struct ProviderCatalogTests {
         #expect(
             ProviderCatalog.live
                 .visibleDefinitions(isDevelopmentBuild: true)
-                .map(\.provider) == qualified + [.minimax],
+                .map(\.provider)
+                == qualified
+                    + [.minimax, .githubCopilot],
         )
     }
 

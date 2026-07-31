@@ -494,6 +494,32 @@ public final class AppModel {
         return false
     }
 
+    public func hasGitHubCopilotAccount(
+        userID: String,
+        excluding excludedAccountID: UUID? = nil
+    ) async -> Bool {
+        for account in accounts
+            where
+                account.account.provider
+                    == .githubCopilot
+                && account.id != excludedAccountID
+        {
+            guard
+                let credential =
+                    try? await credentialStore.load(
+                        GitHubCopilotCredential.self,
+                        for: account.id
+                    )
+            else {
+                continue
+            }
+            if credential.userID == userID {
+                return true
+            }
+        }
+        return false
+    }
+
     public func renameAccount(
         id: UUID,
         displayName: String,

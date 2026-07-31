@@ -1,0 +1,23 @@
+{
+  "copilot_plan": "individual_pro",
+  "user_id": 42,
+  "quota_reset_date_utc": "2026-08-01T00:00:00Z",
+  "quota_snapshots": {
+    "chat": {
+      "unlimited": true,
+      "entitlement": -1,
+      "remaining": -1
+    },
+    "completions": {
+      "unlimited": false,
+      "entitlement": "1000",
+      "remaining": "750"
+    },
+    "premium_interactions": {
+      "unlimited": false,
+      "entitlement": 300,
+      "remaining": 120,
+      "overage_permitted": true
+    }
+  }
+}

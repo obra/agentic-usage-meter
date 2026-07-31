@@ -13,7 +13,7 @@ explicitly obtains a safe display identity.
 | Codex | Browser OAuth and usage API | Qualified with two accounts | Enabled |
 | Kimi | Device OAuth and usage API | Qualified current flow; second-account gate outstanding | Enabled (existing) |
 | MiniMax Token Plan | API key and documented remains endpoint | Automated adapter complete | Experimental builds |
-| GitHub Copilot | GitHub OAuth and billing usage API | Researched | Hidden |
+| GitHub Copilot | GitHub device OAuth and quota API | Automated adapter complete | Experimental builds |
 | Antigravity | Isolated CLI profile and `/usage` | Researched | Hidden |
 | Factory | Isolated Droid profile and `/limits` | Researched | Hidden |
 | OpenCode Go | API key plus console/endpoint qualification | Researched | Hidden |
@@ -169,3 +169,33 @@ The automated adapter behavior is adapted from OpenCode Bar commit
 - Real two-account validation, ten-minute persistence refresh, console
   comparison, and independent deletion remain outstanding. MiniMax therefore
   remains experimental.
+
+## GitHub Copilot
+
+The automated quota interpretation is adapted from OpenCode Bar commit
+`4c501b3d97f2f88ff5178ec20d4e45fe3108b3fe`.
+
+- Authentication uses GitHub's device authorization flow in the regular
+  browser. The approved GitHub user ID and login are stored with the token in
+  an account-scoped macOS Keychain record.
+- Usage is fetched from
+  `https://api.github.com/copilot_internal/user`.
+- Limited `quota_snapshots` remain independent monthly rows. Unlimited pools
+  and negative sentinel entitlements are omitted rather than converted into
+  synthetic capacity.
+- A usage response reporting a different GitHub user ID is rejected, so one
+  account's quota cannot be displayed under another account's row.
+- The provider is visible only in development builds pending real
+  qualification.
+
+### 2026-07-30 mechanical qualification
+
+- A credential-free request to GitHub's device-code endpoint confirmed that
+  the Copilot CLI OAuth client identifier is currently accepted and returns
+  GitHub's HTTPS device authorization route.
+- The 194-test package suite passed after the OAuth flow, account adapter,
+  decoder, duplicate-identity gate, connection UI, and independent cleanup
+  behavior were added.
+- Real two-account authorization, ten-minute persistence refresh, comparison
+  with GitHub's billing UI, and independent deletion remain outstanding.
+  GitHub Copilot therefore remains experimental.

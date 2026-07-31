@@ -229,6 +229,8 @@ private struct AddAccountView: View {
     @State private var claude: ClaudeConnectionModel
     @State private var codex: CodexConnectionModel
     @State private var kimi: KimiConnectionModel
+    @State private var githubCopilot:
+        GitHubCopilotConnectionModel
 
     init(
         model: AppModel,
@@ -273,6 +275,16 @@ private struct AddAccountView: View {
                     ? reconnectingAccount
                     : nil,
             ),
+        )
+        _githubCopilot = State(
+            initialValue:
+                GitHubCopilotConnectionModel(
+                    appModel: model,
+                    reconnectingAccount:
+                        provider == .githubCopilot
+                            ? reconnectingAccount
+                            : nil
+                )
         )
     }
 
@@ -331,8 +343,17 @@ private struct AddAccountView: View {
                                     ?? "MiniMax",
                             onComplete: complete
                         )
-                    case .githubCopilot,
-                        .antigravity, .factory,
+                    case .githubCopilot:
+                        GitHubCopilotConnectionView(
+                            model: githubCopilot,
+                            suggestedName:
+                                route
+                                    .reconnectingAccount?
+                                    .displayName
+                                ?? "GitHub Copilot",
+                            onComplete: complete
+                        )
+                    case .antigravity, .factory,
                         .openCodeGo, .openCodeZen,
                         .superGrok:
                         EmptyView()

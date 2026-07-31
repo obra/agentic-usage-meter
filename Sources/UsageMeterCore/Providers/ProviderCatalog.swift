@@ -155,7 +155,7 @@ public struct ProviderCatalog: Sendable {
                     green: 0.36,
                     blue: 0.88,
                 ),
-                releaseState: .unavailable,
+                releaseState: .experimental,
                 connectionStrategy: .deviceOAuth,
                 dashboardStrategy: .nativeDetail(
                     externalURL: URL(

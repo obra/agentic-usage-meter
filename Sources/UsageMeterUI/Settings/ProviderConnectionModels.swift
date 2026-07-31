@@ -262,6 +262,169 @@ public final class KimiConnectionModel {
     }
 }
 
+public enum GitHubCopilotConnectionPhase:
+    Equatable,
+    Sendable
+{
+    case idle
+    case authorizing
+    case waitingForApproval
+    case readyToSave(login: String)
+    case duplicateIdentity(login: String)
+    case saving
+    case complete
+    case failed(String)
+}
+
+@MainActor
+@Observable
+public final class GitHubCopilotConnectionModel {
+    public typealias Authenticate =
+        @Sendable (
+            @escaping GitHubCopilotOAuthFlow
+                .AuthorizationUpdate
+        ) async throws -> GitHubCopilotOAuthResult
+
+    public private(set) var phase =
+        GitHubCopilotConnectionPhase.idle
+    public private(set) var prompt:
+        GitHubCopilotAuthorizationPrompt?
+
+    @ObservationIgnored
+    private let appModel: AppModel
+    @ObservationIgnored
+    private let accountID: UUID
+    @ObservationIgnored
+    private let reconnectingAccount:
+        SubscriptionAccount?
+    @ObservationIgnored
+    private let authenticate: Authenticate
+    @ObservationIgnored
+    private var pendingResult:
+        GitHubCopilotOAuthResult?
+
+    public init(
+        appModel: AppModel,
+        accountID: UUID = UUID(),
+        reconnectingAccount:
+            SubscriptionAccount? = nil,
+        authenticate:
+            @escaping Authenticate = {
+                onPrompt in
+                try await GitHubCopilotOAuthFlow()
+                    .authenticate(
+                        onPrompt: onPrompt
+                    )
+            }
+    ) {
+        self.appModel = appModel
+        self.accountID =
+            reconnectingAccount?.id ?? accountID
+        self.reconnectingAccount =
+            reconnectingAccount
+        self.authenticate = authenticate
+    }
+
+    public func start() async {
+        phase = .authorizing
+        prompt = nil
+        pendingResult = nil
+        do {
+            let result = try await authenticate {
+                [weak self] prompt in
+                await MainActor.run {
+                    self?.prompt = prompt
+                    self?.phase =
+                        .waitingForApproval
+                }
+            }
+            if
+                await appModel
+                    .hasGitHubCopilotAccount(
+                        userID:
+                            result.credential.userID,
+                        excluding:
+                            reconnectingAccount?.id
+                    )
+            {
+                phase = .duplicateIdentity(
+                    login:
+                        result.credential.login
+                )
+                return
+            }
+            pendingResult = result
+            phase = .readyToSave(
+                login:
+                    result.credential.login
+            )
+        } catch is CancellationError {
+            phase = .idle
+        } catch {
+            phase = .failed(
+                "GitHub authorization failed."
+            )
+        }
+    }
+
+    public func save(
+        displayName: String
+    ) async throws {
+        let displayName =
+            try validatedDisplayName(
+                displayName
+            )
+        guard let pendingResult else {
+            throw ProviderConnectionInputError
+                .authorizationNotComplete
+        }
+
+        phase = .saving
+        do {
+            let credential =
+                pendingResult.credential
+            if let reconnectingAccount {
+                try await appModel.reconnectAccount(
+                    id: reconnectingAccount.id,
+                    credential: credential,
+                    authenticatedIdentity:
+                        credential.login
+                )
+            } else {
+                try await appModel.connectAccount(
+                    SubscriptionAccount(
+                        id: accountID,
+                        provider:
+                            .githubCopilot,
+                        displayName: displayName,
+                        authenticatedIdentity:
+                            credential.login,
+                        displayOrder:
+                            appModel.accounts.count {
+                                $0.account.provider
+                                    == .githubCopilot
+                            }
+                    ),
+                    credential: credential
+                )
+            }
+            self.pendingResult = nil
+            phase = .complete
+        } catch {
+            phase = .failed(
+                "GitHub Copilot usage validation failed."
+            )
+            throw error
+        }
+    }
+
+    public func cancel() {
+        pendingResult = nil
+        prompt = nil
+        phase = .idle
+    }
+}
+
 private func validatedDisplayName(
     _ value: String,
 ) throws -> String {

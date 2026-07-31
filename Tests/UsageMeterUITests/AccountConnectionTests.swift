@@ -682,3 +682,153 @@ func cancellingClaudeConnectionDeletesProvisionalProfile() async {
     #expect(profileRemover.removedProfileIDs == [profileID])
     #expect(appModel.accounts.isEmpty)
 }
+
+@Test
+@MainActor
+func githubCopilotConnectionShowsDevicePromptAndSavesIdentity()
+    async throws
+{
+    let reference = Date(
+        timeIntervalSince1970: 2_000_000_000
+    )
+    let accountID = UUID()
+    let prompt = GitHubCopilotAuthorizationPrompt(
+        verificationURL: URL(
+            string: "https://github.com/login/device"
+        )!,
+        userCode: "ABCD-EFGH",
+        expiresAt:
+            reference.addingTimeInterval(600)
+    )
+    let credential = GitHubCopilotCredential(
+        accessToken: "github-token",
+        userID: "42",
+        login: "octocat"
+    )
+    let credentials = TestCredentialStore()
+    let adapter = TestProviderAccountAdapter(
+        provider: .githubCopilot,
+        result: .success(
+            UsageSnapshot(
+                accountID: accountID,
+                fetchedAt: reference,
+                windows: []
+            )
+        )
+    )
+    let appModel = AppModel(
+        stateStore: TestAppStateStore(
+            state: .empty
+        ),
+        credentialStore: credentials,
+        adapters: [adapter],
+        now: { reference }
+    )
+    await appModel.start()
+    let connection =
+        GitHubCopilotConnectionModel(
+            appModel: appModel,
+            accountID: accountID,
+            authenticate: { onPrompt in
+                await onPrompt(prompt)
+                return GitHubCopilotOAuthResult(
+                    credential: credential
+                )
+            }
+        )
+
+    await connection.start()
+
+    #expect(connection.prompt == prompt)
+    #expect(
+        connection.phase
+            == .readyToSave(login: "octocat")
+    )
+
+    try await connection.save(
+        displayName: "Personal Copilot"
+    )
+
+    #expect(connection.phase == .complete)
+    #expect(
+        appModel.accounts[0].account
+            .authenticatedIdentity == "octocat"
+    )
+    #expect(
+        try await credentials.load(
+            GitHubCopilotCredential.self,
+            for: accountID
+        ) == credential
+    )
+}
+
+@Test
+@MainActor
+func githubCopilotConnectionBlocksAnExistingGitHubIdentity()
+    async throws
+{
+    let existing = SubscriptionAccount(
+        provider: .githubCopilot,
+        displayName: "Existing",
+        authenticatedIdentity: "octocat",
+        displayOrder: 0
+    )
+    let credentials = TestCredentialStore()
+    try await credentials.save(
+        GitHubCopilotCredential(
+            accessToken: "existing-token",
+            userID: "42",
+            login: "octocat"
+        ),
+        for: existing.id
+    )
+    let appModel = AppModel(
+        stateStore: TestAppStateStore(
+            state: PersistedAppState(
+                accounts: [existing],
+                snapshots: [:]
+            )
+        ),
+        credentialStore: credentials,
+        adapters: [
+            TestProviderAccountAdapter(
+                provider: .githubCopilot
+            )
+        ]
+    )
+    await appModel.start()
+    let connection =
+        GitHubCopilotConnectionModel(
+            appModel: appModel,
+            authenticate: { _ in
+                GitHubCopilotOAuthResult(
+                    credential:
+                        GitHubCopilotCredential(
+                            accessToken:
+                                "replacement-token",
+                            userID: "42",
+                            login: "octocat"
+                        )
+                )
+            }
+        )
+
+    await connection.start()
+
+    #expect(
+        connection.phase
+            == .duplicateIdentity(
+                login: "octocat"
+            )
+    )
+    await #expect(
+        throws:
+            ProviderConnectionInputError
+                .authorizationNotComplete
+    ) {
+        try await connection.save(
+            displayName: "Duplicate"
+        )
+    }
+    #expect(appModel.accounts.count == 1)
+}
