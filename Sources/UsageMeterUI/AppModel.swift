@@ -81,6 +81,8 @@ public final class AppModel {
     @ObservationIgnored
     private let refreshCoordinator: RefreshCoordinator
     @ObservationIgnored
+    private let refreshPolicy: RefreshPolicy
+    @ObservationIgnored
     private let now: @Sendable () -> Date
     @ObservationIgnored
     private var persistedState = PersistedAppState.empty
@@ -92,6 +94,7 @@ public final class AppModel {
         credentialStore: any CredentialStore,
         adapters: [any ProviderAccountAdapter],
         refreshCoordinator: RefreshCoordinator = RefreshCoordinator(),
+        refreshPolicy: RefreshPolicy = .release,
         isSampleData: Bool = false,
         now: @escaping @Sendable () -> Date = { Date() },
     ) {
@@ -103,6 +106,7 @@ public final class AppModel {
             },
         )
         self.refreshCoordinator = refreshCoordinator
+        self.refreshPolicy = refreshPolicy
         self.isSampleData = isSampleData
         self.now = now
     }
@@ -148,6 +152,8 @@ public final class AppModel {
                     (
                         account.id,
                         AccountRefresher(
+                            minimumInterval:
+                                refreshPolicy.minimumProviderInterval,
                             state:
                             loaded.refreshStates[account.id]
                                 ?? .initial,
@@ -180,7 +186,6 @@ public final class AppModel {
     }
 
     public func runAutomaticRefresh(
-        interval: TimeInterval = 600,
         sleep: @escaping RefreshSleep = { interval in
             try await Task.sleep(
                 for: .milliseconds(
@@ -189,7 +194,7 @@ public final class AppModel {
             )
         },
     ) async {
-        precondition(interval.isFinite && interval > 0)
+        let interval = refreshPolicy.automaticInterval
         while !Task.isCancelled {
             do {
                 try await sleep(interval)
@@ -353,6 +358,7 @@ public final class AppModel {
         let now = now
         persistedState = nextState
         refreshers[account.id] = AccountRefresher(
+            minimumInterval: refreshPolicy.minimumProviderInterval,
             state: refreshState,
             lastGoodSnapshot: snapshot,
             now: { now() }
@@ -420,6 +426,7 @@ public final class AppModel {
         let now = now
         persistedState = nextState
         refreshers[id] = AccountRefresher(
+            minimumInterval: refreshPolicy.minimumProviderInterval,
             state: refreshState,
             lastGoodSnapshot: snapshot,
             now: { now() },
@@ -459,6 +466,7 @@ public final class AppModel {
         let now = now
         persistedState = nextState
         refreshers[account.id] = AccountRefresher(
+            minimumInterval: refreshPolicy.minimumProviderInterval,
             now: { now() }
         )
         accounts.append(
@@ -706,7 +714,10 @@ public final class AppModel {
             refresher = existingRefresher
         } else {
             let now = now
-            refresher = AccountRefresher(now: { now() })
+            refresher = AccountRefresher(
+                minimumInterval: refreshPolicy.minimumProviderInterval,
+                now: { now() },
+            )
             refreshers[id] = refresher
         }
         await refresher.credentialsDidChange()

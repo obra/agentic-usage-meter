@@ -101,7 +101,8 @@ public actor AccountRefresher {
     private var completedRequest: CompletedRequest?
 
     public init(
-        minimumInterval: TimeInterval = 600,
+        minimumInterval: TimeInterval =
+            RefreshPolicy.release.minimumProviderInterval,
         state: AccountRefreshState = .initial,
         lastGoodSnapshot: UsageSnapshot? = nil,
         now: @escaping @Sendable () async -> Date = { Date() }

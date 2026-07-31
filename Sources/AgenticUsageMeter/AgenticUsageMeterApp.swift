@@ -89,6 +89,11 @@ private enum AppEnvironment {
                 )
                 : AppStateStore(fileURL: stateFileURL())
         let credentialStore = KeychainCredentialStore()
+        #if DEBUG
+            let refreshPolicy = RefreshPolicy.development
+        #else
+            let refreshPolicy = RefreshPolicy.release
+        #endif
         let adapters: [any ProviderAccountAdapter] = [
             ClaudeWebAccountUsageClient(),
             CredentialUsageAdapter(
@@ -132,6 +137,7 @@ private enum AppEnvironment {
             stateStore: stateStore,
             credentialStore: credentialStore,
             adapters: adapters,
+            refreshPolicy: refreshPolicy,
             isSampleData: sampleData
         )
     }

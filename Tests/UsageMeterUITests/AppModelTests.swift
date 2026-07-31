@@ -175,7 +175,28 @@ struct AppModelTests {
     }
 
     @Test
-    func automaticRefreshRunsAfterTenMinutes() async {
+    func automaticRefreshUsesReleasePolicy() async {
+        let result = await automaticRefreshResult(
+            refreshPolicy: .release,
+        )
+
+        #expect(result.requestCount == 2)
+        #expect(result.interval == 600)
+    }
+
+    @Test
+    func automaticRefreshUsesDevelopmentPolicy() async {
+        let result = await automaticRefreshResult(
+            refreshPolicy: .development,
+        )
+
+        #expect(result.requestCount == 2)
+        #expect(result.interval == 60)
+    }
+
+    private func automaticRefreshResult(
+        refreshPolicy: RefreshPolicy,
+    ) async -> (requestCount: Int, interval: TimeInterval?) {
         let account = SubscriptionAccount(
             provider: .codex,
             displayName: "Work",
@@ -216,7 +237,9 @@ struct AppModelTests {
                     refreshStates: [
                         account.id: AccountRefreshState(
                             lastRequestStartedAt:
-                                reference.addingTimeInterval(-600),
+                                reference.addingTimeInterval(
+                                    -refreshPolicy.minimumProviderInterval,
+                                ),
                         ),
                     ],
                 ),
@@ -229,6 +252,7 @@ struct AppModelTests {
                     client: provider
                 ),
             ],
+            refreshPolicy: refreshPolicy,
             now: { clock.current },
         )
         await model.start()
@@ -237,11 +261,10 @@ struct AppModelTests {
             try await sleeper.sleep(interval: interval)
         }
 
-        #expect(
-            await provider.requestedAccountIDs
-                == [account.id, account.id],
+        return (
+            requestCount: await provider.requestedAccountIDs.count,
+            interval: await sleeper.intervals.first,
         )
-        #expect(await sleeper.intervals.first == 600)
     }
 
     @Test
