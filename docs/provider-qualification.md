@@ -20,9 +20,10 @@ explicitly obtains a safe display identity.
 | OpenCode Zen | Isolated web session and workspace billing | Automated adapter complete | Experimental builds |
 | SuperGrok | Account-scoped device OAuth and Usage dashboard | Automated adapter complete | Experimental builds |
 
-`Researched` means an authoritative usage surface has been identified but no
-real multi-account adapter has passed the qualification gate. Development code
-may mark an in-progress adapter experimental; release builds keep it hidden.
+`Automated adapter complete` means fixture, request, error, persistence, and
+cleanup contracts pass, but no real two-account qualification has completed.
+Development builds expose those adapters as experimental; release builds keep
+them hidden.
 
 The provider expansion architecture and common release gate are specified in
 `docs/superpowers/specs/2026-07-30-provider-expansion-design.md`.
@@ -216,6 +217,17 @@ stores one API key per local account in the macOS Keychain.
 - The provider is visible only in development builds pending real two-account
   qualification, ten-minute persistence refresh, dashboard comparison, and
   independent deletion.
+
+### 2026-07-30 mechanical qualification
+
+- A credential-free request reached the current billing-limits route and
+  returned HTTP 401 with `x-matched-path: /api/billing/limits`, confirming the
+  live route without transmitting a key.
+- The complete Swift package suite passed 241 tests in 39 suites.
+- The release product compiled, assembled, and passed strict Developer ID
+  signature verification with the hardened runtime and Apple timestamp.
+- Gatekeeper correctly rejected the local artifact as `Unnotarized Developer
+  ID`; notarization and stapling remain separate distribution gates.
 
 ## Antigravity
 

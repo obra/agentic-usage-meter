@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-30
 
-**Status:** Approved; implementation planning pending
+**Status:** Implemented; real-provider qualification pending
 
 **Target:** Provider architecture, account connection, refresh, diagnostics,
 and account dashboards
@@ -331,12 +331,12 @@ regex over arbitrary secret-bearing output.
 
 | Product | Distinct pool | Candidate connection | Reported limits | Dashboard |
 | --- | --- | --- | --- | --- |
-| GitHub Copilot | Personal or organization/enterprise billing scope | GitHub OAuth | Monthly AI-credit or legacy premium-request allowance | Embedded if session login qualifies; otherwise native plus external |
-| SuperGrok | SuperGrok subscription | Isolated WebKit session | Shared weekly percentage, reset, extra credits | Embedded candidate |
-| Antigravity | Google AI plan's Antigravity allowance | Isolated Antigravity CLI profile | Five-hour and weekly baseline pools; AI credits | Native plus external |
-| Factory | Factory organization plan | Isolated Droid CLI profile | Five-hour, weekly, and monthly | Embedded candidate or native plus external |
-| OpenCode Go | Go subscription | API key plus console/endpoint qualification | Five-hour, weekly, and monthly dollar-denominated usage | Embedded candidate or native plus external |
-| OpenCode Zen | Zen workspace | API key plus console/endpoint qualification | Balance and configured monthly limits | Embedded candidate or native plus external |
+| GitHub Copilot | Personal or organization/enterprise billing scope | GitHub device OAuth | Independent limited Copilot quota snapshots | Native plus external |
+| SuperGrok | SuperGrok subscription | Account-scoped Grok CLI device OAuth | Shared weekly percentage, reset, product balances, extra credits | Isolated embedded login |
+| Antigravity | Google AI plan's Antigravity allowance | Blocked: AGY uses the shared macOS Keychain | Authoritative CLI usage exists, but accounts cannot be isolated | Hidden |
+| Factory | Factory organization plan | Per-account Factory API key | Independent Standard and Droid Core five-hour, weekly, and monthly pools; extra-usage balance | Native plus external |
+| OpenCode Go | Go subscription | Isolated workspace WebKit session | Provider-present five-hour, weekly, and monthly windows | Isolated embedded workspace |
+| OpenCode Zen | Zen workspace | Isolated workspace WebKit session | Dollar balance and provider-configured cycle limit | Isolated embedded workspace |
 | MiniMax Token Plan | Token Plan API key | API key | Five-hour and weekly text limits; separate modality limits where authoritative | Embedded candidate or native plus external |
 
 Official product surfaces:

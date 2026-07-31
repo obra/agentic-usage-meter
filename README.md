@@ -1,9 +1,9 @@
 # Agentic Usage Meter
 
 Agentic Usage Meter is a macOS 26 menu-bar app for watching subscription quota
-windows across multiple Claude, Codex, and Kimi Code accounts. The optional
-floating widget aligns comparable five-hour windows on a shared ten-hour axis
-and weekly windows on a shared fourteen-day axis.
+windows across multiple coding-agent accounts. The optional floating widget
+aligns comparable five-hour windows on a shared ten-hour axis and weekly
+windows on a shared fourteen-day axis.
 
 The app displays only windows actually returned by a provider. A provider that
 currently returns weekly usage but no five-hour usage gets a weekly row only.
@@ -36,10 +36,23 @@ Settings from the menu-bar panel to add accounts:
 - Kimi opens its device-authorization page in the regular browser and displays
   the user code and expiry in Settings.
 
-Codex and Kimi credentials are stored as separate Keychain items. Claude
-cookies remain in their identified WebKit data stores and are not copied into
-application settings or Keychain. Removing an account deletes its credential
-or complete WebKit profile.
+Development builds also expose experimental account flows for:
+
+- MiniMax Token Plan API keys;
+- GitHub Copilot device OAuth;
+- SuperGrok device OAuth;
+- OpenCode Go and Zen isolated workspace sessions; and
+- Factory API keys.
+
+Release builds hide experimental providers until two real accounts pass the
+restart, refresh, reconnect, dashboard-isolation, and deletion qualification
+gate. Antigravity remains unavailable because its CLI stores authentication in
+the shared macOS Keychain; changing `$HOME` does not isolate accounts.
+
+OAuth tokens and API keys are stored as separate account-scoped Keychain
+items. Claude and OpenCode cookies remain in their identified WebKit data
+stores and are not copied into application settings or Keychain. Removing an
+account deletes its credential or complete WebKit profile.
 
 Usage is cached on disk and shown immediately at launch. Scheduled, manual,
 menu-bar, and widget demand share the same per-account refresher. No account
