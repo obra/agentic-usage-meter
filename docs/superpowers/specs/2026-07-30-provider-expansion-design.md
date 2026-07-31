@@ -73,8 +73,8 @@ behavior remains compiled and typed; this is not a dynamic plugin system.
 
 Each definition has a release state:
 
-- `qualified`, visible in release and development builds;
-- `experimental`, visible only in development builds;
+- `qualified`, selectable with completed real-account qualification;
+- `experimental`, selectable with outstanding qualification gates;
 - `unavailable`, retained in the qualification matrix but absent from Add
   Account.
 
@@ -364,8 +364,8 @@ Implement and qualify providers in this order:
 6. SuperGrok.
 
 This order prioritizes documented machine-readable interfaces before
-interactive CLI and web-session probes. It does not imply that experimental
-adapters are visible in release builds.
+interactive CLI and web-session probes. Visibility does not imply completed
+qualification; the catalog preserves that distinction.
 
 Every newly added provider must pass:
 

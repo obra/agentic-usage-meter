@@ -277,15 +277,9 @@ public struct ProviderCatalog: Sendable {
         all.first { $0.provider == provider }
     }
 
-    public func visibleDefinitions(
-        isDevelopmentBuild: Bool,
-    ) -> [ProviderDefinition] {
+    public func connectableDefinitions() -> [ProviderDefinition] {
         all.filter {
-            $0.releaseState == .qualified
-                || (
-                    isDevelopmentBuild
-                        && $0.releaseState == .experimental
-                )
+            $0.releaseState != .unavailable
         }
     }
 

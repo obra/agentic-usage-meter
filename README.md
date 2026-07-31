@@ -36,7 +36,7 @@ Settings from the menu-bar panel to add accounts:
 - Kimi opens its device-authorization page in the regular browser and displays
   the user code and expiry in Settings.
 
-Development builds also expose experimental account flows for:
+The account picker also exposes experimental account flows for:
 
 - MiniMax Token Plan API keys;
 - GitHub Copilot device OAuth;
@@ -44,10 +44,10 @@ Development builds also expose experimental account flows for:
 - OpenCode Go and Zen isolated workspace sessions; and
 - Factory API keys.
 
-Release builds hide experimental providers until two real accounts pass the
-restart, refresh, reconnect, dashboard-isolation, and deletion qualification
-gate. Antigravity remains unavailable because its CLI stores authentication in
-the shared macOS Keychain; changing `$HOME` does not isolate accounts.
+Experimental providers remain explicitly unqualified until two real accounts
+pass the restart, refresh, reconnect, dashboard-isolation, and deletion gate.
+Antigravity remains unavailable because its CLI stores authentication in the
+shared macOS Keychain; changing `$HOME` does not isolate accounts.
 
 OAuth tokens and API keys are stored as separate account-scoped Keychain
 items. Claude and OpenCode cookies remain in their identified WebKit data

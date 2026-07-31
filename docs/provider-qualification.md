@@ -12,18 +12,18 @@ explicitly obtains a safe display identity.
 | Claude | Isolated WebKit session | Qualified with two profiles | Enabled |
 | Codex | Browser OAuth and usage API | Qualified with two accounts | Enabled |
 | Kimi | Device OAuth and usage API | Qualified current flow; second-account gate outstanding | Enabled (existing) |
-| MiniMax Token Plan | API key and documented remains endpoint | Automated adapter complete | Experimental builds |
-| GitHub Copilot | GitHub device OAuth and quota API | Automated adapter complete | Experimental builds |
+| MiniMax Token Plan | API key and documented remains endpoint | Automated adapter complete | Selectable, experimental |
+| GitHub Copilot | GitHub device OAuth and quota API | Automated adapter complete | Selectable, experimental |
 | Antigravity | AGY CLI with shared macOS Keychain auth | Multi-account isolation blocked | Hidden |
-| Factory | Per-account API key and billing-limits API | Automated adapter complete | Experimental builds |
-| OpenCode Go | Isolated web session and workspace dashboard | Automated adapter complete | Experimental builds |
-| OpenCode Zen | Isolated web session and workspace billing | Automated adapter complete | Experimental builds |
-| SuperGrok | Account-scoped device OAuth and Usage dashboard | Automated adapter complete | Experimental builds |
+| Factory | Per-account API key and billing-limits API | Automated adapter complete | Selectable, experimental |
+| OpenCode Go | Isolated web session and workspace dashboard | Automated adapter complete | Selectable, experimental |
+| OpenCode Zen | Isolated web session and workspace billing | Automated adapter complete | Selectable, experimental |
+| SuperGrok | Account-scoped device OAuth and Usage dashboard | Automated adapter complete | Selectable, experimental |
 
 `Automated adapter complete` means fixture, request, error, persistence, and
 cleanup contracts pass, but no real two-account qualification has completed.
-Development builds expose those adapters as experimental; release builds keep
-them hidden.
+Release and development builds expose automated adapters while preserving
+their experimental qualification state. Unavailable providers remain hidden.
 
 The provider expansion architecture and common release gate are specified in
 `docs/superpowers/specs/2026-07-30-provider-expansion-design.md`.
@@ -153,7 +153,7 @@ The automated adapter behavior is adapted from OpenCode Bar commit
   as remaining counts despite their names.
 - Zero-capacity modalities are ignored, and numeric strings are accepted
   without rounding the normalized fraction to an integer percentage.
-- The provider is visible only in development builds pending a real
+- The provider is selectable but remains experimental pending a real
   two-account qualification and cleanup check.
 
 ### 2026-07-30 mechanical qualification
@@ -186,7 +186,7 @@ The automated quota interpretation is adapted from OpenCode Bar commit
   synthetic capacity.
 - A usage response reporting a different GitHub user ID is rejected, so one
   account's quota cannot be displayed under another account's row.
-- The provider is visible only in development builds pending real
+- The provider is selectable but remains experimental pending real
   qualification.
 
 ### 2026-07-30 mechanical qualification
@@ -214,7 +214,7 @@ stores one API key per local account in the macOS Keychain.
   preserved as the provider reset time.
 - `extraUsageBalanceCents` is presented as an optional USD balance only when
   the provider supplies it.
-- The provider is visible only in development builds pending real two-account
+- The provider is selectable but remains experimental pending real two-account
   qualification, ten-minute persistence refresh, dashboard comparison, and
   independent deletion.
 

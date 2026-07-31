@@ -53,31 +53,24 @@ struct ProviderCatalogTests {
     }
 
     @Test
-    func catalogShowsExperimentalProvidersOnlyInDevelopment() {
-        let qualified = [
+    func catalogShowsAllImplementedProviders() {
+        let connectable = [
             Provider.claude,
             Provider.codex,
             Provider.kimi,
+            Provider.minimax,
+            Provider.githubCopilot,
+            Provider.factory,
+            Provider.openCodeGo,
+            Provider.openCodeZen,
+            Provider.superGrok,
         ]
 
         #expect(
             ProviderCatalog.live
-                .visibleDefinitions(isDevelopmentBuild: false)
-                .map(\.provider) == qualified,
-        )
-        #expect(
-            ProviderCatalog.live
-                .visibleDefinitions(isDevelopmentBuild: true)
+                .connectableDefinitions()
                 .map(\.provider)
-                == qualified
-                    + [
-                        .minimax,
-                        .githubCopilot,
-                        .factory,
-                        .openCodeGo,
-                        .openCodeZen,
-                        .superGrok,
-                    ],
+                == connectable,
         )
     }
 

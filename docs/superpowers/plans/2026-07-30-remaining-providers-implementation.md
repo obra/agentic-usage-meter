@@ -83,5 +83,5 @@ until Google provides account-scoped credential isolation.
 5. Exercise Add Account, independent reconnect, refresh, deletion, ordering,
    dashboard isolation, and ten-minute refresh behavior for every provider that
    can be authenticated locally.
-6. Keep any provider without real two-account qualification hidden from release
-   builds and document the exact remaining qualification boundary.
+6. Keep any provider without real two-account qualification marked experimental
+   and document the exact remaining qualification boundary.

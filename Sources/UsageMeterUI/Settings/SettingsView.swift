@@ -501,10 +501,7 @@ private struct AddAccountView: View {
                 spacing: 12
             ) {
                 ForEach(
-                    ProviderCatalog.live.visibleDefinitions(
-                        isDevelopmentBuild:
-                        _isDebugAssertConfiguration(),
-                    ),
+                    ProviderCatalog.live.connectableDefinitions(),
                 ) { definition in
                     providerCard(
                         definition.provider,
