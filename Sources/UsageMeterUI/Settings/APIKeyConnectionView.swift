@@ -19,6 +19,36 @@ struct APIKeyConnectionForm {
     }
 }
 
+struct APIKeyConnectionPresentation {
+    let sectionTitle: String
+    let secretLabel: String
+    let guidance: String
+    let failureMessage: String
+
+    init(provider: Provider) {
+        switch provider {
+        case .minimax:
+            sectionTitle = "MiniMax Token Plan"
+            secretLabel = "MiniMax API key"
+            guidance =
+                "Create an API key in the MiniMax platform. The key is stored only in this account's macOS Keychain record."
+            failureMessage =
+                "MiniMax account could not be connected."
+        case .factory:
+            sectionTitle = "Factory API key"
+            secretLabel = "Factory API key"
+            guidance =
+                "Create a key at app.factory.ai/settings/api-keys. The key is stored only in this account's macOS Keychain record."
+            failureMessage =
+                "Factory account could not be connected."
+        default:
+            preconditionFailure(
+                "Provider does not use an API-key connection."
+            )
+        }
+    }
+}
+
 struct APIKeyConnectionView: View {
     let model: AppModel
     let provider: Provider
@@ -36,7 +66,10 @@ struct APIKeyConnectionView: View {
         suggestedName: String,
         onComplete: @escaping () -> Void
     ) {
-        precondition(provider == .minimax)
+        precondition(
+            provider == .minimax
+                || provider == .factory
+        )
         self.model = model
         self.provider = provider
         self.reconnectingAccount = reconnectingAccount
@@ -57,15 +90,13 @@ struct APIKeyConnectionView: View {
                     text: $form.displayName
                 )
                 SecureField(
-                    "MiniMax API key",
+                    presentation.secretLabel,
                     text: $form.apiKey
                 )
             } header: {
-                Text("MiniMax Token Plan")
+                Text(presentation.sectionTitle)
             } footer: {
-                Text(
-                    "Create an API key in the MiniMax platform. The key is stored only in this account's macOS Keychain record."
-                )
+                Text(presentation.guidance)
             }
 
             if let errorMessage {
@@ -96,15 +127,47 @@ struct APIKeyConnectionView: View {
     }
 
     private func connect() {
-        guard
-            form.canConnect,
-            let credential = MiniMaxCredential(
-                apiKey: form.apiKey
-            )
-        else {
+        guard form.canConnect else {
             return
         }
 
+        switch provider {
+        case .minimax:
+            guard
+                let credential = MiniMaxCredential(
+                    apiKey: form.apiKey
+                )
+            else {
+                return
+            }
+            connect(using: credential)
+        case .factory:
+            guard
+                let credential = FactoryCredential(
+                    apiKey: form.apiKey
+                )
+            else {
+                return
+            }
+            connect(using: credential)
+        default:
+            preconditionFailure(
+                "Provider does not use an API-key connection."
+            )
+        }
+    }
+
+    private var presentation:
+        APIKeyConnectionPresentation
+    {
+        APIKeyConnectionPresentation(provider: provider)
+    }
+
+    private func connect<
+        Credential: Codable & Sendable
+    >(
+        using credential: Credential
+    ) {
         isConnecting = true
         errorMessage = nil
         Task {
@@ -131,8 +194,7 @@ struct APIKeyConnectionView: View {
                 }
                 onComplete()
             } catch {
-                errorMessage =
-                    "MiniMax account could not be connected."
+                errorMessage = presentation.failureMessage
                 isConnecting = false
             }
         }

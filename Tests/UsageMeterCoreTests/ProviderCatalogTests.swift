@@ -73,6 +73,7 @@ struct ProviderCatalogTests {
                     + [
                         .minimax,
                         .githubCopilot,
+                        .factory,
                         .openCodeGo,
                         .openCodeZen,
                         .superGrok,
@@ -122,6 +123,46 @@ struct ProviderCatalogTests {
                             "https://grok.com/?_s=usage"
                     )!
                 )
+        )
+    }
+
+    @Test
+    func factoryUsesPerAccountAPIKeysAndNativeUsageDetail()
+        throws
+    {
+        let definition = try #require(
+            ProviderCatalog.live.definition(
+                for: .factory
+            )
+        )
+
+        #expect(definition.releaseState == .experimental)
+        #expect(definition.connectionStrategy == .apiKey)
+        #expect(
+            definition.dashboardStrategy
+                == .nativeDetail(
+                    externalURL: URL(
+                        string:
+                            "https://app.factory.ai/settings/usage"
+                    )!
+                )
+        )
+    }
+
+    @Test
+    func antigravityExplainsItsMultiAccountCredentialBlocker()
+        throws
+    {
+        let definition = try #require(
+            ProviderCatalog.live.definition(
+                for: .antigravity
+            )
+        )
+
+        #expect(definition.releaseState == .unavailable)
+        #expect(
+            definition.connectionDetail
+                == "Shared macOS Keychain prevents isolated accounts"
         )
     }
 

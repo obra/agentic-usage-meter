@@ -14,11 +14,11 @@ explicitly obtains a safe display identity.
 | Kimi | Device OAuth and usage API | Qualified current flow; second-account gate outstanding | Enabled (existing) |
 | MiniMax Token Plan | API key and documented remains endpoint | Automated adapter complete | Experimental builds |
 | GitHub Copilot | GitHub device OAuth and quota API | Automated adapter complete | Experimental builds |
-| Antigravity | Isolated CLI profile and `/usage` | Researched | Hidden |
-| Factory | Isolated Droid profile and `/limits` | Researched | Hidden |
-| OpenCode Go | API key plus console/endpoint qualification | Researched | Hidden |
-| OpenCode Zen | API key plus console/endpoint qualification | Researched | Hidden |
-| SuperGrok | Isolated web session and Usage dashboard | Researched | Hidden |
+| Antigravity | AGY CLI with shared macOS Keychain auth | Multi-account isolation blocked | Hidden |
+| Factory | Per-account API key and billing-limits API | Automated adapter complete | Experimental builds |
+| OpenCode Go | Isolated web session and workspace dashboard | Automated adapter complete | Experimental builds |
+| OpenCode Zen | Isolated web session and workspace billing | Automated adapter complete | Experimental builds |
+| SuperGrok | Account-scoped device OAuth and Usage dashboard | Automated adapter complete | Experimental builds |
 
 `Researched` means an authoritative usage surface has been identified but no
 real multi-account adapter has passed the qualification gate. Development code
@@ -199,3 +199,29 @@ The automated quota interpretation is adapted from OpenCode Bar commit
 - Real two-account authorization, ten-minute persistence refresh, comparison
   with GitHub's billing UI, and independent deletion remain outstanding.
   GitHub Copilot therefore remains experimental.
+
+## Factory
+
+The installed Droid CLI 0.120.1 fetches its current token-rate limits from
+`https://api.factory.ai/api/billing/limits`. Factory's API documentation
+specifies Bearer authentication for Factory API keys, and the application
+stores one API key per local account in the macOS Keychain.
+
+- Standard and Droid Core 5-hour, weekly, and monthly pools remain independent.
+- A missing pool or window is omitted rather than inferred.
+- `usedPercent` is normalized without integer rounding, and `windowEnd` is
+  preserved as the provider reset time.
+- `extraUsageBalanceCents` is presented as an optional USD balance only when
+  the provider supplies it.
+- The provider is visible only in development builds pending real two-account
+  qualification, ten-minute persistence refresh, dashboard comparison, and
+  independent deletion.
+
+## Antigravity
+
+Antigravity CLI 1.0.2 stores its Google authentication in the macOS Keychain.
+Changing `$HOME` isolates settings and cache files but does not isolate those
+credentials, and no documented account/profile selector was found. The app
+therefore keeps Antigravity unavailable instead of presenting a false
+multi-account connection flow. Qualification can resume when Google exposes
+account-scoped credentials or a supported profile selector.

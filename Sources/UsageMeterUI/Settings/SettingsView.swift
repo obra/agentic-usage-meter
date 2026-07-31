@@ -381,6 +381,18 @@ private struct AddAccountView: View {
                                     ?? "MiniMax",
                             onComplete: complete
                         )
+                    case .factory:
+                        APIKeyConnectionView(
+                            model: model,
+                            provider: .factory,
+                            reconnectingAccount:
+                                route.reconnectingAccount,
+                            suggestedName:
+                                route.reconnectingAccount?
+                                    .displayName
+                                    ?? "Factory",
+                            onComplete: complete
+                        )
                     case .githubCopilot:
                         GitHubCopilotConnectionView(
                             model: githubCopilot,
@@ -423,7 +435,7 @@ private struct AddAccountView: View {
                                 ?? "OpenCode Zen",
                             onComplete: complete
                         )
-                    case .antigravity, .factory:
+                    case .antigravity:
                         EmptyView()
                     }
                 }

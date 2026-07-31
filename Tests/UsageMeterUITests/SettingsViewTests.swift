@@ -270,3 +270,27 @@ func apiKeyFormRequiresANameAndNonblankSecret() {
         ).canConnect
     )
 }
+
+@Test
+func apiKeyConnectionCopyMatchesTheSelectedProvider() {
+    let miniMax = APIKeyConnectionPresentation(
+        provider: .minimax
+    )
+    let factory = APIKeyConnectionPresentation(
+        provider: .factory
+    )
+
+    #expect(miniMax.sectionTitle == "MiniMax Token Plan")
+    #expect(miniMax.secretLabel == "MiniMax API key")
+    #expect(factory.sectionTitle == "Factory API key")
+    #expect(factory.secretLabel == "Factory API key")
+    #expect(
+        factory.guidance.contains(
+            "app.factory.ai/settings/api-keys"
+        )
+    )
+    #expect(
+        factory.failureMessage
+            == "Factory account could not be connected."
+    )
+}

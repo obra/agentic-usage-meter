@@ -168,7 +168,7 @@ public struct ProviderCatalog: Sendable {
                 provider: .antigravity,
                 displayName: "Antigravity",
                 connectionDetail:
-                "Isolated AGY CLI profile",
+                "Shared macOS Keychain prevents isolated accounts",
                 systemImage: "sparkles",
                 color: ProviderColor(
                     red: 0.25,
@@ -189,17 +189,15 @@ public struct ProviderCatalog: Sendable {
                 provider: .factory,
                 displayName: "Factory",
                 connectionDetail:
-                "Isolated Droid profile",
+                "Per-account Factory API key",
                 systemImage: "building.2",
                 color: ProviderColor(
                     red: 0.89,
                     green: 0.55,
                     blue: 0.18,
                 ),
-                releaseState: .unavailable,
-                connectionStrategy: .isolatedCLIProfile(
-                    executable: "droid",
-                ),
+                releaseState: .experimental,
+                connectionStrategy: .apiKey,
                 dashboardStrategy: .nativeDetail(
                     externalURL: URL(
                         string:

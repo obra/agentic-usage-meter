@@ -105,6 +105,9 @@ private enum AppEnvironment {
             MiniMaxUsageAdapter(
                 credentialStore: credentialStore
             ),
+            FactoryUsageAdapter(
+                credentialStore: credentialStore
+            ),
             GitHubCopilotUsageAdapter(
                 credentialStore: credentialStore
             ),

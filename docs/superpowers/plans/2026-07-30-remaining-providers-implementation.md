@@ -59,16 +59,19 @@
 
 ## Task 4: Antigravity and Factory
 
-1. Add failing tests for an account-scoped CLI home and a process runner that
-   never inherits the user's default provider profile.
-2. Add failing transcript/response parser tests using sanitized output from
-   Antigravity `/usage` and Factory `/limits`.
-3. Implement typed profile credentials, parsers, and adapters only for values
-   explicitly reported by the installed CLI.
-4. Implement connection flows that launch the provider CLI in Terminal with the
-   isolated profile and validate that profile before saving.
-5. Use native detail dashboards with official external fallbacks where an
-   authenticated embedded dashboard is unavailable.
+The installed CLIs changed the viable architecture. Jesse approved using
+Factory's supported per-account API keys and keeping Antigravity unavailable
+until Google provides account-scoped credential isolation.
+
+1. Add failing decoder tests using a sanitized Factory billing-limits response.
+2. Implement a typed Factory API-key credential and direct adapter for values
+   explicitly reported by `GET /api/billing/limits`.
+3. Preserve Standard and Droid Core pools independently, omit missing windows,
+   and expose the optional extra-usage balance.
+4. Add failing catalog and connection-copy tests, then wire Factory into the
+   development-only provider picker, account lifecycle, and native detail view.
+5. Record that isolated `$HOME` directories do not isolate Antigravity's
+   shared macOS Keychain authentication, and keep the provider unavailable.
 6. Run focused tests, then the full suite, and commit.
 
 ## Task 5: Product Verification
