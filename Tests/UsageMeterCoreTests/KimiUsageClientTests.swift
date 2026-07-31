@@ -30,18 +30,20 @@ struct KimiUsageClientTests {
     #expect(snapshot.accountID == accountID)
     #expect(snapshot.fetchedAt == fetchedAt)
     #expect(snapshot.windows.count == 2)
-    #expect(snapshot.windows[0].kind == .short)
-    #expect(snapshot.windows[0].duration == 18_000)
-    #expect(snapshot.windows[0].consumedFraction == 0.4)
+    let short = try #require(snapshot.windows.first)
+    #expect(short.kind == .short)
+    #expect(short.duration == 18_000)
+    #expect(short.consumedFraction == 0.4)
     #expect(
-      snapshot.windows[0].resetAt
+      short.resetAt
         == fetchedAt.addingTimeInterval(3_600)
     )
-    #expect(snapshot.windows[1].kind == .weekly)
-    #expect(snapshot.windows[1].duration == 604_800)
-    #expect(snapshot.windows[1].consumedFraction == 0.25)
+    let weekly = try #require(snapshot.windows.dropFirst().first)
+    #expect(weekly.kind == .weekly)
+    #expect(weekly.duration == 604_800)
+    #expect(weekly.consumedFraction == 0.25)
     #expect(
-      snapshot.windows[1].resetAt
+      weekly.resetAt
         == Date(timeIntervalSince1970: 2_000_000_000)
     )
 

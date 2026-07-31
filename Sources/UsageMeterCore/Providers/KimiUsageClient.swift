@@ -231,7 +231,11 @@ private struct KimiUsageResponse: Decodable {
       else {
         return nil
       }
-      return switch timeUnit.uppercased() {
+      let rawUnit = timeUnit.uppercased()
+      let unit = rawUnit.hasPrefix("TIME_UNIT_")
+        ? String(rawUnit.dropFirst("TIME_UNIT_".count))
+        : rawUnit
+      return switch unit {
       case "MINUTE", "MINUTES":
         duration * 60
       case "HOUR", "HOURS":

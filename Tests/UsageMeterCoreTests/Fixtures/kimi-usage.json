@@ -8,7 +8,7 @@
     {
       "window": {
         "duration": 300,
-        "timeUnit": "MINUTE"
+        "timeUnit": "TIME_UNIT_MINUTE"
       },
       "detail": {
         "limit": 100,
