@@ -30,7 +30,11 @@ public struct UsageTimelineView: View {
       ForEach(timeline.sections, id: \.kind) {
         timelineSection($0)
       }
+
       if !timeline.balanceRows.isEmpty {
+        if !timeline.sections.isEmpty {
+          Divider()
+        }
         balanceSection(timeline.balanceRows)
       }
     }
@@ -40,36 +44,21 @@ public struct UsageTimelineView: View {
     _ section: UsageTimelineSectionPresentation,
   ) -> some View {
     VStack(alignment: .leading, spacing: 7) {
-      ZStack {
-        HStack {
-          Text(section.title)
-            .font(.headline)
-          Spacer()
-        }
-        HStack(spacing: UsageWindowRow.columnSpacing) {
-          Color.clear
-            .frame(
-              width:
-                UsageWindowRow
-                .percentageColumnWidth,
-            )
-          Color.clear
-            .frame(
-              width:
-                UsageWindowRow
-                .identityColumnWidth,
-            )
-          Text("Now")
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity)
-          Color.clear
-            .frame(
-              width:
-                UsageWindowRow
-                .resetColumnWidth,
-            )
-        }
+      HStack(spacing: UsageWindowRow.columnSpacing) {
+        Text(section.title)
+          .font(.headline)
+          .frame(
+            width: identityColumnsWidth,
+            alignment: .leading,
+          )
+
+        Text("Now")
+          .font(.caption2)
+          .foregroundStyle(.secondary)
+          .frame(maxWidth: .infinity)
+
+        Color.clear
+          .frame(width: UsageWindowRow.resetColumnWidth)
       }
 
       ForEach(section.rows) {
@@ -88,57 +77,68 @@ public struct UsageTimelineView: View {
     _ rows: [UsageBalanceRowPresentation],
   ) -> some View {
     VStack(alignment: .leading, spacing: 7) {
-      Text("Balances")
+      Text("Extra Credits")
         .font(.headline)
 
       ForEach(rows) { row in
         HStack(spacing: UsageWindowRow.columnSpacing) {
-          HStack(spacing: 4) {
-            Circle()
-              .fill(row.account.provider.timelineColor)
-              .frame(width: 7, height: 7)
-            Text(row.providerText)
-              .foregroundStyle(.secondary)
-            if let accountText = row.accountText {
-              Text("·")
-                .foregroundStyle(.secondary)
-              Text(accountText)
-                .fontWeight(.medium)
-                .lineLimit(1)
-            }
-          }
-          .frame(
-            width:
-              UsageWindowRow.percentageColumnWidth
-              + UsageWindowRow.identityColumnWidth
-              + UsageWindowRow.columnSpacing,
-            alignment: .leading,
-          )
+          Circle()
+            .fill(row.account.provider.timelineColor)
+            .frame(width: 7, height: 7)
+            .frame(
+              width: UsageWindowRow.percentageColumnWidth,
+              alignment: .trailing,
+            )
 
-          Text(row.balance.label)
+          Text(row.providerText)
             .font(.caption)
             .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .frame(
+              width: UsageWindowRow.providerColumnWidth,
+              alignment: .leading,
+            )
 
-          Spacer()
+          Text(row.accountText)
+            .font(.caption)
+            .fontWeight(.medium)
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .frame(
+              width: UsageWindowRow.accountColumnWidth,
+              alignment: .leading,
+            )
+
+          Text(row.labelText)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
           Text(row.valueText)
             .font(.caption.monospacedDigit())
             .fontWeight(.semibold)
-
-          if let cycleEndText = row.cycleEndText {
-            Text(cycleEndText)
-              .font(.caption.monospacedDigit())
-              .foregroundStyle(.secondary)
-          }
+            .lineLimit(1)
+            .frame(width: 110, alignment: .trailing)
         }
         .frame(height: UsageWindowRow.rowHeight)
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(row.helpText)
         .contentShape(Rectangle())
         .onTapGesture {
           openAccount(id: row.account.id)
         }
+        .help(row.helpText)
       }
     }
+  }
+
+  private var identityColumnsWidth: CGFloat {
+    UsageWindowRow.percentageColumnWidth
+      + UsageWindowRow.providerColumnWidth
+      + UsageWindowRow.accountColumnWidth
+      + (2 * UsageWindowRow.columnSpacing)
   }
 
   private func openAccount(id: UUID) {

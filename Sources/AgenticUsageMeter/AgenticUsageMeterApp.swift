@@ -202,6 +202,11 @@ private enum AppEnvironment {
                 displayName: "Kimi",
                 displayOrder: 0,
             ),
+            SubscriptionAccount(
+                provider: .factory,
+                displayName: "Factory",
+                displayOrder: 0,
+            ),
         ]
         let snapshots = Dictionary(
             uniqueKeysWithValues: accounts.enumerated().map {
@@ -216,6 +221,10 @@ private enum AppEnvironment {
                             provider: account.provider,
                             index: index,
                             now: now,
+                        ),
+                        balances: sampleBalances(
+                            provider: account.provider,
+                            displayOrder: account.displayOrder,
                         ),
                     ),
                 )
@@ -244,6 +253,25 @@ private enum AppEnvironment {
         index: Int,
         now: Date,
     ) -> [UsageWindow] {
+        if provider == .factory {
+            return [
+                UsageWindow(
+                    id: "short",
+                    kind: .short,
+                    duration: 18_000,
+                    resetAt: nil,
+                    consumedFraction: 0,
+                )!,
+                UsageWindow(
+                    id: "weekly",
+                    kind: .weekly,
+                    duration: 604_800,
+                    resetAt: nil,
+                    consumedFraction: 0,
+                )!,
+            ]
+        }
+
         let weeklyConsumed =
             provider == .kimi
                 ? 0.26
@@ -277,6 +305,50 @@ private enum AppEnvironment {
                 ),
             )!,
             weekly,
+        ]
+    }
+
+    private static func sampleBalances(
+        provider: Provider,
+        displayOrder: Int,
+    ) -> [UsageBalance] {
+        let value: UsageBalanceValue
+        let label: String
+        switch (provider, displayOrder) {
+        case (.claude, 0):
+            label = "Extra usage"
+            value = .available(
+                amount: Decimal(string: "38.42")!,
+                unit: "USD",
+            )
+        case (.claude, _):
+            label = "Extra usage"
+            value = .disabled
+        case (.codex, 0):
+            label = "Credits"
+            value = .available(
+                amount: Decimal(string: "1240.5")!,
+                unit: "credits",
+            )
+        case (.codex, _):
+            label = "Credits"
+            value = .unlimited
+        case (.kimi, _):
+            label = "Extra usage"
+            value = .disabled
+        case (.factory, _):
+            label = "Credits"
+            value = .available(amount: 0, unit: "USD")
+        default:
+            return []
+        }
+
+        return [
+            UsageBalance(
+                id: "extra-credits",
+                label: label,
+                value: value,
+            )!
         ]
     }
 }

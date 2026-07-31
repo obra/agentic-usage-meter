@@ -2,9 +2,10 @@ import SwiftUI
 import UsageMeterCore
 
 public struct UsageWindowRow: View {
-  static let percentageColumnWidth: CGFloat = 42
-  static let identityColumnWidth: CGFloat = 156
-  static let resetColumnWidth: CGFloat = 64
+  static let percentageColumnWidth: CGFloat = 38
+  static let providerColumnWidth: CGFloat = 104
+  static let accountColumnWidth: CGFloat = 88
+  static let resetColumnWidth: CGFloat = 58
   static let columnSpacing: CGFloat = 8
   static let rowHeight: CGFloat = 29
 
@@ -37,22 +38,25 @@ public struct UsageWindowRow: View {
           .frame(width: 7, height: 7)
         Text(presentation.providerText)
           .foregroundStyle(.secondary)
-          .fixedSize(horizontal: true, vertical: false)
-        if let accountText = presentation.accountText {
-          Text("·")
-            .foregroundStyle(.secondary)
-          Text(accountText)
-            .fontWeight(.medium)
-            .lineLimit(1)
-            .truncationMode(.tail)
-        }
+          .lineLimit(1)
+          .truncationMode(.tail)
       }
       .font(.caption)
       .lineLimit(1)
       .frame(
-        width: Self.identityColumnWidth,
+        width: Self.providerColumnWidth,
         alignment: .leading,
       )
+
+      Text(presentation.accountText)
+        .font(.caption)
+        .fontWeight(.medium)
+        .lineLimit(1)
+        .truncationMode(.tail)
+        .frame(
+          width: Self.accountColumnWidth,
+          alignment: .leading,
+        )
 
       GeometryReader { geometry in
         let width = geometry.size.width
@@ -98,6 +102,7 @@ public struct UsageWindowRow: View {
             )
         }
       }
+      .frame(minWidth: 160, maxWidth: .infinity)
       .frame(height: Self.rowHeight)
 
       Text(presentation.relativeResetText)

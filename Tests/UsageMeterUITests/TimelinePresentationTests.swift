@@ -170,7 +170,7 @@ struct TimelinePresentationTests {
   }
 
   @Test
-  func repeatedProviderAndAccountNameIsShownOnce() throws {
+  func repeatedProviderAndAccountNameKeepsTheAccountColumn() throws {
     let account = SubscriptionAccount(
       provider: .kimi,
       displayName: "  kImI ",
@@ -194,7 +194,7 @@ struct TimelinePresentationTests {
     )
 
     #expect(presentation.providerText == "Kimi")
-    #expect(presentation.accountText == nil)
+    #expect(presentation.accountText == "kImI")
     #expect(presentation.remainingPercentageText == "73%")
   }
 

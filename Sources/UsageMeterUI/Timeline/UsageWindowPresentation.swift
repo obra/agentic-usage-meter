@@ -4,7 +4,7 @@ import UsageMeterCore
 public struct UsageWindowPresentation: Equatable, Sendable {
   public let provider: Provider
   public let providerText: String
-  public let accountText: String?
+  public let accountText: String
   public let outerXFraction: Double
   public let outerWidthFraction: Double
   public let fillFraction: Double
@@ -183,10 +183,18 @@ public struct UsageBalanceRowPresentation:
   public let account: SubscriptionAccount
   public let balance: UsageBalance
   public let providerText: String
-  public let accountText: String?
+  public let accountText: String
   public let labelText: String
   public let valueText: String
   public let cycleEndText: String?
+
+  public var helpText: String {
+    var components = [providerText, accountText, labelText, valueText]
+    if let cycleEndText {
+      components.append("Cycle ends \(cycleEndText)")
+    }
+    return components.joined(separator: ", ")
+  }
 
   public var id: String {
     "\(account.id.uuidString):balance:\(balance.id)"
@@ -311,7 +319,7 @@ extension UsageWindowKind {
 
 private func usageIdentity(
   for account: SubscriptionAccount,
-) -> (providerText: String, accountText: String?) {
+) -> (providerText: String, accountText: String) {
   let providerText =
     ProviderCatalog.live.definition(
       for: account.provider,
@@ -320,12 +328,7 @@ private func usageIdentity(
   let trimmedAccountName = account.displayName.trimmingCharacters(
     in: .whitespacesAndNewlines,
   )
-  let accountText =
-    trimmedAccountName.caseInsensitiveCompare(providerText)
-      == .orderedSame
-    ? nil
-    : trimmedAccountName
-  return (providerText, accountText)
+  return (providerText, trimmedAccountName)
 }
 
 private func accountStateComesBefore(
