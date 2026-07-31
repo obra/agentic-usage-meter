@@ -73,9 +73,31 @@ struct ProviderCatalogTests {
                     + [
                         .minimax,
                         .githubCopilot,
+                        .openCodeGo,
+                        .openCodeZen,
                         .superGrok,
                     ],
         )
+    }
+
+    @Test
+    func openCodeUsesIsolatedDashboardSessions() throws {
+        for provider in [
+            Provider.openCodeGo,
+            Provider.openCodeZen,
+        ] {
+            let definition = try #require(
+                ProviderCatalog.live.definition(
+                    for: provider,
+                ),
+            )
+
+            #expect(definition.releaseState == .experimental)
+            #expect(
+                definition.connectionStrategy
+                    == .isolatedWebSession,
+            )
+        }
     }
 
     @Test

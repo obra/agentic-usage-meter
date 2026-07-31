@@ -233,6 +233,10 @@ private struct AddAccountView: View {
         GitHubCopilotConnectionModel
     @State private var superGrok:
         SuperGrokConnectionModel
+    @State private var openCodeGo:
+        OpenCodeConnectionModel
+    @State private var openCodeZen:
+        OpenCodeConnectionModel
 
     init(
         model: AppModel,
@@ -294,6 +298,28 @@ private struct AddAccountView: View {
                     appModel: model,
                     reconnectingAccount:
                         provider == .superGrok
+                            ? reconnectingAccount
+                            : nil
+                )
+        )
+        _openCodeGo = State(
+            initialValue:
+                OpenCodeConnectionModel(
+                    provider: .openCodeGo,
+                    appModel: model,
+                    reconnectingAccount:
+                        provider == .openCodeGo
+                            ? reconnectingAccount
+                            : nil
+                )
+        )
+        _openCodeZen = State(
+            initialValue:
+                OpenCodeConnectionModel(
+                    provider: .openCodeZen,
+                    appModel: model,
+                    reconnectingAccount:
+                        provider == .openCodeZen
                             ? reconnectingAccount
                             : nil
                 )
@@ -375,8 +401,29 @@ private struct AddAccountView: View {
                                 ?? "SuperGrok",
                             onComplete: complete
                         )
-                    case .antigravity, .factory,
-                        .openCodeGo, .openCodeZen:
+                    case .openCodeGo:
+                        OpenCodeConnectionView(
+                            provider: .openCodeGo,
+                            model: openCodeGo,
+                            suggestedName:
+                                route
+                                    .reconnectingAccount?
+                                    .displayName
+                                ?? "OpenCode Go",
+                            onComplete: complete
+                        )
+                    case .openCodeZen:
+                        OpenCodeConnectionView(
+                            provider: .openCodeZen,
+                            model: openCodeZen,
+                            suggestedName:
+                                route
+                                    .reconnectingAccount?
+                                    .displayName
+                                ?? "OpenCode Zen",
+                            onComplete: complete
+                        )
+                    case .antigravity, .factory:
                         EmptyView()
                     }
                 }
@@ -428,7 +475,19 @@ private struct AddAccountView: View {
             )
             .disabled(true)
         } else {
-            HStack(spacing: 12) {
+            LazyVGrid(
+                columns: [
+                    GridItem(
+                        .adaptive(
+                            minimum: 190,
+                            maximum: 280
+                        ),
+                        spacing: 12
+                    )
+                ],
+                alignment: .leading,
+                spacing: 12
+            ) {
                 ForEach(
                     ProviderCatalog.live.visibleDefinitions(
                         isDevelopmentBuild:

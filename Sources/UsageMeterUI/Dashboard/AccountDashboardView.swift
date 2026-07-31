@@ -15,7 +15,44 @@ struct AccountDashboardRoute: Equatable {
     ) {
         accountID = account.id
         webProfileID = account.claudeProfileID ?? account.id
-        self.strategy = strategy
+        self.strategy = Self.resolvedStrategy(
+            for: account,
+            fallback: strategy
+        )
+    }
+
+    private static func resolvedStrategy(
+        for account: SubscriptionAccount,
+        fallback: ProviderDashboardStrategy
+    ) -> ProviderDashboardStrategy {
+        guard
+            let workspaceID =
+                account.authenticatedIdentity?
+                    .trimmingCharacters(
+                        in: .whitespacesAndNewlines
+                    ),
+            !workspaceID.isEmpty
+        else {
+            return fallback
+        }
+        let page: String
+        switch account.provider {
+        case .openCodeGo:
+            page = "go"
+        case .openCodeZen:
+            page = "billing"
+        default:
+            return fallback
+        }
+        guard
+            let url = URL(
+                string:
+                    "https://opencode.ai/workspace/\(workspaceID)/\(page)"
+            )
+        else {
+            return fallback
+        }
+        return .embedded(url)
     }
 }
 

@@ -53,6 +53,67 @@ func claudeDashboardReusesTheAuthenticatedWebProfile() throws {
 }
 
 @Test
+func openCodeDashboardUsesTheSelectedWorkspace() throws {
+    let account = SubscriptionAccount(
+        provider: .openCodeGo,
+        displayName: "OpenCode",
+        authenticatedIdentity: "wrk_personal",
+        displayOrder: 0,
+    )
+    let definition = try #require(
+        ProviderCatalog.live.definition(
+            for: .openCodeGo,
+        ),
+    )
+
+    let route = AccountDashboardRoute(
+        account: account,
+        strategy: definition.dashboardStrategy,
+    )
+
+    #expect(
+        route.strategy
+            == .embedded(
+                URL(
+                    string:
+                        "https://opencode.ai/workspace/wrk_personal/go",
+                )!,
+            ),
+    )
+    #expect(route.webProfileID == account.id)
+}
+
+@Test
+func openCodeZenDashboardOpensWorkspaceBilling() throws {
+    let account = SubscriptionAccount(
+        provider: .openCodeZen,
+        displayName: "OpenCode Zen",
+        authenticatedIdentity: "wrk_team",
+        displayOrder: 0,
+    )
+    let definition = try #require(
+        ProviderCatalog.live.definition(
+            for: .openCodeZen,
+        ),
+    )
+
+    let route = AccountDashboardRoute(
+        account: account,
+        strategy: definition.dashboardStrategy,
+    )
+
+    #expect(
+        route.strategy
+            == .embedded(
+                URL(
+                    string:
+                        "https://opencode.ai/workspace/wrk_team/billing",
+                )!,
+            ),
+    )
+}
+
+@Test
 func accountRowBackgroundOpensDashboardWithoutStealingControls() {
     #expect(
         AccountRowAction.resolved(

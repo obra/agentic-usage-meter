@@ -211,15 +211,15 @@ public struct ProviderCatalog: Sendable {
                 provider: .openCodeGo,
                 displayName: "OpenCode Go",
                 connectionDetail:
-                "Go API key and workspace",
+                "Isolated OpenCode session",
                 systemImage: "arrow.right.circle",
                 color: ProviderColor(
                     red: 0.18,
                     green: 0.70,
                     blue: 0.72,
                 ),
-                releaseState: .unavailable,
-                connectionStrategy: .apiKey,
+                releaseState: .experimental,
+                connectionStrategy: .isolatedWebSession,
                 dashboardStrategy: .embedded(
                     URL(string: "https://opencode.ai/go")!,
                 ),
@@ -228,15 +228,15 @@ public struct ProviderCatalog: Sendable {
                 provider: .openCodeZen,
                 displayName: "OpenCode Zen",
                 connectionDetail:
-                "Zen API key and workspace",
+                "Isolated OpenCode session",
                 systemImage: "circle.hexagongrid",
                 color: ProviderColor(
                     red: 0.51,
                     green: 0.61,
                     blue: 0.29,
                 ),
-                releaseState: .unavailable,
-                connectionStrategy: .apiKey,
+                releaseState: .experimental,
+                connectionStrategy: .isolatedWebSession,
                 dashboardStrategy: .embedded(
                     URL(string: "https://opencode.ai/zen")!,
                 ),

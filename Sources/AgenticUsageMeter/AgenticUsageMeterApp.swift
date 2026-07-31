@@ -111,6 +111,18 @@ private enum AppEnvironment {
             SuperGrokUsageAdapter(
                 credentialStore: credentialStore
             ),
+            OpenCodeWebAccountUsageClient(
+                base: OpenCodeGoUsageAdapter(
+                    credentialStore:
+                        credentialStore
+                )
+            ),
+            OpenCodeWebAccountUsageClient(
+                base: OpenCodeZenUsageAdapter(
+                    credentialStore:
+                        credentialStore
+                )
+            ),
         ]
 
         return AppModel(

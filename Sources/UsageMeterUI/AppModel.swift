@@ -545,6 +545,38 @@ public final class AppModel {
         return false
     }
 
+    public func hasOpenCodeAccount(
+        provider: Provider,
+        workspaceID: String,
+        excluding excludedAccountID: UUID? = nil
+    ) async -> Bool {
+        guard
+            provider == .openCodeGo
+                || provider == .openCodeZen
+        else {
+            return false
+        }
+        for account in accounts
+            where
+                account.account.provider == provider
+                && account.id != excludedAccountID
+        {
+            guard
+                let credential =
+                    try? await credentialStore.load(
+                        OpenCodeDashboardCredential.self,
+                        for: account.id
+                    )
+            else {
+                continue
+            }
+            if credential.identityKey == workspaceID {
+                return true
+            }
+        }
+        return false
+    }
+
     public func renameAccount(
         id: UUID,
         displayName: String,
