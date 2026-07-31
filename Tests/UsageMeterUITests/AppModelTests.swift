@@ -4,6 +4,7 @@ import SwiftUI
 import Testing
 import UsageMeterCore
 
+@testable import AgenticUsageMeter
 @testable import UsageMeterUI
 
 @Suite
@@ -705,6 +706,20 @@ struct AppModelTests {
         )
 
         #expect(model.isSampleData)
+    }
+
+    @Test
+    func sampleDataIncludesKimiFiveHourWindow() throws {
+        let state = AppEnvironment.sampleState(showWidget: false)
+        let account = try #require(
+            state.accounts.first { $0.provider == .kimi },
+        )
+        let snapshot = try #require(state.snapshots[account.id])
+        let short = try #require(
+            snapshot.windows.first { $0.kind == .short },
+        )
+
+        #expect(short.duration == 18_000)
     }
 
     @Test

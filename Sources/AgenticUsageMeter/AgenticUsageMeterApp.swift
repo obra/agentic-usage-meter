@@ -72,7 +72,7 @@ private struct MenuBarLabel: View {
     }
 }
 
-private enum AppEnvironment {
+enum AppEnvironment {
     @MainActor
     static func makeModel() -> AppModel {
         let sampleData = CommandLine.arguments.contains(
@@ -178,7 +178,7 @@ private enum AppEnvironment {
             )
     }
 
-    private static func sampleState(
+    static func sampleState(
         showWidget: Bool,
     ) -> PersistedAppState {
         let now = Date()
@@ -309,7 +309,7 @@ private enum AppEnvironment {
             ),
             consumedFraction: weeklyConsumed,
         )!
-        guard provider == .claude else {
+        guard provider == .claude || provider == .kimi else {
             return [weekly]
         }
         return [

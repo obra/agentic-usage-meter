@@ -69,7 +69,11 @@ let package = Package(
         ),
         .testTarget(
             name: "UsageMeterUITests",
-            dependencies: ["UsageMeterUI", "UsageMeterCore"]
+            dependencies: [
+                "AgenticUsageMeter",
+                "UsageMeterUI",
+                "UsageMeterCore"
+            ]
         ),
         .testTarget(
             name: "UsageMeterWebTests",
