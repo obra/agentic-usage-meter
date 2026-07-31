@@ -28,8 +28,15 @@ public struct FloatingWidgetView: View {
                 .buttonStyle(.borderless)
                 .help("Hide Widget")
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .controlSize(.small)
+            .padding(
+                .horizontal,
+                UsageTimelineMetrics.outerHorizontalPadding
+            )
+            .padding(
+                .vertical,
+                UsageTimelineMetrics.outerVerticalPadding
+            )
 
             Divider()
 
@@ -44,7 +51,11 @@ public struct FloatingWidgetView: View {
                 }
             }
         }
-        .frame(width: 520)
+        .frame(
+            minWidth: 360,
+            idealWidth: UsageTimelineMetrics.naturalWidth,
+            maxWidth: .infinity
+        )
         .background(.regularMaterial)
     }
 
@@ -55,15 +66,22 @@ public struct FloatingWidgetView: View {
                 AccountDashboardPresenter.shared.open($0)
             }
         )
-            .padding(14)
+            .padding(
+                .horizontal,
+                UsageTimelineMetrics.outerHorizontalPadding
+            )
+            .padding(
+                .vertical,
+                UsageTimelineMetrics.outerVerticalPadding
+            )
     }
 
     private var sampleDataBadge: some View {
         Text("SAMPLE DATA")
             .font(.caption2.weight(.bold))
             .foregroundStyle(.orange)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 3)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
             .background(.orange.opacity(0.14), in: Capsule())
             .accessibilityLabel("Sample data")
     }

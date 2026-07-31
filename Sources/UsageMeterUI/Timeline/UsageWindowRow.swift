@@ -2,13 +2,6 @@ import SwiftUI
 import UsageMeterCore
 
 public struct UsageWindowRow: View {
-  static let percentageColumnWidth: CGFloat = 38
-  static let providerColumnWidth: CGFloat = 104
-  static let accountColumnWidth: CGFloat = 88
-  static let resetColumnWidth: CGFloat = 58
-  static let columnSpacing: CGFloat = 8
-  static let rowHeight: CGFloat = 29
-
   private let row: UsageTimelineRowPresentation
   private let onOpenDashboard: (() -> Void)?
 
@@ -23,12 +16,12 @@ public struct UsageWindowRow: View {
   public var body: some View {
     let presentation = row.windowPresentation
 
-    HStack(spacing: Self.columnSpacing) {
+    HStack(spacing: UsageTimelineMetrics.columnSpacing) {
       Text(presentation.remainingPercentageText)
         .font(.caption.monospacedDigit())
         .fontWeight(.semibold)
         .frame(
-          width: Self.percentageColumnWidth,
+          width: UsageTimelineMetrics.percentageColumnWidth,
           alignment: .trailing,
         )
 
@@ -44,7 +37,7 @@ public struct UsageWindowRow: View {
       .font(.caption)
       .lineLimit(1)
       .frame(
-        width: Self.providerColumnWidth,
+        width: UsageTimelineMetrics.providerColumnWidth,
         alignment: .leading,
       )
 
@@ -54,7 +47,7 @@ public struct UsageWindowRow: View {
         .lineLimit(1)
         .truncationMode(.tail)
         .frame(
-          width: Self.accountColumnWidth,
+          width: UsageTimelineMetrics.accountColumnWidth,
           alignment: .leading,
         )
 
@@ -80,7 +73,10 @@ public struct UsageWindowRow: View {
                   * presentation.fillFraction,
               )
           }
-          .frame(width: outerWidth, height: 14)
+          .frame(
+            width: outerWidth,
+            height: UsageTimelineMetrics.barHeight,
+          )
           .clipShape(RoundedRectangle(cornerRadius: 4))
           .overlay {
             RoundedRectangle(cornerRadius: 4)
@@ -94,7 +90,10 @@ public struct UsageWindowRow: View {
 
           Rectangle()
             .fill(.primary.opacity(0.55))
-            .frame(width: 1, height: 22)
+            .frame(
+              width: 1,
+              height: UsageTimelineMetrics.nowLineHeight,
+            )
             .offset(
               x:
                 width
@@ -102,19 +101,22 @@ public struct UsageWindowRow: View {
             )
         }
       }
-      .frame(minWidth: 160, maxWidth: .infinity)
-      .frame(height: Self.rowHeight)
+      .frame(
+        minWidth: UsageTimelineMetrics.minimumTimelineWidth,
+        maxWidth: .infinity,
+      )
+      .frame(height: UsageTimelineMetrics.rowHeight)
 
       Text(presentation.relativeResetText)
         .font(.caption.monospacedDigit())
         .foregroundStyle(.secondary)
         .lineLimit(1)
         .frame(
-          width: Self.resetColumnWidth,
+          width: UsageTimelineMetrics.resetColumnWidth,
           alignment: .trailing,
         )
     }
-    .frame(height: Self.rowHeight)
+    .frame(height: UsageTimelineMetrics.rowHeight)
     .help(presentation.helpText)
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(presentation.accessibilityValue)

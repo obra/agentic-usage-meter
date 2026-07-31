@@ -55,7 +55,8 @@ public final class FloatingWidgetController:
             rootView: FloatingWidgetView(model: model),
         )
         hostingView.sizingOptions = [.intrinsicContentSize]
-        hostingView.frame.size.width = 520
+        hostingView.frame.size.width =
+            UsageTimelineMetrics.naturalWidth
         hostingView.layoutSubtreeIfNeeded()
         let fittingHeight = hostingView.fittingSize.height
         let screenHeight =
@@ -69,7 +70,7 @@ public final class FloatingWidgetController:
             contentRect: NSRect(
                 x: 0,
                 y: 0,
-                width: 520,
+                width: UsageTimelineMetrics.naturalWidth,
                 height: initialHeight,
             ),
             styleMask: [
@@ -144,7 +145,8 @@ public final class FloatingWidgetController:
         guard let hostingView = panel.contentView else {
             return
         }
-        hostingView.frame.size.width = 520
+        hostingView.frame.size.width =
+            UsageTimelineMetrics.naturalWidth
         hostingView.layoutSubtreeIfNeeded()
         let fittingHeight = hostingView.fittingSize.height
         let screenHeight =
@@ -160,7 +162,10 @@ public final class FloatingWidgetController:
             y: panel.frame.maxY,
         )
         panel.setContentSize(
-            NSSize(width: 520, height: height),
+            NSSize(
+                width: UsageTimelineMetrics.naturalWidth,
+                height: height
+            ),
         )
         panel.setFrameTopLeftPoint(topLeft)
     }

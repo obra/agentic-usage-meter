@@ -143,6 +143,17 @@ struct ProviderCatalogTests {
     }
 
     @Test
+    func githubUsesItsCompactProviderLabel() throws {
+        let definition = try #require(
+            ProviderCatalog.live.definition(
+                for: .githubCopilot
+            )
+        )
+
+        #expect(definition.displayName == "GitHub")
+    }
+
+    @Test
     func antigravityExplainsItsMultiAccountCredentialBlocker()
         throws
     {

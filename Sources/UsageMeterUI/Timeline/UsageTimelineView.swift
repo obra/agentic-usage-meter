@@ -26,7 +26,10 @@ public struct UsageTimelineView: View {
       timeZone: timeZone,
     )
 
-    VStack(alignment: .leading, spacing: 14) {
+    VStack(
+      alignment: .leading,
+      spacing: UsageTimelineMetrics.sectionSpacing,
+    ) {
       ForEach(timeline.sections, id: \.kind) {
         timelineSection($0)
       }
@@ -43,8 +46,11 @@ public struct UsageTimelineView: View {
   private func timelineSection(
     _ section: UsageTimelineSectionPresentation,
   ) -> some View {
-    VStack(alignment: .leading, spacing: 7) {
-      HStack(spacing: UsageWindowRow.columnSpacing) {
+    VStack(
+      alignment: .leading,
+      spacing: UsageTimelineMetrics.sectionContentSpacing,
+    ) {
+      HStack(spacing: UsageTimelineMetrics.columnSpacing) {
         Text(section.title)
           .font(.headline)
           .frame(
@@ -58,7 +64,7 @@ public struct UsageTimelineView: View {
           .frame(maxWidth: .infinity)
 
         Color.clear
-          .frame(width: UsageWindowRow.resetColumnWidth)
+          .frame(width: UsageTimelineMetrics.resetColumnWidth)
       }
 
       ForEach(section.rows) {
@@ -76,17 +82,20 @@ public struct UsageTimelineView: View {
   private func balanceSection(
     _ rows: [UsageBalanceRowPresentation],
   ) -> some View {
-    VStack(alignment: .leading, spacing: 7) {
+    VStack(
+      alignment: .leading,
+      spacing: UsageTimelineMetrics.sectionContentSpacing,
+    ) {
       Text("Extra Credits")
         .font(.headline)
 
       ForEach(rows) { row in
-        HStack(spacing: UsageWindowRow.columnSpacing) {
+        HStack(spacing: UsageTimelineMetrics.columnSpacing) {
           Circle()
             .fill(row.account.provider.timelineColor)
             .frame(width: 7, height: 7)
             .frame(
-              width: UsageWindowRow.percentageColumnWidth,
+              width: UsageTimelineMetrics.percentageColumnWidth,
               alignment: .trailing,
             )
 
@@ -96,7 +105,7 @@ public struct UsageTimelineView: View {
             .lineLimit(1)
             .truncationMode(.tail)
             .frame(
-              width: UsageWindowRow.providerColumnWidth,
+              width: UsageTimelineMetrics.providerColumnWidth,
               alignment: .leading,
             )
 
@@ -106,7 +115,7 @@ public struct UsageTimelineView: View {
             .lineLimit(1)
             .truncationMode(.tail)
             .frame(
-              width: UsageWindowRow.accountColumnWidth,
+              width: UsageTimelineMetrics.accountColumnWidth,
               alignment: .leading,
             )
 
@@ -120,9 +129,9 @@ public struct UsageTimelineView: View {
             .font(.caption.monospacedDigit())
             .fontWeight(.semibold)
             .lineLimit(1)
-            .frame(width: 110, alignment: .trailing)
+            .frame(width: 88, alignment: .trailing)
         }
-        .frame(height: UsageWindowRow.rowHeight)
+        .frame(height: UsageTimelineMetrics.rowHeight)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(row.helpText)
         .contentShape(Rectangle())
@@ -135,10 +144,10 @@ public struct UsageTimelineView: View {
   }
 
   private var identityColumnsWidth: CGFloat {
-    UsageWindowRow.percentageColumnWidth
-      + UsageWindowRow.providerColumnWidth
-      + UsageWindowRow.accountColumnWidth
-      + (2 * UsageWindowRow.columnSpacing)
+    UsageTimelineMetrics.percentageColumnWidth
+      + UsageTimelineMetrics.providerColumnWidth
+      + UsageTimelineMetrics.accountColumnWidth
+      + (2 * UsageTimelineMetrics.columnSpacing)
   }
 
   private func openAccount(id: UUID) {

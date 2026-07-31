@@ -720,7 +720,7 @@ struct AppModelTests {
         let placement = FloatingWidgetPlacement(
             x: 120,
             y: 240,
-            width: 520,
+            width: 460,
             height: 360,
         )
 
@@ -764,8 +764,9 @@ struct AppModelTests {
             },
         )
         let screen = try #require(panel.screen)
-        #expect(panel.frame.width == 520)
-        #expect(panel.frame.height > 360)
+        #expect(panel.frame.width == 460)
+        #expect(panel.frame.height >= 240)
+        #expect(panel.frame.height < 360)
         #expect(
             panel.frame.height
                 <= screen.visibleFrame.height,
@@ -812,7 +813,7 @@ struct AppModelTests {
         hostingView.layoutSubtreeIfNeeded()
         await Task.yield()
 
-        #expect(renderedHeight > 350)
+        #expect(renderedHeight > emptyHeight)
     }
 
     @Test

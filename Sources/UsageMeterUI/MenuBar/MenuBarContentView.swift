@@ -29,7 +29,15 @@ public struct MenuBarContentView: View {
                     $0.isRefreshing
                 })
             }
-            .padding()
+            .controlSize(.small)
+            .padding(
+                .horizontal,
+                UsageTimelineMetrics.outerHorizontalPadding
+            )
+            .padding(
+                .vertical,
+                UsageTimelineMetrics.outerVerticalPadding
+            )
 
             Divider()
 
@@ -77,9 +85,17 @@ public struct MenuBarContentView: View {
                 }
             }
             .buttonStyle(.borderless)
-            .padding()
+            .controlSize(.small)
+            .padding(
+                .horizontal,
+                UsageTimelineMetrics.outerHorizontalPadding
+            )
+            .padding(
+                .vertical,
+                UsageTimelineMetrics.outerVerticalPadding
+            )
         }
-        .frame(width: 520)
+        .frame(width: UsageTimelineMetrics.naturalWidth)
         .fixedSize(horizontal: false, vertical: true)
     }
 
@@ -96,15 +112,22 @@ public struct MenuBarContentView: View {
                 AccountDashboardPresenter.shared.open($0)
             }
         )
-            .padding()
+            .padding(
+                .horizontal,
+                UsageTimelineMetrics.outerHorizontalPadding
+            )
+            .padding(
+                .vertical,
+                UsageTimelineMetrics.outerVerticalPadding
+            )
     }
 
     private var sampleDataBadge: some View {
         Text("SAMPLE DATA")
             .font(.caption2.weight(.bold))
             .foregroundStyle(.orange)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 3)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
             .background(.orange.opacity(0.14), in: Capsule())
             .accessibilityLabel("Sample data")
     }

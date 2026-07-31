@@ -146,7 +146,7 @@ public struct ProviderCatalog: Sendable {
             ),
             ProviderDefinition(
                 provider: .githubCopilot,
-                displayName: "GitHub Copilot",
+                displayName: "GitHub",
                 connectionDetail: "GitHub device OAuth",
                 systemImage:
                 "chevron.left.forwardslash.chevron.right",
