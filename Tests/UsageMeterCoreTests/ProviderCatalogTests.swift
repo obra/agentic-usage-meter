@@ -70,7 +70,36 @@ struct ProviderCatalogTests {
                 .visibleDefinitions(isDevelopmentBuild: true)
                 .map(\.provider)
                 == qualified
-                    + [.minimax, .githubCopilot],
+                    + [
+                        .minimax,
+                        .githubCopilot,
+                        .superGrok,
+                    ],
+        )
+    }
+
+    @Test
+    func superGrokUsesTheAccountScopedUsageDashboard()
+        throws
+    {
+        let definition = try #require(
+            ProviderCatalog.live.definition(
+                for: .superGrok
+            )
+        )
+
+        #expect(
+            definition.releaseState
+                == .experimental
+        )
+        #expect(
+            definition.dashboardStrategy
+                == .embedded(
+                    URL(
+                        string:
+                            "https://grok.com/?_s=usage"
+                    )!
+                )
         )
     }
 

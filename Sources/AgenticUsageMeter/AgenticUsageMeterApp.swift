@@ -108,6 +108,9 @@ private enum AppEnvironment {
             GitHubCopilotUsageAdapter(
                 credentialStore: credentialStore
             ),
+            SuperGrokUsageAdapter(
+                credentialStore: credentialStore
+            ),
         ]
 
         return AppModel(

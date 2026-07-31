@@ -425,6 +425,187 @@ public final class GitHubCopilotConnectionModel {
     }
 }
 
+public enum SuperGrokConnectionPhase:
+    Equatable,
+    Sendable
+{
+    case idle
+    case authorizing
+    case waitingForApproval
+    case readyToSave(identity: String)
+    case duplicateIdentity(identity: String)
+    case saving
+    case complete
+    case failed(String)
+}
+
+@MainActor
+@Observable
+public final class SuperGrokConnectionModel {
+    public typealias Authenticate =
+        @Sendable (
+            @escaping SuperGrokDeviceAuthenticationFlow
+                .AuthorizationUpdate
+        ) async throws -> SuperGrokCredential
+
+    public private(set) var phase =
+        SuperGrokConnectionPhase.idle
+    public private(set) var prompt:
+        SuperGrokAuthorizationPrompt?
+
+    @ObservationIgnored
+    private let appModel: AppModel
+    @ObservationIgnored
+    private let accountID: UUID
+    @ObservationIgnored
+    private let reconnectingAccount:
+        SubscriptionAccount?
+    @ObservationIgnored
+    private let authenticate: Authenticate
+    @ObservationIgnored
+    private var pendingCredential:
+        SuperGrokCredential?
+
+    public init(
+        appModel: AppModel,
+        accountID: UUID = UUID(),
+        reconnectingAccount:
+            SubscriptionAccount? = nil,
+        authenticate:
+            @escaping Authenticate = {
+                onPrompt in
+                try await
+                    SuperGrokDeviceAuthenticationFlow()
+                    .authenticate(
+                        onPrompt: onPrompt
+                    )
+            }
+    ) {
+        self.appModel = appModel
+        self.accountID =
+            reconnectingAccount?.id ?? accountID
+        self.reconnectingAccount =
+            reconnectingAccount
+        self.authenticate = authenticate
+    }
+
+    public func start() async {
+        phase = .authorizing
+        prompt = nil
+        pendingCredential = nil
+        do {
+            let credential = try await authenticate {
+                [weak self] prompt in
+                await MainActor.run {
+                    self?.prompt = prompt
+                    self?.phase =
+                        .waitingForApproval
+                }
+            }
+            guard
+                let identityKey =
+                    credential.identityKey
+            else {
+                phase = .failed(
+                    "Grok authorization did not return an account identity."
+                )
+                return
+            }
+            let displayIdentity =
+                credential.displayIdentity
+                    ?? identityKey
+            if
+                await appModel.hasSuperGrokAccount(
+                    identityKey: identityKey,
+                    excluding:
+                        reconnectingAccount?.id
+                )
+            {
+                phase = .duplicateIdentity(
+                    identity: displayIdentity
+                )
+                return
+            }
+            pendingCredential = credential
+            phase = .readyToSave(
+                identity: displayIdentity
+            )
+        } catch is CancellationError {
+            phase = .idle
+        } catch
+            SuperGrokDeviceAuthenticationError
+                .executableNotFound
+        {
+            phase = .failed(
+                "Install the Grok CLI before connecting this account."
+            )
+        } catch {
+            phase = .failed(
+                "Grok device authorization failed."
+            )
+        }
+    }
+
+    public func save(
+        displayName: String
+    ) async throws {
+        let displayName =
+            try validatedDisplayName(
+                displayName
+            )
+        guard let pendingCredential else {
+            throw ProviderConnectionInputError
+                .authorizationNotComplete
+        }
+
+        phase = .saving
+        do {
+            let identity =
+                pendingCredential.displayIdentity
+                    ?? pendingCredential
+                        .identityKey
+            if let reconnectingAccount {
+                try await appModel.reconnectAccount(
+                    id: reconnectingAccount.id,
+                    credential:
+                        pendingCredential,
+                    authenticatedIdentity:
+                        identity
+                )
+            } else {
+                try await appModel.connectAccount(
+                    SubscriptionAccount(
+                        id: accountID,
+                        provider: .superGrok,
+                        displayName: displayName,
+                        authenticatedIdentity:
+                            identity,
+                        displayOrder:
+                            appModel.accounts.count {
+                                $0.account.provider
+                                    == .superGrok
+                            }
+                    ),
+                    credential: pendingCredential
+                )
+            }
+            self.pendingCredential = nil
+            phase = .complete
+        } catch {
+            phase = .failed(
+                "SuperGrok usage validation failed."
+            )
+            throw error
+        }
+    }
+
+    public func cancel() {
+        pendingCredential = nil
+        prompt = nil
+        phase = .idle
+    }
+}
+
 private func validatedDisplayName(
     _ value: String,
 ) throws -> String {

@@ -520,6 +520,31 @@ public final class AppModel {
         return false
     }
 
+    public func hasSuperGrokAccount(
+        identityKey: String,
+        excluding excludedAccountID: UUID? = nil
+    ) async -> Bool {
+        for account in accounts
+            where
+                account.account.provider == .superGrok
+                && account.id != excludedAccountID
+        {
+            guard
+                let credential =
+                    try? await credentialStore.load(
+                        SuperGrokCredential.self,
+                        for: account.id
+                    )
+            else {
+                continue
+            }
+            if credential.identityKey == identityKey {
+                return true
+            }
+        }
+        return false
+    }
+
     public func renameAccount(
         id: UUID,
         displayName: String,

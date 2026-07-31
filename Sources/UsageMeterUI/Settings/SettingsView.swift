@@ -231,6 +231,8 @@ private struct AddAccountView: View {
     @State private var kimi: KimiConnectionModel
     @State private var githubCopilot:
         GitHubCopilotConnectionModel
+    @State private var superGrok:
+        SuperGrokConnectionModel
 
     init(
         model: AppModel,
@@ -282,6 +284,16 @@ private struct AddAccountView: View {
                     appModel: model,
                     reconnectingAccount:
                         provider == .githubCopilot
+                            ? reconnectingAccount
+                            : nil
+                )
+        )
+        _superGrok = State(
+            initialValue:
+                SuperGrokConnectionModel(
+                    appModel: model,
+                    reconnectingAccount:
+                        provider == .superGrok
                             ? reconnectingAccount
                             : nil
                 )
@@ -353,9 +365,18 @@ private struct AddAccountView: View {
                                 ?? "GitHub Copilot",
                             onComplete: complete
                         )
+                    case .superGrok:
+                        SuperGrokConnectionView(
+                            model: superGrok,
+                            suggestedName:
+                                route
+                                    .reconnectingAccount?
+                                    .displayName
+                                ?? "SuperGrok",
+                            onComplete: complete
+                        )
                     case .antigravity, .factory,
-                        .openCodeGo, .openCodeZen,
-                        .superGrok:
+                        .openCodeGo, .openCodeZen:
                         EmptyView()
                     }
                 }

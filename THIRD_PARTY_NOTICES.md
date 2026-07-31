@@ -2,8 +2,8 @@
 
 ## OpenCode Bar
 
-The MiniMax Coding Plan and GitHub Copilot quota response interpretations were
-adapted from OpenCode Bar at commit
+The MiniMax Coding Plan, GitHub Copilot quota, and SuperGrok gRPC-Web response
+interpretations were adapted from OpenCode Bar at commit
 `4c501b3d97f2f88ff5178ec20d4e45fe3108b3fe`.
 
 MIT License

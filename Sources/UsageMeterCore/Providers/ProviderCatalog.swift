@@ -251,10 +251,13 @@ public struct ProviderCatalog: Sendable {
                     green: 0.36,
                     blue: 0.38,
                 ),
-                releaseState: .unavailable,
+                releaseState: .experimental,
                 connectionStrategy: .deviceOAuth,
                 dashboardStrategy: .embedded(
-                    URL(string: "https://grok.com/usage")!,
+                    URL(
+                        string:
+                            "https://grok.com/?_s=usage",
+                    )!,
                 ),
             ),
         ],

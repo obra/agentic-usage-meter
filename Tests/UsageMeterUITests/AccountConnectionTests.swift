@@ -832,3 +832,163 @@ func githubCopilotConnectionBlocksAnExistingGitHubIdentity()
     }
     #expect(appModel.accounts.count == 1)
 }
+
+@Test
+@MainActor
+func superGrokConnectionShowsDevicePromptAndSavesIdentity()
+    async throws
+{
+    let reference = Date(
+        timeIntervalSince1970: 2_000_000_000
+    )
+    let accountID = UUID()
+    let prompt = SuperGrokAuthorizationPrompt(
+        verificationURL: URL(
+            string: "https://auth.x.ai/device"
+        )!,
+        userCode: "ABCD-EFGH"
+    )
+    let credential = SuperGrokCredential(
+        accessToken: "grok-token",
+        email: "user@example.com",
+        teamID: "team-1",
+        userID: "user-1",
+        authMode: "oidc",
+        expiresAt: nil
+    )
+    let credentials = TestCredentialStore()
+    let adapter = TestProviderAccountAdapter(
+        provider: .superGrok,
+        result: .success(
+            UsageSnapshot(
+                accountID: accountID,
+                fetchedAt: reference,
+                windows: []
+            )
+        )
+    )
+    let appModel = AppModel(
+        stateStore: TestAppStateStore(
+            state: .empty
+        ),
+        credentialStore: credentials,
+        adapters: [adapter],
+        now: { reference }
+    )
+    await appModel.start()
+    let connection =
+        SuperGrokConnectionModel(
+            appModel: appModel,
+            accountID: accountID,
+            authenticate: { onPrompt in
+                await onPrompt(prompt)
+                return credential
+            }
+        )
+
+    await connection.start()
+
+    #expect(connection.prompt == prompt)
+    #expect(
+        connection.phase
+            == .readyToSave(
+                identity:
+                    "user@example.com"
+            )
+    )
+
+    try await connection.save(
+        displayName: "Personal Grok"
+    )
+
+    #expect(connection.phase == .complete)
+    #expect(
+        appModel.accounts[0].account
+            .authenticatedIdentity
+            == "user@example.com"
+    )
+    #expect(
+        try await credentials.load(
+            SuperGrokCredential.self,
+            for: accountID
+        ) == credential
+    )
+}
+
+@Test
+@MainActor
+func superGrokConnectionBlocksAnExistingBillingIdentity()
+    async throws
+{
+    let existing = SubscriptionAccount(
+        provider: .superGrok,
+        displayName: "Existing",
+        authenticatedIdentity:
+            "user@example.com",
+        displayOrder: 0
+    )
+    let credentials = TestCredentialStore()
+    let existingCredential =
+        SuperGrokCredential(
+            accessToken: "existing-token",
+            email: "user@example.com",
+            teamID: "team-1",
+            userID: "user-1",
+            authMode: "oidc",
+            expiresAt: nil
+        )
+    try await credentials.save(
+        existingCredential,
+        for: existing.id
+    )
+    let appModel = AppModel(
+        stateStore: TestAppStateStore(
+            state: PersistedAppState(
+                accounts: [existing],
+                snapshots: [:]
+            )
+        ),
+        credentialStore: credentials,
+        adapters: [
+            TestProviderAccountAdapter(
+                provider: .superGrok
+            )
+        ]
+    )
+    await appModel.start()
+    let connection =
+        SuperGrokConnectionModel(
+            appModel: appModel,
+            authenticate: { _ in
+                SuperGrokCredential(
+                    accessToken:
+                        "replacement-token",
+                    email: "user@example.com",
+                    teamID: "team-1",
+                    userID: "user-1",
+                    authMode: "oidc",
+                    expiresAt: nil
+                )
+            }
+        )
+
+    await connection.start()
+
+    #expect(
+        connection.phase
+            == .duplicateIdentity(
+                identity:
+                    "user@example.com"
+            )
+    )
+    await #expect(
+        throws:
+            ProviderConnectionInputError
+                .authorizationNotComplete
+    ) {
+        try await connection.save(
+            displayName: "Duplicate"
+        )
+    }
+    #expect(appModel.accounts.count == 1)
+}
