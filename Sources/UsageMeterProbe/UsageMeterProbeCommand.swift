@@ -10,12 +10,33 @@ enum UsageMeterProbeCommand: Equatable {
   case kimiFetch(UUID)
   case kimiRefresh(UUID)
   case kimiDelete(UUID)
+  case minimaxLogin(UUID)
+  case minimaxFetch(UUID)
+  case minimaxDelete(UUID)
 
   static func parse(arguments: [String]) throws -> Self {
     if arguments.count == 2 {
       switch arguments[1] {
       case "claude":
         return .claude
+      default:
+        throw UsageMeterProbeCommandError.invalidArguments
+      }
+    }
+
+    if
+      arguments.count == 5,
+      arguments[1] == "minimax",
+      arguments[3] == "--account-id",
+      let accountID = UUID(uuidString: arguments[4])
+    {
+      return switch arguments[2] {
+      case "login":
+        .minimaxLogin(accountID)
+      case "usage":
+        .minimaxFetch(accountID)
+      case "delete":
+        .minimaxDelete(accountID)
       default:
         throw UsageMeterProbeCommandError.invalidArguments
       }

@@ -32,6 +32,12 @@ enum UsageMeterProbe {
         try await runKimiRefresh(accountID: accountID)
       case let .kimiDelete(accountID):
         try await credentialStore.delete(for: accountID)
+      case let .minimaxLogin(accountID):
+        try await runMiniMaxLogin(accountID: accountID)
+      case let .minimaxFetch(accountID):
+        try await runMiniMaxFetch(accountID: accountID)
+      case let .minimaxDelete(accountID):
+        try await credentialStore.delete(for: accountID)
       }
     } catch UsageMeterProbeCommandError.invalidArguments {
       writeError(
@@ -46,6 +52,9 @@ enum UsageMeterProbe {
           UsageMeterProbe kimi-fetch <account-uuid>
           UsageMeterProbe kimi-refresh <account-uuid>
           UsageMeterProbe kimi-delete <account-uuid>
+          UsageMeterProbe minimax login --account-id <account-uuid>
+          UsageMeterProbe minimax usage --account-id <account-uuid>
+          UsageMeterProbe minimax delete --account-id <account-uuid>
         """
       )
       Darwin.exit(EX_USAGE)
@@ -247,6 +256,98 @@ enum UsageMeterProbe {
         identity: nil,
         snapshot: snapshot
       )
+    )
+  }
+
+  private static func runMiniMaxLogin(
+    accountID: UUID
+  ) async throws {
+    let apiKey = try readSecret(
+      prompt: "MiniMax API key: "
+    )
+    guard
+      let credential = MiniMaxCredential(apiKey: apiKey)
+    else {
+      throw ProviderClientError.credentialMismatch
+    }
+    try await credentialStore.save(
+      credential,
+      for: accountID
+    )
+    try await fetchMiniMaxUsage(
+      accountID: accountID
+    )
+  }
+
+  private static func runMiniMaxFetch(
+    accountID: UUID
+  ) async throws {
+    try await fetchMiniMaxUsage(
+      accountID: accountID
+    )
+  }
+
+  private static func fetchMiniMaxUsage(
+    accountID: UUID
+  ) async throws {
+    let account = SubscriptionAccount(
+      id: accountID,
+      provider: .minimax,
+      displayName: "MiniMax qualification",
+      displayOrder: 0
+    )
+    let snapshot = try await MiniMaxUsageAdapter(
+      credentialStore: credentialStore
+    ).fetchUsage(
+      for: account,
+      now: Date()
+    )
+    try write(
+      ProbeOutput(
+        provider: .minimax,
+        identity: nil,
+        snapshot: snapshot
+      )
+    )
+  }
+
+  private static func readSecret(
+    prompt: String
+  ) throws -> String {
+    var buffer = [CChar](
+      repeating: 0,
+      count: 4_096
+    )
+    defer {
+      _ = buffer.withUnsafeMutableBytes {
+        $0.initializeMemory(
+          as: UInt8.self,
+          repeating: 0
+        )
+      }
+    }
+
+    let result = prompt.withCString { promptPointer in
+      buffer.withUnsafeMutableBufferPointer {
+        bufferPointer in
+        readpassphrase(
+          promptPointer,
+          bufferPointer.baseAddress,
+          bufferPointer.count,
+          RPP_ECHO_OFF
+        )
+      }
+    }
+    guard result != nil else {
+      throw ProviderClientError.credentialMismatch
+    }
+    let terminator =
+      buffer.firstIndex(of: 0) ?? buffer.endIndex
+    return String(
+      decoding: buffer[..<terminator].map {
+        UInt8(bitPattern: $0)
+      },
+      as: UTF8.self
     )
   }
 

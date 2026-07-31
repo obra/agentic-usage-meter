@@ -1805,7 +1805,7 @@ release visibility pending real two-account qualification.
 - Produces: sanitized MiniMax probe commands and an evidence-backed
   qualification status.
 
-- [ ] **Step 1: Write failing probe command tests**
+- [x] **Step 1: Write failing probe command tests**
 
 Add parsing tests for:
 
@@ -1819,13 +1819,13 @@ Assert output contains only local account UUID, normalized window kind,
 remaining fraction, and reset time. It must not contain the API key,
 authorization header, raw response, or authenticated email.
 
-- [ ] **Step 2: Run tests and verify RED**
+- [x] **Step 2: Run tests and verify RED**
 
 ```bash
 swift test --filter UsageMeterProbeCommandTests
 ```
 
-- [ ] **Step 3: Implement sanitized probe commands**
+- [x] **Step 3: Implement sanitized probe commands**
 
 `login` reads the API key from a secure terminal prompt, stores it under the
 provided temporary account UUID, and performs one validation. `usage` uses the
@@ -1843,6 +1843,12 @@ codesign --verify --deep --strict --verbose=2 \
   "build/Agentic Usage Meter.app"
 ./Scripts/verify-release.sh "build/Agentic Usage Meter.app"
 ```
+
+2026-07-30 local result: the full test suite, release build, app assembly,
+ad-hoc signing, and strict `codesign` verification passed. The distribution
+verifier stopped at `spctl`, as expected for an ad-hoc artifact without a
+Developer ID signature, notarization ticket, or staple. This does not satisfy
+the distribution half of this gate.
 
 - [ ] **Step 5: Run real qualification**
 

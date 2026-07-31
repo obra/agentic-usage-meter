@@ -154,3 +154,18 @@ The automated adapter behavior is adapted from OpenCode Bar commit
   without rounding the normalized fraction to an integer percentage.
 - The provider is visible only in development builds pending a real
   two-account qualification and cleanup check.
+
+### 2026-07-30 mechanical qualification
+
+- The sanitized probe accepts account-scoped `login`, `usage`, and `delete`
+  commands. Secret entry disables terminal echo, and output contains the local
+  account UUID plus normalized windows without credentials, headers, raw
+  responses, or identity.
+- The 184-test Swift package suite, production build, app assembly, ad-hoc
+  signing, and strict code-signature verification passed.
+- The distribution verifier rejected the ad-hoc artifact at Gatekeeper. That
+  is expected because the local artifact has no Developer ID signature,
+  notarization ticket, or staple; it is not distribution evidence.
+- Real two-account validation, ten-minute persistence refresh, console
+  comparison, and independent deletion remain outstanding. MiniMax therefore
+  remains experimental.
