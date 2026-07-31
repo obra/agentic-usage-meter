@@ -7,6 +7,12 @@ windows on a shared fourteen-day axis.
 
 The app displays only windows actually returned by a provider. A provider that
 currently returns weekly usage but no five-hour usage gets a weekly row only.
+A returned zero-use window with no provider reset is shown as an empty meter
+beginning at **Now**; the app does not invent or persist a reset time.
+
+Authoritative monetary and provider-credit states appear in a separate
+**Extra Credits** section as an available balance, **Unlimited**, or **Off**.
+Unknown or absent credit data does not create a row.
 
 ## Develop
 
@@ -56,13 +62,14 @@ account deletes its credential or complete WebKit profile.
 
 Usage is cached on disk and shown immediately at launch. Scheduled, manual,
 menu-bar, and widget demand share the same per-account refresher. No account
-usage request is started less than ten minutes after that account's preceding
-request.
+usage request is started less than one minute after that account's preceding
+request in a development build, or less than ten minutes after it in a release
+build. Provider retry times and transient-error backoff can extend that floor.
 
 ## Assemble a local app
 
 ```sh
-Scripts/assemble-app.sh
+scripts/assemble-app.sh
 codesign --force --deep --sign - "build/Agentic Usage Meter.app"
 codesign --verify --deep --strict --verbose=2 \
   "build/Agentic Usage Meter.app"
@@ -80,7 +87,7 @@ exact existing Developer ID Application identity and profile name:
 ```sh
 DEVELOPER_ID_APPLICATION="Developer ID Application: Example (TEAMID)" \
 NOTARYTOOL_PROFILE="agentic-usage-meter" \
-Scripts/sign-and-notarize.sh
+scripts/sign-and-notarize.sh
 ```
 
 The script assembles a fresh release, signs with the hardened runtime, submits

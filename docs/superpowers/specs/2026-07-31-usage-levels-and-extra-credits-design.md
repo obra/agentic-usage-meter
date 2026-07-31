@@ -113,8 +113,8 @@ axis by duration, while an active provider window retains its actual placement.
 
 ## Timed Usage Layout
 
-All timed sections participate in one parent SwiftUI grid so row columns line
-up across section boundaries:
+All timed sections use the same fixed identity and reset column widths, leaving
+the timeline column flexible so rows line up across section boundaries:
 
 | Column | Content | Alignment and sizing |
 | --- | --- | --- |
@@ -130,9 +130,15 @@ neighboring label. Account text receives truncation priority; accessibility
 retains its full value.
 
 There are no pills, labels, or other text inside a timeline bar. There is no
-large column header beneath **Usage**. Section headers span the grid and place
-their **Now** label above the same horizontal coordinate as the row center
-line.
+large column header beneath **Usage**. Section headers span the identity
+columns and place their **Now** label above the same horizontal coordinate as
+the row center line.
+
+The implementation uses one fixed-column `HStack` per row rather than a parent
+SwiftUI `Grid`. macOS accessibility replicated row-level actions across every
+`GridRow` cell, or collapsed the complete grid into one element when the cells
+were hidden. Independent row stacks preserve the same aligned geometry while
+exposing one clickable accessibility element per account window.
 
 Timed sections preserve existing ordering and visibility rules:
 

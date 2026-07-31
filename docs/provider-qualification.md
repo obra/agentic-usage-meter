@@ -71,6 +71,18 @@ also traced to displaying the raw web view before its first navigation
 finished; the probe now keeps a loading presentation visible until that
 callback.
 
+### 2026-07-31 usage-level and extra-credit contract qualification
+
+- Sanitized decoder fixtures preserve a returned zero-use timed window whose
+  provider reset is null, while rejecting a nonzero window without a reset.
+- Explicit disabled extra usage becomes **Off**, and a structured remaining
+  balance becomes an available currency value without deriving it from a
+  spending cap or amount used.
+- Missing credit state remains absent, and malformed present balance data is
+  rejected instead of displayed optimistically.
+- Fixtures and test output contain no credential, account identifier, live
+  numeric balance, or raw provider response.
+
 ## Codex
 
 The implementation follows OpenAI Codex commit
@@ -103,6 +115,17 @@ The probe was run on macOS 26.5.2 with two separate ChatGPT subscriptions.
   value rather than inventing the missing window.
 - Both temporary Keychain records were removed after the refresh and
   persistence check, and lookup confirmed that neither remained.
+
+### 2026-07-31 credit contract qualification
+
+- Sanitized decoder fixtures distinguish absent, available, unlimited, and
+  explicitly disabled credits.
+- String-form available balances retain decimal precision; an enabled but
+  malformed balance is rejected rather than omitted or rounded.
+- Timed-window visibility remains provider-driven, so the credit addition does
+  not manufacture a missing five-hour row.
+- Fixtures and test output contain no credential, account identifier, live
+  numeric balance, or raw provider response.
 
 ## Kimi
 
@@ -210,7 +233,8 @@ stores one API key per local account in the macOS Keychain.
 
 - Standard and Droid Core 5-hour, 7-day, and rolling 30-day pools remain
   independent.
-- A missing pool or window is omitted rather than inferred.
+- A missing pool is omitted rather than inferred. A returned zero-use window
+  without `windowEnd` is preserved as an inactive resetless window.
 - `usedPercent` is normalized without integer rounding, and `windowEnd` is
   preserved as the provider reset time.
 - `extraUsageBalanceCents` is presented as an optional USD balance only when
@@ -236,9 +260,11 @@ stores one API key per local account in the macOS Keychain.
   but omitted `windowEnd` from every rolling window. Factory documents that a
   rolling window starts when Droid is first used, so no reset exists yet for
   those inactive windows.
-- The decoder omits a zero-percent window without an end date instead of
-  rejecting the whole account. A nonzero window without an end date remains an
-  unsupported response because the application must not invent a reset.
+- The decoder preserves a zero-percent window without an end date as an
+  inactive resetless window. Its empty bar begins at **Now** only for display;
+  no reset is persisted or described as provider data. A nonzero window
+  without an end date remains an unsupported response because the application
+  must not invent a reset.
 
 ## Antigravity
 
