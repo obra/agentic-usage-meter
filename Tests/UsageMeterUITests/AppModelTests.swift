@@ -764,7 +764,7 @@ struct AppModelTests {
             },
         )
         let screen = try #require(panel.screen)
-        #expect(panel.frame.width == 460)
+        #expect(panel.frame.width == 411)
         #expect(panel.frame.height >= 240)
         #expect(panel.frame.height < 360)
         #expect(
@@ -807,7 +807,7 @@ struct AppModelTests {
         hostingView.frame = NSRect(
             x: 0,
             y: 0,
-            width: 520,
+            width: 411,
             height: emptyHeight,
         )
         hostingView.layoutSubtreeIfNeeded()
