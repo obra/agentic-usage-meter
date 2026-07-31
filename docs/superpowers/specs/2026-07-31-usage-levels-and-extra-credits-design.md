@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-31
 
-**Status:** Visually approved; written-spec review pending
+**Status:** Approved
 
 **Target:** Menu-bar popover, floating widget, provider normalization, and
 refresh policy
@@ -363,5 +363,8 @@ Product references:
 Implementation may begin only after Jesse reviews this written specification.
 Approval includes the narrow persistence compatibility described above: old
 snapshots with a reset continue to decode, and new snapshots may represent a
-zero-use window without a reset. It does not authorize a broader migration or
-backward-compatibility layer.
+zero-use window without a reset. Jesse also explicitly approved one additive
+credit-state compatibility rule: existing numeric `UsageBalance` records that
+predate an explicit state decode as **Available**. New records encode their
+explicit Available, Unlimited, or Off state. These rules do not authorize a
+broader migration or backward-compatibility layer.
