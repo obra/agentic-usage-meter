@@ -75,7 +75,7 @@ struct SuperGrokUsageAdapterTests {
             request.value(
                 forHTTPHeaderField:
                     "x-grok-client-version"
-            ) == "0.2.81"
+            ) == "0.2.118"
         )
         #expect(
             request.value(

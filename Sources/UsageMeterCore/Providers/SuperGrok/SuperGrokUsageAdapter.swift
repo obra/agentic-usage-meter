@@ -3,6 +3,8 @@ import Foundation
 public struct SuperGrokUsageAdapter:
     ProviderAccountAdapter
 {
+    private static let clientVersion = "0.2.118"
+
     public let provider = Provider.superGrok
 
     private let credentialStore: any CredentialStore
@@ -71,7 +73,7 @@ public struct SuperGrokUsageAdapter:
             forHTTPHeaderField: "x-userid"
         )
         request.setValue(
-            "0.2.81",
+            Self.clientVersion,
             forHTTPHeaderField:
                 "x-grok-client-version"
         )

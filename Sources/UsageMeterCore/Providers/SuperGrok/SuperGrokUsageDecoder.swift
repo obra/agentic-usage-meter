@@ -24,32 +24,9 @@ public struct SuperGrokUsageDecoder:
 
         guard
             let config = response.config,
-            let usedPercent =
-                config.creditUsagePercent,
-            usedPercent.isFinite,
-            (0 ... 100).contains(
-                usedPercent
-            ),
-            let period = config.currentPeriod,
-            period.type
-                == "USAGE_PERIOD_TYPE_WEEKLY",
-            let resetAt = parseDate(period.end),
-            let reportedStartAt =
-                parseDate(period.start),
-            resetAt > reportedStartAt,
-            let weekly = UsageWindow(
-                id: "supergrok-weekly",
-                kind: .weekly,
-                duration:
-                    resetAt.timeIntervalSince(
-                        reportedStartAt
-                    ),
-                resetAt: resetAt,
-                consumedFraction:
-                    usedPercent / 100,
-                reportedStartAt:
-                    reportedStartAt
-            )
+            let window = currentWindow(
+                from: config
+            ) ?? legacyWindow(from: config)
         else {
             throw ProviderClientError
                 .unsupportedResponse
@@ -58,11 +35,94 @@ public struct SuperGrokUsageDecoder:
         return UsageSnapshot(
             accountID: accountID,
             fetchedAt: fetchedAt,
-            windows: [weekly],
+            windows: [window],
             balances: try balances(
                 from: config
             )
         )
+    }
+
+    private func currentWindow(
+        from config: BillingConfig
+    ) -> UsageWindow? {
+        guard
+            let usedPercent =
+                config.creditUsagePercent,
+            usedPercent.isFinite,
+            (0 ... 100).contains(
+                usedPercent
+            ),
+            let period = config.currentPeriod,
+            let identity = windowIdentity(
+                for: period.type
+            ),
+            let reportedStartAt =
+                parseDate(period.start),
+            let resetAt = parseDate(period.end),
+            resetAt > reportedStartAt
+        else {
+            return nil
+        }
+
+        return UsageWindow(
+            id: identity.id,
+            kind: identity.kind,
+            duration: resetAt.timeIntervalSince(
+                reportedStartAt
+            ),
+            resetAt: resetAt,
+            consumedFraction: usedPercent / 100,
+            reportedStartAt: reportedStartAt
+        )
+    }
+
+    private func legacyWindow(
+        from config: BillingConfig
+    ) -> UsageWindow? {
+        guard
+            let limit = config.monthlyLimit?.val,
+            let used = config.used?.val,
+            limit > 0,
+            used >= 0,
+            used <= limit,
+            let reportedStartAt = parseDate(
+                config.billingPeriodStart
+            ),
+            let resetAt = parseDate(
+                config.billingPeriodEnd
+            ),
+            resetAt > reportedStartAt
+        else {
+            return nil
+        }
+
+        return UsageWindow(
+            id: "supergrok-monthly",
+            kind: .monthly,
+            duration: resetAt.timeIntervalSince(
+                reportedStartAt
+            ),
+            resetAt: resetAt,
+            consumedFraction:
+                Double(used) / Double(limit),
+            reportedStartAt: reportedStartAt
+        )
+    }
+
+    private func windowIdentity(
+        for periodType: String?
+    ) -> (
+        id: String,
+        kind: UsageWindowKind
+    )? {
+        switch periodType {
+        case "USAGE_PERIOD_TYPE_WEEKLY":
+            ("supergrok-weekly", .weekly)
+        case "USAGE_PERIOD_TYPE_MONTHLY":
+            ("supergrok-monthly", .monthly)
+        default:
+            nil
+        }
     }
 
     private func balances(
@@ -139,7 +199,11 @@ private struct BillingConfig:
 {
     let creditUsagePercent: Double?
     let currentPeriod: UsagePeriod?
+    let monthlyLimit: Cent?
+    let used: Cent?
     let prepaidBalance: Cent?
+    let billingPeriodStart: String?
+    let billingPeriodEnd: String?
 }
 
 private struct UsagePeriod:

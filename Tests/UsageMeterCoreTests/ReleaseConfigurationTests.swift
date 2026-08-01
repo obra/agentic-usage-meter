@@ -125,6 +125,37 @@ struct ReleaseConfigurationTests {
         )
     }
 
+    @Test
+    func localSigningRejectsAmbiguousDeveloperIDIdentities() throws {
+        let process = Process()
+        let input = Pipe()
+        process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        process.arguments = [
+            repositoryRoot.appending(
+                path: "Scripts/select-local-signing-identity.sh",
+            ).path,
+        ]
+        process.standardInput = input
+        process.standardOutput = Pipe()
+        process.standardError = Pipe()
+
+        try process.run()
+        input.fileHandleForWriting.write(
+            Data(
+                """
+                    1) AAAA "Developer ID Application: Example (TEAMONE)"
+                    2) BBBB "Developer ID Application: Example (TEAMTWO)"
+                       2 valid identities found
+
+                """.utf8,
+            ),
+        )
+        input.fileHandleForWriting.closeFile()
+        process.waitUntilExit()
+
+        #expect(process.terminationStatus != 0)
+    }
+
     private var repositoryRoot: URL {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

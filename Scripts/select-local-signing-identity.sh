@@ -4,13 +4,12 @@ set -euo pipefail
 
 /usr/bin/awk -F '"' '
     /"Developer ID Application: / {
-        found = 1
-        print $2
-        exit
+        identities[++count] = $2
     }
     END {
-        if (!found) {
+        if (count != 1) {
             exit 1
         }
+        print identities[1]
     }
 '

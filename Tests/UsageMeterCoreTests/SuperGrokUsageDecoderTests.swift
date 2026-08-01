@@ -77,6 +77,70 @@ struct SuperGrokUsageDecoderTests {
     }
 
     @Test
+    func currentMonthlyPeriodBecomesMonthlyUsage() throws {
+        let response = Data(
+            #"""
+            {
+              "config": {
+                "creditUsagePercent": 25,
+                "currentPeriod": {
+                  "type": "USAGE_PERIOD_TYPE_MONTHLY",
+                  "start": "2026-07-01T00:00:00Z",
+                  "end": "2026-08-01T00:00:00Z"
+                }
+              }
+            }
+            """#.utf8
+        )
+
+        let snapshot = try SuperGrokUsageDecoder()
+            .decode(
+                response,
+                accountID: UUID(),
+                fetchedAt: Date()
+            )
+
+        let window = try #require(
+            snapshot.windows.only
+        )
+        #expect(window.id == "supergrok-monthly")
+        #expect(window.kind == .monthly)
+        #expect(window.duration == 2_678_400)
+        #expect(window.consumedFraction == 0.25)
+    }
+
+    @Test
+    func legacyMonthlyBillingBecomesMonthlyUsage() throws {
+        let response = Data(
+            #"""
+            {
+              "config": {
+                "monthlyLimit": { "val": 10000 },
+                "used": { "val": 3750 },
+                "billingPeriodStart": "2026-07-01T00:00:00Z",
+                "billingPeriodEnd": "2026-08-01T00:00:00Z"
+              }
+            }
+            """#.utf8
+        )
+
+        let snapshot = try SuperGrokUsageDecoder()
+            .decode(
+                response,
+                accountID: UUID(),
+                fetchedAt: Date()
+            )
+
+        let window = try #require(
+            snapshot.windows.only
+        )
+        #expect(window.id == "supergrok-monthly")
+        #expect(window.kind == .monthly)
+        #expect(window.duration == 2_678_400)
+        #expect(window.consumedFraction == 0.375)
+    }
+
+    @Test
     func responseWithoutUsageOrResetIsRejected() {
         #expect(
             throws:
