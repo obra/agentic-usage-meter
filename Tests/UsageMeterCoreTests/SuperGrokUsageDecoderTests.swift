@@ -110,6 +110,36 @@ struct SuperGrokUsageDecoderTests {
     }
 
     @Test
+    func omittedCurrentUsagePercentMeansZeroUsed() throws {
+        let response = Data(
+            #"""
+            {
+              "config": {
+                "currentPeriod": {
+                  "type": "USAGE_PERIOD_TYPE_WEEKLY",
+                  "start": "2026-07-30T00:00:00Z",
+                  "end": "2026-08-06T00:00:00Z"
+                }
+              }
+            }
+            """#.utf8
+        )
+
+        let snapshot = try SuperGrokUsageDecoder()
+            .decode(
+                response,
+                accountID: UUID(),
+                fetchedAt: Date()
+            )
+
+        let window = try #require(
+            snapshot.windows.only
+        )
+        #expect(window.kind == .weekly)
+        #expect(window.consumedFraction == 0)
+    }
+
+    @Test
     func legacyMonthlyBillingBecomesMonthlyUsage() throws {
         let response = Data(
             #"""

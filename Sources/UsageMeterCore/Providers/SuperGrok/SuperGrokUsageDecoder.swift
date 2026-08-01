@@ -1,4 +1,11 @@
 import Foundation
+import OSLog
+
+private let superGrokLogger = Logger(
+    subsystem:
+        "com.jesse.agentic-usage-meter",
+    category: "SuperGrok"
+)
 
 public struct SuperGrokUsageDecoder:
     Sendable
@@ -18,6 +25,9 @@ public struct SuperGrokUsageDecoder:
                     from: data
                 )
         } catch {
+            superGrokLogger.error(
+                "Rejected billing response: malformed JSON or field types"
+            )
             throw ProviderClientError
                 .unsupportedResponse
         }
@@ -28,6 +38,7 @@ public struct SuperGrokUsageDecoder:
                 from: config
             ) ?? legacyWindow(from: config)
         else {
+            logRejection(response.config)
             throw ProviderClientError
                 .unsupportedResponse
         }
@@ -42,12 +53,51 @@ public struct SuperGrokUsageDecoder:
         )
     }
 
+    private func logRejection(
+        _ config: BillingConfig?
+    ) {
+        guard let config else {
+            superGrokLogger.error(
+                "Rejected billing response: config missing"
+            )
+            return
+        }
+
+        let periodKind: String
+        switch config.currentPeriod?.type {
+        case "USAGE_PERIOD_TYPE_WEEKLY":
+            periodKind = "weekly"
+        case "USAGE_PERIOD_TYPE_MONTHLY":
+            periodKind = "monthly"
+        case nil:
+            periodKind = "missing"
+        default:
+            periodKind = "other"
+        }
+        let currentStartParseable = parseDate(
+            config.currentPeriod?.start
+        ) != nil
+        let currentEndParseable = parseDate(
+            config.currentPeriod?.end
+        ) != nil
+        let legacyStartParseable = parseDate(
+            config.billingPeriodStart
+        ) != nil
+        let legacyEndParseable = parseDate(
+            config.billingPeriodEnd
+        ) != nil
+
+        superGrokLogger.error(
+            "Rejected billing response: creditPercent=\(config.creditUsagePercent != nil, privacy: .public) period=\(periodKind, privacy: .public) currentStart=\(currentStartParseable, privacy: .public) currentEnd=\(currentEndParseable, privacy: .public) monthlyLimit=\(config.monthlyLimit != nil, privacy: .public) used=\(config.used != nil, privacy: .public) legacyStart=\(legacyStartParseable, privacy: .public) legacyEnd=\(legacyEndParseable, privacy: .public) prepaid=\(config.prepaidBalance != nil, privacy: .public)"
+        )
+    }
+
     private func currentWindow(
         from config: BillingConfig
     ) -> UsageWindow? {
+        let usedPercent =
+            config.creditUsagePercent ?? 0
         guard
-            let usedPercent =
-                config.creditUsagePercent,
             usedPercent.isFinite,
             (0 ... 100).contains(
                 usedPercent

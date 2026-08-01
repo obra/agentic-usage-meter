@@ -857,15 +857,25 @@ func superGrokConnectionShowsDevicePromptAndSavesIdentity()
         expiresAt: nil
     )
     let credentials = TestCredentialStore()
+    let snapshot = UsageSnapshot(
+        accountID: accountID,
+        fetchedAt: reference,
+        windows: [
+            UsageWindow(
+                id: "supergrok-weekly",
+                kind: .weekly,
+                duration: 604_800,
+                resetAt:
+                    reference.addingTimeInterval(
+                        604_800
+                    ),
+                consumedFraction: 0
+            )!
+        ]
+    )
     let adapter = TestProviderAccountAdapter(
         provider: .superGrok,
-        result: .success(
-            UsageSnapshot(
-                accountID: accountID,
-                fetchedAt: reference,
-                windows: []
-            )
-        )
+        result: .success(snapshot)
     )
     let appModel = AppModel(
         stateStore: TestAppStateStore(
@@ -906,6 +916,10 @@ func superGrokConnectionShowsDevicePromptAndSavesIdentity()
         appModel.accounts[0].account
             .authenticatedIdentity
             == "user@example.com"
+    )
+    #expect(
+        appModel.accounts[0].snapshot
+            == snapshot
     )
     #expect(
         try await credentials.load(
