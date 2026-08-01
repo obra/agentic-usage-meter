@@ -98,7 +98,25 @@ public final class FloatingWidgetController:
         panel.delegate = self
         panel.contentView = hostingView
         self.panel = panel
+        observeCollapsedSections()
         return panel
+    }
+
+    private func observeCollapsedSections() {
+        withObservationTracking {
+            _ = model.collapsedUsageSections
+        } onChange: { [weak self] in
+            Task { @MainActor in
+                guard let self else {
+                    return
+                }
+                self.observeCollapsedSections()
+                guard let panel = self.panel else {
+                    return
+                }
+                self.sizeToFitContent(panel)
+            }
+        }
     }
 
     private func applySavedPlacement(to panel: NSPanel) {
@@ -145,8 +163,8 @@ public final class FloatingWidgetController:
         guard let hostingView = panel.contentView else {
             return
         }
-        hostingView.frame.size.width =
-            UsageTimelineMetrics.naturalWidth
+        let contentWidth = panel.contentLayoutRect.width
+        hostingView.frame.size.width = contentWidth
         hostingView.layoutSubtreeIfNeeded()
         let fittingHeight = hostingView.fittingSize.height
         let screenHeight =
@@ -163,7 +181,7 @@ public final class FloatingWidgetController:
         )
         panel.setContentSize(
             NSSize(
-                width: UsageTimelineMetrics.naturalWidth,
+                width: contentWidth,
                 height: height
             ),
         )

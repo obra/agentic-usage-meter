@@ -854,6 +854,53 @@ struct AppModelTests {
     }
 
     @Test
+    func floatingWidgetShrinksWhenASectionCollapses() async throws {
+        let stateStore = TestAppStateStore(
+            state: try populatedState(
+                isFloatingWidgetVisible: true,
+            ),
+        )
+        let model = AppModel(
+            stateStore: stateStore,
+            credentialStore: TestCredentialStore(),
+            adapters: [],
+            now: { reference },
+        )
+        await model.start()
+        let existingWindows = Set(
+            NSApplication.shared.windows.map(ObjectIdentifier.init),
+        )
+        let controller = FloatingWidgetController(model: model)
+
+        controller.synchronize()
+
+        let panel = try #require(
+            NSApplication.shared.windows.first {
+                !existingWindows.contains(ObjectIdentifier($0))
+                    && $0.title == "Agentic Usage"
+            },
+        )
+        let expandedHeight = panel.frame.height
+        let expandedWidth = panel.frame.width
+
+        try await model.toggleUsageSection(.weekly)
+        try await Task.sleep(for: .milliseconds(300))
+
+        #expect(panel.frame.height < expandedHeight)
+        #expect(panel.frame.width == expandedWidth)
+        let collapsedHeight = panel.frame.height
+
+        try await model.toggleUsageSection(.weekly)
+        try await Task.sleep(for: .milliseconds(300))
+
+        #expect(panel.frame.height > collapsedHeight)
+        #expect(panel.frame.width == expandedWidth)
+
+        try await model.setFloatingWidgetVisible(false)
+        controller.synchronize()
+    }
+
+    @Test
     func menuBarContentExpandsWhenAccountsFinishLoading() async throws {
         let model = AppModel(
             stateStore: TestAppStateStore(
