@@ -57,6 +57,8 @@ struct ClaudeConnectionFailureDescription {
         switch error {
         case .credentialMismatch:
             return "Claude returned credentials that do not match this connection."
+        case .subscriptionRequired:
+            return "The selected Claude subscription is not active."
         case .unsupportedResponse:
             switch stage {
             case .organizations:

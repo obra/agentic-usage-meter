@@ -437,6 +437,8 @@ private struct AccountSettingsRow: View {
             switch error {
             case .authenticationRequired:
                 Text("Reconnect required")
+            case .subscriptionRequired:
+                Text("Subscription not active")
             case .temporarilyUnavailable:
                 Text("Temporarily unavailable")
             case .unsupportedResponse:

@@ -11,6 +11,7 @@ extension AppStateStore: AppStatePersisting {}
 
 public enum AccountViewError: Equatable, Sendable {
     case authenticationRequired
+    case subscriptionRequired
     case temporarilyUnavailable
     case unsupportedResponse
 }
@@ -303,10 +304,14 @@ public final class AppModel {
             apply(outcome, to: id)
         } catch let error as ProviderClientError {
             updateAccount(id: id) {
-                $0.error =
-                    error == .unsupportedResponse
-                        ? .unsupportedResponse
-                        : .temporarilyUnavailable
+                switch error {
+                case .subscriptionRequired:
+                    $0.error = .subscriptionRequired
+                case .unsupportedResponse:
+                    $0.error = .unsupportedResponse
+                default:
+                    $0.error = .temporarilyUnavailable
+                }
             }
         } catch {
             updateAccount(id: id) {
@@ -828,7 +833,8 @@ private func refreshFailure(
         RefreshFailure.transient(providerRetryAt: date)
     case .temporaryFailure:
         RefreshFailure.transient(providerRetryAt: nil)
-    case .unsupportedResponse:
+    case .subscriptionRequired,
+        .unsupportedResponse:
         error
     }
 }

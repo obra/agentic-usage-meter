@@ -142,6 +142,8 @@ struct AccountDashboardView: View {
         switch state.error {
         case .authenticationRequired:
             "Reconnect this account to load usage."
+        case .subscriptionRequired:
+            "This subscription is not active for the selected workspace."
         case .temporarilyUnavailable:
             "The provider is temporarily unavailable."
         case .unsupportedResponse:

@@ -63,6 +63,34 @@ enum OpenCodeLoginDetector {
     }
 }
 
+struct OpenCodeLoginCompletionGate {
+    private var workspaceID: String?
+
+    mutating func didFinish(_ url: URL?) {
+        workspaceID = url.flatMap {
+            OpenCodeLoginDetector
+                .workspaceID(in: $0)
+        }
+    }
+
+    func credential(
+        in cookies: [HTTPCookie]
+    ) -> OpenCodeDashboardCredential? {
+        guard
+            let workspaceID,
+            let authCookie =
+                OpenCodeLoginDetector
+                .authCookie(in: cookies)
+        else {
+            return nil
+        }
+        return OpenCodeDashboardCredential(
+            workspaceID: workspaceID,
+            authCookie: authCookie
+        )
+    }
+}
+
 @MainActor
 final class OpenCodeLoginSession: NSObject {
     private let accountID: UUID
@@ -77,8 +105,8 @@ final class OpenCodeLoginSession: NSObject {
     private var webView: WKWebView?
     private var popupPanel: NSPanel?
     private var popupWebView: WKWebView?
-    private var workspaceID: String?
-    private var authCookie: String?
+    private var completionGate =
+        OpenCodeLoginCompletionGate()
     private var isFinished = false
 
     init(
@@ -127,9 +155,6 @@ final class OpenCodeLoginSession: NSObject {
             .httpCookieStore
         self.cookieStore = cookieStore
         cookieStore.add(self)
-        searchForAuthentication(
-            in: cookieStore
-        )
         webView.load(
             URLRequest(
                 url: URL(
@@ -154,21 +179,6 @@ final class OpenCodeLoginSession: NSObject {
         profileStore = nil
     }
 
-    private func consider(_ url: URL?) {
-        guard
-            !isFinished,
-            let url,
-            let workspaceID =
-                OpenCodeLoginDetector.workspaceID(
-                    in: url
-                )
-        else {
-            return
-        }
-        self.workspaceID = workspaceID
-        completeIfReady()
-    }
-
     private func searchForAuthentication(
         in cookieStore: WKHTTPCookieStore
     ) {
@@ -180,31 +190,29 @@ final class OpenCodeLoginSession: NSObject {
             else {
                 return
             }
-            self.authCookie =
-                OpenCodeLoginDetector
-                .authCookie(in: cookies)
-            self.completeIfReady()
+            guard
+                let credential =
+                    self.completionGate
+                    .credential(in: cookies)
+            else {
+                return
+            }
+            self.complete(with: credential)
         }
     }
 
-    private func completeIfReady() {
-        guard
-            !isFinished,
-            let workspaceID,
-            let authCookie
-        else {
+    private func complete(
+        with credential:
+            OpenCodeDashboardCredential
+    ) {
+        guard !isFinished else {
             return
         }
         isFinished = true
         cookieStore?.remove(self)
         cookieStore = nil
         closePopup()
-        onAuthenticated(
-            OpenCodeDashboardCredential(
-                workspaceID: workspaceID,
-                authCookie: authCookie
-            )
-        )
+        onAuthenticated(credential)
     }
 
     private func closePopup() {
@@ -235,27 +243,14 @@ extension OpenCodeLoginSession:
         didFinish navigation: WKNavigation!
     ) {
         onPageReady()
-        consider(webView.url)
+        completionGate.didFinish(
+            webView.url
+        )
         searchForAuthentication(
             in: webView.configuration
                 .websiteDataStore
                 .httpCookieStore
         )
-    }
-
-    func webView(
-        _ webView: WKWebView,
-        decidePolicyFor navigationAction:
-            WKNavigationAction,
-        decisionHandler:
-            @escaping @MainActor (
-                WKNavigationActionPolicy
-            ) -> Void
-    ) {
-        consider(
-            navigationAction.request.url
-        )
-        decisionHandler(.allow)
     }
 
     func webView(

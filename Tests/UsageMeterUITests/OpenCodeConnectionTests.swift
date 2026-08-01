@@ -78,6 +78,55 @@ func openCodeLoginDetectorSelectsOnlyTheAccountCookie() throws {
 }
 
 @Test
+func openCodeLoginCompletionWaitsForFinishedWorkspace()
+    throws
+{
+    let preliminary = try #require(
+        HTTPCookie(
+            properties: [
+                .name: "auth",
+                .value: "preliminary-session",
+                .domain: "opencode.ai",
+                .path: "/",
+            ]
+        )
+    )
+    let final = try #require(
+        HTTPCookie(
+            properties: [
+                .name: "auth",
+                .value: "final-session",
+                .domain: "opencode.ai",
+                .path: "/",
+            ]
+        )
+    )
+    var completion =
+        OpenCodeLoginCompletionGate()
+
+    #expect(
+        completion.credential(
+            in: [preliminary]
+        ) == nil
+    )
+
+    completion.didFinish(
+        URL(
+            string:
+                "https://opencode.ai/workspace/wrk_personal/go"
+        )!
+    )
+
+    #expect(
+        completion.credential(in: [final])
+            == OpenCodeDashboardCredential(
+                workspaceID: "wrk_personal",
+                authCookie: "final-session"
+            )
+    )
+}
+
+@Test
 @MainActor
 func openCodeConnectionSavesItsSelectedWorkspace() async throws {
     let reference = Date(
@@ -304,6 +353,100 @@ func cancellingNewOpenCodeAccountDeletesItsWebProfile()
 
 @Test
 @MainActor
+func openCodeRefreshUsesTheProfilesCurrentAuthCookie()
+    async throws
+{
+    let account = SubscriptionAccount(
+        provider: .openCodeGo,
+        displayName: "OpenCode Go",
+        authenticatedIdentity: "wrk_personal",
+        displayOrder: 0
+    )
+    let credentialStore = TestCredentialStore()
+    try await credentialStore.save(
+        OpenCodeDashboardCredential(
+            workspaceID: "wrk_personal",
+            authCookie: "preliminary-session"
+        ),
+        for: account.id
+    )
+    let base = TestProviderAccountAdapter(
+        provider: .openCodeGo,
+        result: .success(
+            UsageSnapshot(
+                accountID: account.id,
+                fetchedAt: Date(),
+                windows: []
+            )
+        )
+    )
+    let adapter = OpenCodeWebAccountUsageClient(
+        base: base,
+        credentialStore: credentialStore,
+        loadAuthCookie: { accountID in
+            #expect(accountID == account.id)
+            return "final-session"
+        },
+        removeProfile: { _ in }
+    )
+
+    #expect(
+        adapter
+            .canRecoverAuthenticationWithoutReconnect
+    )
+
+    _ = try await adapter.fetchUsage(
+        for: account,
+        now: Date()
+    )
+
+    let stored = try #require(
+        await credentialStore.load(
+            OpenCodeDashboardCredential.self,
+            for: account.id
+        )
+    )
+    #expect(stored.authCookie == "final-session")
+    #expect(
+        await base.fetchedAccountIDs
+            == [account.id]
+    )
+}
+
+@Test
+@MainActor
+func openCodeCookieSourceWarmsAColdProfile()
+    async throws
+{
+    let cookie = try #require(
+        HTTPCookie(
+            properties: [
+                .name: "auth",
+                .value: "profile-session",
+                .domain: "opencode.ai",
+                .path: "/",
+            ]
+        )
+    )
+    let profile = TestOpenCodeCookieProfile(
+        responses: [[], [cookie]]
+    )
+    let source = OpenCodeProfileAuthCookieSource(
+        retryDelays: [.zero],
+        profileFactory: { _ in profile }
+    )
+
+    let authCookie = await source.authCookie(
+        accountID: UUID()
+    )
+
+    #expect(authCookie == "profile-session")
+    #expect(profile.warmCount == 1)
+    #expect(profile.readCount == 2)
+}
+
+@Test
+@MainActor
 func removingOpenCodeAccountDeletesCredentialAndWebProfile()
     async throws
 {
@@ -318,6 +461,8 @@ func removingOpenCodeAccountDeletesCredentialAndWebProfile()
     let removal = OpenCodeProfileRemovalRecorder()
     let adapter = OpenCodeWebAccountUsageClient(
         base: base,
+        credentialStore: TestCredentialStore(),
+        loadAuthCookie: { _ in nil },
         removeProfile: { profileID in
             removal.remove(profileID)
         },
@@ -340,5 +485,31 @@ private final class OpenCodeProfileRemovalRecorder {
 
     func remove(_ profileID: UUID) {
         profileIDs.append(profileID)
+    }
+}
+
+@MainActor
+private final class TestOpenCodeCookieProfile:
+    OpenCodeProfileCookieLoading
+{
+    private var responses: [[HTTPCookie]]
+    private(set) var readCount = 0
+    private(set) var warmCount = 0
+
+    init(responses: [[HTTPCookie]]) {
+        self.responses = responses
+    }
+
+    func cookies() async -> [HTTPCookie] {
+        let index = min(
+            readCount,
+            responses.count - 1
+        )
+        readCount += 1
+        return responses[index]
+    }
+
+    func warmIfNeeded() {
+        warmCount += 1
     }
 }

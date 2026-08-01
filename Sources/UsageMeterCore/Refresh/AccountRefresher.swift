@@ -207,6 +207,16 @@ public actor AccountRefresher {
         case let .failure(failure as RefreshFailure):
             result = .success(await outcome(for: failure))
 
+        case let .failure(error as ProviderClientError):
+            switch error {
+            case .subscriptionRequired,
+                .unsupportedResponse:
+                state.requiresReauthentication = false
+            default:
+                break
+            }
+            result = .failure(error)
+
         case let .failure(error):
             result = .failure(error)
         }

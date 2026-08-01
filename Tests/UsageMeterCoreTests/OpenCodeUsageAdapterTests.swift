@@ -120,6 +120,7 @@ struct OpenCodeUsageAdapterTests {
         )
         let cases: [(Int, [String: String], ProviderClientError)] =
             [
+                (302, [:], .reauthenticationRequired),
                 (401, [:], .reauthenticationRequired),
                 (403, [:], .reauthenticationRequired),
                 (

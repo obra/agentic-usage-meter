@@ -402,6 +402,8 @@ enum UsageMeterProbe {
     switch providerError {
     case .credentialMismatch:
       return "credential mismatch"
+    case .subscriptionRequired:
+      return "subscription is not active"
     case .unsupportedResponse:
       return "unsupported response shape"
     case .reauthenticationRequired:

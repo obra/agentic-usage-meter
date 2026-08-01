@@ -123,13 +123,15 @@ enum AppEnvironment {
                 base: OpenCodeGoUsageAdapter(
                     credentialStore:
                         credentialStore
-                )
+                ),
+                credentialStore: credentialStore
             ),
             OpenCodeWebAccountUsageClient(
                 base: OpenCodeZenUsageAdapter(
                     credentialStore:
                         credentialStore
-                )
+                ),
+                credentialStore: credentialStore
             ),
         ]
 

@@ -10,7 +10,10 @@ public struct OpenCodeGoUsageAdapter:
     public init(
         credentialStore: any CredentialStore,
         transport: any HTTPTransport =
-            URLSessionHTTPTransport(),
+            URLSessionHTTPTransport(
+                configuration: .ephemeral,
+                followsRedirects: false
+            ),
         decoder: OpenCodeGoUsageDecoder =
             OpenCodeGoUsageDecoder()
     ) {
@@ -52,7 +55,10 @@ public struct OpenCodeZenUsageAdapter:
     public init(
         credentialStore: any CredentialStore,
         transport: any HTTPTransport =
-            URLSessionHTTPTransport(),
+            URLSessionHTTPTransport(
+                configuration: .ephemeral,
+                followsRedirects: false
+            ),
         decoder: OpenCodeZenUsageDecoder =
             OpenCodeZenUsageDecoder()
     ) {
@@ -162,7 +168,7 @@ private struct OpenCodeDashboardUsageClient:
                 account.id,
                 now
             )
-        case 401, 403:
+        case 300...399, 401, 403:
             throw ProviderClientError
                 .reauthenticationRequired
         case 429:

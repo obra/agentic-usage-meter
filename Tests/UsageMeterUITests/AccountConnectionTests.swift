@@ -177,6 +177,48 @@ func failedFirstUsageKeepsSuccessfulAuthenticationAndAccount() async throws {
 
 @Test
 @MainActor
+func inactiveSubscriptionIsReportedAfterConnection()
+    async throws
+{
+    let account = SubscriptionAccount(
+        provider: .openCodeGo,
+        displayName: "OpenCode Go",
+        displayOrder: 0
+    )
+    let model = AppModel(
+        stateStore: TestAppStateStore(
+            state: .empty
+        ),
+        credentialStore: TestCredentialStore(),
+        adapters: [
+            TestProviderAccountAdapter(
+                provider: .openCodeGo,
+                result: .failure(
+                    ProviderClientError
+                        .subscriptionRequired
+                )
+            )
+        ]
+    )
+    await model.start()
+
+    try await model.connectAccount(
+        account,
+        credential:
+            OpenCodeDashboardCredential(
+                workspaceID: "wrk_personal",
+                authCookie: "session"
+            )
+    )
+
+    #expect(
+        model.accounts.first?.error
+            == .subscriptionRequired
+    )
+}
+
+@Test
+@MainActor
 func reconnectValidatesReplacementBeforeClearingError() async throws {
     let reference = Date(timeIntervalSince1970: 2_000_000_000)
     let account = SubscriptionAccount(

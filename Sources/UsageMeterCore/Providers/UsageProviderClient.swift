@@ -12,6 +12,7 @@ public protocol UsageProviderClient: Sendable {
 
 public enum ProviderClientError: Error, Equatable, Sendable {
     case credentialMismatch
+    case subscriptionRequired
     case unsupportedResponse
     case reauthenticationRequired
     case retryAfter(Date?)

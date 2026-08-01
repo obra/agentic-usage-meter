@@ -101,6 +101,92 @@ struct OpenCodeGoUsageDecoderTests {
     }
 
     @Test
+    func dataSlotDashboardWindowsDecode()
+        throws
+    {
+        let fetchedAt = Date(
+            timeIntervalSince1970: 1_800_000_000
+        )
+        let html = #"""
+            <div data-slot="usage">
+              <div data-slot="usage-item">
+                <span data-slot="usage-label">Rolling Usage</span>
+                <span data-slot="usage-value"><!--$-->7<!--/-->%</span>
+                <span data-slot="reset-time"><!--$-->Resets in<!--/--> <!--$-->1 hour 56 minutes<!--/--></span>
+              </div>
+              <div data-slot="usage-item">
+                <span data-slot="usage-label">Weekly Usage</span>
+                <span data-slot="usage-value"><!--$-->10<!--/-->%</span>
+                <span data-slot="reset-time"><!--$-->Resets in<!--/--> <!--$-->6 days 2 hours<!--/--></span>
+              </div>
+              <div data-slot="usage-item">
+                <span data-slot="usage-label">Monthly Usage</span>
+                <span data-slot="usage-value"><!--$-->50<!--/-->%</span>
+                <span data-slot="reset-time"><!--$-->Resets in<!--/--> <!--$-->26 days 17 hours<!--/--></span>
+              </div>
+            </div>
+            """#
+
+        let snapshot = try OpenCodeGoUsageDecoder()
+            .decode(
+                Data(html.utf8),
+                accountID: UUID(),
+                fetchedAt: fetchedAt
+            )
+
+        #expect(
+            snapshot.windows.map(\.id)
+                == [
+                    "opencode-go-rolling",
+                    "opencode-go-weekly",
+                    "opencode-go-monthly",
+                ]
+        )
+        #expect(
+            snapshot.windows.map(
+                \.consumedFraction
+            ) == [0.07, 0.10, 0.50]
+        )
+        #expect(
+            snapshot.windows.map(\.resetAt)
+                == [
+                    fetchedAt.addingTimeInterval(
+                        6_960
+                    ),
+                    fetchedAt.addingTimeInterval(
+                        525_600
+                    ),
+                    fetchedAt.addingTimeInterval(
+                        2_307_600
+                    ),
+                ]
+        )
+    }
+
+    @Test
+    func workspaceWithoutGoSubscriptionIsRejectedClearly() {
+        let html = #"""
+            <script>
+            $R[1]={subscription:null,subscriptionPlan:null,monthlyUsage:null};
+            </script>
+            <button data-slot="subscribe-button">Subscribe to Go</button>
+            """#
+
+        #expect(
+            throws:
+                ProviderClientError
+                .subscriptionRequired
+        ) {
+            _ = try OpenCodeGoUsageDecoder()
+                .decode(
+                    Data(html.utf8),
+                    accountID: UUID(),
+                    fetchedAt: Date()
+                )
+        }
+    }
+
+    @Test
     func pageWithoutUsageWindowsIsRejected() {
         #expect(
             throws:

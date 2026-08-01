@@ -217,6 +217,40 @@ func authenticationRetryRespectsHardFloorAndCanRecover() async throws {
 }
 
 @Test
+func providerResponseAfterAuthenticationClearsReconnectState()
+    async
+{
+    let reference = Date(
+        timeIntervalSince1970: 2_000_000_000
+    )
+    let refresher = AccountRefresher(
+        state: AccountRefreshState(
+            requiresReauthentication: true
+        ),
+        now: { reference }
+    )
+
+    await #expect(
+        throws:
+            ProviderClientError
+            .subscriptionRequired
+    ) {
+        _ = try await refresher.refresh(
+            retryingAuthentication: true
+        ) {
+            throw ProviderClientError
+                .subscriptionRequired
+        }
+    }
+
+    #expect(
+        await refresher.refreshState()
+            .requiresReauthentication
+            == false
+    )
+}
+
+@Test
 func refreshStateDecodingRejectsNegativeFailureCounts() {
     let invalidState = Data(
         """

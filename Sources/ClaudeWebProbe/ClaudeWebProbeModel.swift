@@ -203,6 +203,8 @@ final class ClaudeWebProbeModel: ObservableObject {
     switch error {
     case .credentialMismatch:
       return "Credential mismatch"
+    case .subscriptionRequired:
+      return "Subscription is not active"
     case .unsupportedResponse:
       return "Unsupported response shape"
     case .reauthenticationRequired:
