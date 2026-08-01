@@ -69,15 +69,15 @@ build. Provider retry times and transient-error backoff can extend that floor.
 ## Assemble a local app
 
 ```sh
-scripts/assemble-app.sh
-codesign --force --deep --sign - "build/Agentic Usage Meter.app"
-codesign --verify --deep --strict --verbose=2 \
-  "build/Agentic Usage Meter.app"
-open "build/Agentic Usage Meter.app"
+scripts/build-and-run-local.sh
 ```
 
-This produces `build/Agentic Usage Meter.app`. An ad-hoc signature is suitable
-for local verification only; it is not notarized distribution evidence.
+This produces and launches `build/Agentic Usage Meter.app` with the first
+available Developer ID Application identity. The stable signature lets macOS
+keep the app's existing Keychain grants across local rebuilds. Set
+`LOCAL_SIGNING_IDENTITY` to an exact Developer ID Application identity to
+override automatic selection. This is local verification only; it is not
+notarized distribution evidence.
 
 ## Sign and notarize
 

@@ -85,6 +85,46 @@ struct ReleaseConfigurationTests {
         )
     }
 
+    @Test
+    func localSigningSelectsAStableDeveloperIDIdentity() throws {
+        let process = Process()
+        let input = Pipe()
+        let output = Pipe()
+        process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        process.arguments = [
+            repositoryRoot.appending(
+                path: "Scripts/select-local-signing-identity.sh",
+            ).path,
+        ]
+        process.standardInput = input
+        process.standardOutput = output
+        process.standardError = Pipe()
+
+        try process.run()
+        input.fileHandleForWriting.write(
+            Data(
+                """
+                    1) AAAA \"Apple Development: Example (TEAMID)\"
+                    2) BBBB \"Developer ID Application: Example (TEAMID)\"
+                       2 valid identities found
+
+                """.utf8,
+            ),
+        )
+        input.fileHandleForWriting.closeFile()
+        process.waitUntilExit()
+
+        #expect(process.terminationStatus == 0)
+        let selectedIdentity = String(
+            decoding: output.fileHandleForReading.readDataToEndOfFile(),
+            as: UTF8.self,
+        ).trimmingCharacters(in: .whitespacesAndNewlines)
+        #expect(
+            selectedIdentity
+                == "Developer ID Application: Example (TEAMID)",
+        )
+    }
+
     private var repositoryRoot: URL {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
