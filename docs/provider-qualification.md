@@ -18,7 +18,7 @@ explicitly obtains a safe display identity.
 | Factory | Per-account API key and billing-limits API | Automated adapter complete | Selectable, experimental |
 | OpenCode Go | Isolated web session and workspace dashboard | Automated adapter complete | Selectable, experimental |
 | OpenCode Zen | Isolated web session and workspace billing | Automated adapter complete | Selectable, experimental |
-| SuperGrok | Account-scoped device OAuth and Usage dashboard | Automated adapter complete | Selectable, experimental |
+| SuperGrok | Account-scoped device OAuth and billing API | One-account live refresh qualified | Selectable, experimental |
 
 `Automated adapter complete` means fixture, request, error, persistence, and
 cleanup contracts pass, but no real two-account qualification has completed.
@@ -223,6 +223,42 @@ The automated quota interpretation is adapted from OpenCode Bar commit
 - Real two-account authorization, ten-minute persistence refresh, comparison
   with GitHub's billing UI, and independent deletion remain outstanding.
   GitHub Copilot therefore remains experimental.
+
+## SuperGrok
+
+The adapter follows Grok Build's current billing implementation. Authentication
+uses Grok's device OAuth flow in the regular browser and saves each account in
+its own macOS Keychain record. Usage is fetched directly from
+`https://cli-chat-proxy.grok.com/v1/billing?format=credits` with the billing
+identity and client headers required by the Grok proxy.
+
+- Current weekly and monthly periods preserve their provider-reported start and
+  reset timestamps.
+- The documented legacy monthly limit/used response remains supported when the
+  current credits fields are absent.
+- A missing `creditUsagePercent` on an otherwise valid current period is zero
+  used. The provider's protobuf JSON omits zero-valued scalar fields.
+- `prepaidBalance` is presented as an optional USD extra-usage balance.
+- Unsupported responses emit one bounded diagnostic containing only field
+  presence, period kind, and timestamp parseability. Credentials, identity,
+  balances, percentages, and raw payloads are never logged.
+
+### 2026-08-01 one-account live qualification
+
+- A connected SuperGrok account initially remained absent from the menu widget
+  because the live weekly response omitted its zero-valued usage percentage.
+  The decoder treated that omission as unsupported instead of zero used.
+- A privacy-safe live diagnostic confirmed a weekly period with parseable start
+  and end timestamps, an omitted usage percentage, and a present prepaid
+  balance. A regression fixture now locks down the zero-scalar behavior.
+- The stable-signed development app refreshed the existing account and
+  immediately persisted one 604,800-second weekly window at zero consumed,
+  using the exact provider start and reset timestamps.
+- Rebuilding and relaunching a binary with a different code hash but the same
+  Developer ID designated requirement did not produce another Keychain prompt.
+- Two-account authorization, independent refresh-token rotation, dashboard
+  comparison, and independent deletion remain outstanding. SuperGrok therefore
+  remains experimental.
 
 ## Factory
 
