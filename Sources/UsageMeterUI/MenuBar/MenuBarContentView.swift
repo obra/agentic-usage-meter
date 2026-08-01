@@ -108,6 +108,15 @@ public struct MenuBarContentView: View {
     private var timeline: some View {
         UsageTimelineView(
             accounts: model.accounts,
+            collapsedSections:
+                model.collapsedUsageSections,
+            onToggleSection: { section in
+                Task {
+                    try? await model.toggleUsageSection(
+                        section,
+                    )
+                }
+            },
             onOpenAccount: {
                 AccountDashboardPresenter.shared.open($0)
             }

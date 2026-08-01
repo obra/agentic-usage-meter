@@ -31,6 +31,9 @@ let package = Package(
                 "UsageMeterCore",
                 "UsageMeterClaudeWeb",
                 "UsageMeterWeb"
+            ],
+            resources: [
+                .process("Resources")
             ]
         ),
         .executableTarget(

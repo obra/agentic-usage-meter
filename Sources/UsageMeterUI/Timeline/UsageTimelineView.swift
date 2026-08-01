@@ -2,20 +2,28 @@ import SwiftUI
 import UsageMeterCore
 
 public struct UsageTimelineView: View {
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
   private let accounts: [AccountViewState]
   private let now: Date
   private let timeZone: TimeZone
+  private let collapsedSections: Set<UsageSectionID>
+  private let onToggleSection: ((UsageSectionID) -> Void)?
   private let onOpenAccount: ((AccountViewState) -> Void)?
 
   public init(
     accounts: [AccountViewState],
     now: Date = Date(),
     timeZone: TimeZone = .autoupdatingCurrent,
+    collapsedSections: Set<UsageSectionID> = [],
+    onToggleSection: ((UsageSectionID) -> Void)? = nil,
     onOpenAccount: ((AccountViewState) -> Void)? = nil,
   ) {
     self.accounts = accounts
     self.now = now
     self.timeZone = timeZone
+    self.collapsedSections = collapsedSections
+    self.onToggleSection = onToggleSection
     self.onOpenAccount = onOpenAccount
   }
 
@@ -41,40 +49,52 @@ public struct UsageTimelineView: View {
         balanceSection(timeline.balanceRows)
       }
     }
+    .animation(
+      reduceMotion
+        ? nil
+        : .easeInOut(duration: 0.15),
+      value: collapsedSections,
+    )
   }
 
   private func timelineSection(
     _ section: UsageTimelineSectionPresentation,
   ) -> some View {
-    VStack(
+    let sectionID = section.kind.sectionID
+    let isCollapsed =
+      onToggleSection != nil
+      && collapsedSections.contains(sectionID)
+    let toggleAction = onToggleSection.map { toggle in
+      { toggle(sectionID) }
+    }
+
+    return VStack(
       alignment: .leading,
       spacing: UsageTimelineMetrics.sectionContentSpacing,
     ) {
-      HStack(spacing: UsageTimelineMetrics.columnSpacing) {
-        Text(section.title)
-          .font(.headline)
-          .frame(
-            width: identityColumnsWidth,
-            alignment: .leading,
-          )
+      UsageSectionDisclosureHeader(
+        title: section.title,
+        identityColumnsWidth: identityColumnsWidth,
+        showsTimelineColumns: true,
+        isExpanded: !isCollapsed,
+        onToggle: toggleAction,
+      )
 
-        Text("Now")
-          .font(.caption2)
-          .foregroundStyle(.secondary)
-          .frame(maxWidth: .infinity)
-
-        Color.clear
-          .frame(width: UsageTimelineMetrics.resetColumnWidth)
-      }
-
-      ForEach(section.rows) {
-        let row = $0
-        UsageWindowRow(
-          row: row,
-          onOpenDashboard: {
-            openAccount(id: row.account.id)
-          }
+      if isCollapsed {
+        CollapsedUsagePoolShelf(
+          rows: section.rows,
+          onOpenAccount: openAccount,
         )
+      } else {
+        ForEach(section.rows) {
+          let row = $0
+          UsageWindowRow(
+            row: row,
+            onOpenDashboard: {
+              openAccount(id: row.account.id)
+            }
+          )
+        }
       }
     }
   }
@@ -82,63 +102,82 @@ public struct UsageTimelineView: View {
   private func balanceSection(
     _ rows: [UsageBalanceRowPresentation],
   ) -> some View {
-    VStack(
+    let isCollapsed =
+      onToggleSection != nil
+      && collapsedSections.contains(.extraCredits)
+    let toggleAction = onToggleSection.map { toggle in
+      { toggle(.extraCredits) }
+    }
+
+    return VStack(
       alignment: .leading,
       spacing: UsageTimelineMetrics.sectionContentSpacing,
     ) {
-      Text("Extra Credits")
-        .font(.headline)
+      UsageSectionDisclosureHeader(
+        title: "Extra Credits",
+        identityColumnsWidth: identityColumnsWidth,
+        showsTimelineColumns: false,
+        isExpanded: !isCollapsed,
+        onToggle: toggleAction,
+      )
 
-      ForEach(rows) { row in
-        HStack(spacing: UsageTimelineMetrics.columnSpacing) {
-          Circle()
-            .fill(row.account.provider.timelineColor)
-            .frame(width: 7, height: 7)
-            .frame(
-              width: UsageTimelineMetrics.percentageColumnWidth,
-              alignment: .trailing,
-            )
+      if isCollapsed {
+        CollapsedUsageBalanceShelf(
+          rows: rows,
+          onOpenAccount: openAccount,
+        )
+      } else {
+        ForEach(rows) { row in
+          HStack(spacing: UsageTimelineMetrics.columnSpacing) {
+            Circle()
+              .fill(row.account.provider.timelineColor)
+              .frame(width: 7, height: 7)
+              .frame(
+                width: UsageTimelineMetrics.percentageColumnWidth,
+                alignment: .trailing,
+              )
 
-          Text(row.providerText)
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
-            .truncationMode(.tail)
-            .frame(
-              width: UsageTimelineMetrics.providerColumnWidth,
-              alignment: .leading,
-            )
+            Text(row.providerText)
+              .font(.caption)
+              .foregroundStyle(.secondary)
+              .lineLimit(1)
+              .truncationMode(.tail)
+              .frame(
+                width: UsageTimelineMetrics.providerColumnWidth,
+                alignment: .leading,
+              )
 
-          Text(row.accountText)
-            .font(.caption)
-            .fontWeight(.medium)
-            .lineLimit(1)
-            .truncationMode(.tail)
-            .frame(
-              width: UsageTimelineMetrics.accountColumnWidth,
-              alignment: .leading,
-            )
+            Text(row.accountText)
+              .font(.caption)
+              .fontWeight(.medium)
+              .lineLimit(1)
+              .truncationMode(.tail)
+              .frame(
+                width: UsageTimelineMetrics.accountColumnWidth,
+                alignment: .leading,
+              )
 
-          Text(row.labelText)
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            Text(row.labelText)
+              .font(.caption)
+              .foregroundStyle(.secondary)
+              .lineLimit(1)
+              .frame(maxWidth: .infinity, alignment: .leading)
 
-          Text(row.valueText)
-            .font(.caption.monospacedDigit())
-            .fontWeight(.semibold)
-            .lineLimit(1)
-            .frame(width: 88, alignment: .trailing)
+            Text(row.valueText)
+              .font(.caption.monospacedDigit())
+              .fontWeight(.semibold)
+              .lineLimit(1)
+              .frame(width: 88, alignment: .trailing)
+          }
+          .frame(height: UsageTimelineMetrics.rowHeight)
+          .accessibilityElement(children: .ignore)
+          .accessibilityLabel(row.helpText)
+          .contentShape(Rectangle())
+          .onTapGesture {
+            openAccount(id: row.account.id)
+          }
+          .help(row.helpText)
         }
-        .frame(height: UsageTimelineMetrics.rowHeight)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(row.helpText)
-        .contentShape(Rectangle())
-        .onTapGesture {
-          openAccount(id: row.account.id)
-        }
-        .help(row.helpText)
       }
     }
   }
@@ -176,6 +215,23 @@ extension UsageTimelineSectionPresentation {
       "Monthly windows"
     case .custom:
       "Other windows"
+    }
+  }
+}
+
+extension UsageWindowKind {
+  fileprivate var sectionID: UsageSectionID {
+    switch self {
+    case .short:
+      .short
+    case .daily:
+      .daily
+    case .weekly:
+      .weekly
+    case .monthly:
+      .monthly
+    case .custom:
+      .custom
     }
   }
 }

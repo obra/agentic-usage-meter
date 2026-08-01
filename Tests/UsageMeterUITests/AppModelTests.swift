@@ -892,6 +892,56 @@ struct AppModelTests {
     }
 
     @Test
+    func collapsedTimelineHasSmallerIntrinsicHeight() throws {
+        let accounts = try (0 ..< 5).map { index in
+            let account = SubscriptionAccount(
+                provider: .claude,
+                displayName: "Account \(index + 1)",
+                displayOrder: index,
+            )
+            let window = try #require(
+                UsageWindow(
+                    id: "short-\(index)",
+                    kind: .short,
+                    duration: 18_000,
+                    resetAt:
+                        reference.addingTimeInterval(18_000),
+                    consumedFraction: Double(index) / 10,
+                ),
+            )
+            return AccountViewState(
+                account: account,
+                snapshot: UsageSnapshot(
+                    accountID: account.id,
+                    fetchedAt: reference,
+                    windows: [window],
+                ),
+            )
+        }
+        let expanded = NSHostingView(
+            rootView: UsageTimelineView(
+                accounts: accounts,
+                now: reference,
+            )
+            .frame(width: UsageTimelineMetrics.naturalWidth),
+        )
+        let collapsed = NSHostingView(
+            rootView: UsageTimelineView(
+                accounts: accounts,
+                now: reference,
+                collapsedSections: [.short],
+                onToggleSection: { _ in },
+            )
+            .frame(width: UsageTimelineMetrics.naturalWidth),
+        )
+
+        #expect(
+            collapsed.fittingSize.height
+                < expanded.fittingSize.height,
+        )
+    }
+
+    @Test
     func launchRefreshesClaudeFromItsIsolatedProfile() async {
         let account = SubscriptionAccount(
             provider: .claude,

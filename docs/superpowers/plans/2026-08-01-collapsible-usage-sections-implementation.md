@@ -486,7 +486,7 @@ git commit -m "Derive collapsed usage shelf values" -m "Preserve one summary ite
 - Consumes: `UsageSectionID`, `AppModel.collapsedUsageSections`, `AppModel.toggleUsageSection(_:)`, the shelf presentation values from Task 2, bundled provider SVGs, and `ProviderCatalog.systemImage`.
 - Produces: `UsageTimelineView.init(accounts:now:timeZone:collapsedSections:onToggleSection:onOpenAccount:)`, disclosure headers, timed donut shelves, and neutral balance shelves.
 
-- [ ] **Step 1: Write the failing collapsed-height behavior test**
+- [x] **Step 1: Write the failing collapsed-height behavior test**
 
 Add this `AppModelTests` behavior test. It creates five real presentation rows so a shelf is materially shorter than its expanded rows:
 
@@ -540,7 +540,7 @@ func collapsedTimelineHasSmallerIntrinsicHeight() throws {
 
 This test catches a collapse implementation that merely hides content visually without removing expanded rows from intrinsic layout.
 
-- [ ] **Step 2: Run the view behavior test and verify RED**
+- [x] **Step 2: Run the view behavior test and verify RED**
 
 Run:
 
@@ -550,7 +550,7 @@ swift test --filter collapsedTimelineHasSmallerIntrinsicHeight
 
 Expected: compilation fails because `UsageTimelineView` has no collapse inputs.
 
-- [ ] **Step 3: Bundle and verify local provider marks**
+- [x] **Step 3: Bundle and verify local provider marks**
 
 Add `.process("Resources")` to the `UsageMeterUI` target in `Package.swift`. Save these exact sources under the resource filenames listed above:
 
@@ -667,7 +667,7 @@ struct ProviderMarkView: View {
 
 The template rendering keeps monochrome artwork provider-colored and adaptive. OpenCode Go and Zen share the OpenCode resource; Antigravity uses the Google resource.
 
-- [ ] **Step 4: Implement the remaining-capacity and balance ring cells**
+- [x] **Step 4: Implement the remaining-capacity and balance ring cells**
 
 In `CollapsedUsageShelf`, use adaptive equal-width columns:
 
@@ -698,7 +698,7 @@ ZStack {
 
 Below it, render one-line account text and monospaced secondary detail text. The balance variant uses only the neutral circle around the same mark. Both cells are plain buttons that call the supplied account callback, expose the complete accessibility value, and use the same text for `.help`.
 
-- [ ] **Step 5: Implement the disclosure header**
+- [x] **Step 5: Implement the disclosure header**
 
 Build `UsageSectionDisclosureHeader` with explicit title, optional aligned `Now` label, expanded state, and optional toggle. When a toggle exists, wrap the full header content in a plain button and expose `"Collapse <title>"` or `"Expand <title>"`; otherwise render the content unchanged without a chevron. Keep the title region at the existing `identityColumnsWidth` so expanded axes remain aligned:
 
@@ -762,7 +762,7 @@ struct UsageSectionDisclosureHeader: View {
 }
 ```
 
-- [ ] **Step 6: Switch timeline sections between rows and shelves**
+- [x] **Step 6: Switch timeline sections between rows and shelves**
 
 Extend `UsageTimelineView` with defaulted inputs so the account dashboard remains source-compatible:
 
@@ -833,7 +833,7 @@ if isCollapsed {
 }
 ```
 
-- [ ] **Step 7: Wire both compact surfaces to the same model state**
+- [x] **Step 7: Wire both compact surfaces to the same model state**
 
 In both `MenuBarContentView.timeline` and `FloatingWidgetView.timeline`, pass:
 
@@ -848,7 +848,7 @@ onToggleSection: { section in
 
 Leave `AccountDashboardView` unchanged so its default timeline remains expanded and has no disclosure controls.
 
-- [ ] **Step 8: Run focused UI tests and verify GREEN**
+- [x] **Step 8: Run focused UI tests and verify GREEN**
 
 Run:
 
@@ -861,7 +861,7 @@ swift test --filter TimelinePresentationTests
 
 Expected: PASS, with the collapsed timeline reporting a smaller intrinsic height.
 
-- [ ] **Step 9: Commit collapsible shelf rendering**
+- [x] **Step 9: Commit collapsible shelf rendering**
 
 ```bash
 git add Package.swift Sources/UsageMeterUI/Resources/ProviderMarks Sources/UsageMeterUI/Timeline/ProviderMarkView.swift Sources/UsageMeterUI/Timeline/UsageSectionDisclosureHeader.swift Sources/UsageMeterUI/Timeline/CollapsedUsageShelf.swift Sources/UsageMeterUI/Timeline/UsageTimelineView.swift Sources/UsageMeterUI/MenuBar/MenuBarContentView.swift Sources/UsageMeterUI/Widget/FloatingWidgetView.swift Tests/UsageMeterUITests/AppModelTests.swift Tests/UsageMeterUITests/ProviderMarkTests.swift
