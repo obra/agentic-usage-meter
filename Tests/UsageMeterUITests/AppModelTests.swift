@@ -989,6 +989,58 @@ struct AppModelTests {
     }
 
     @Test
+    func weeklyCollapseDoesNotAnimateRowsIntoTheShelf() async throws {
+        let model = AppModel(
+            stateStore: TestAppStateStore(
+                state: try populatedState(
+                    isFloatingWidgetVisible: true,
+                ),
+            ),
+            credentialStore: TestCredentialStore(),
+            adapters: [],
+            now: { reference },
+        )
+        await model.start()
+        let existingWindows = Set(
+            NSApplication.shared.windows.map(ObjectIdentifier.init),
+        )
+        let controller = FloatingWidgetController(model: model)
+        controller.synchronize()
+        let panel = try #require(
+            NSApplication.shared.windows.first {
+                !existingWindows.contains(ObjectIdentifier($0))
+                    && $0.title == "Agentic Usage"
+            },
+        )
+        let contentView = try #require(panel.contentView)
+
+        try await model.toggleUsageSection(.weekly)
+        try await Task.sleep(for: .milliseconds(50))
+        contentView.layoutSubtreeIfNeeded()
+        panel.displayIfNeeded()
+        let transitionPixels = try renderedPixels(
+            in: contentView,
+        )
+
+        try await Task.sleep(for: .milliseconds(200))
+        contentView.layoutSubtreeIfNeeded()
+        panel.displayIfNeeded()
+        let settledPixels = try renderedPixels(
+            in: contentView,
+        )
+
+        #expect(
+            pixelDifferenceFraction(
+                transitionPixels,
+                settledPixels,
+            ) < 0.005,
+        )
+
+        try await model.setFloatingWidgetVisible(false)
+        controller.synchronize()
+    }
+
+    @Test
     func launchRefreshesClaudeFromItsIsolatedProfile() async {
         let account = SubscriptionAccount(
             provider: .claude,
@@ -1107,5 +1159,38 @@ struct AppModelTests {
             ),
             isFloatingWidgetVisible: isFloatingWidgetVisible,
         )
+    }
+
+    private func renderedPixels(
+        in view: NSView,
+    ) throws -> Data {
+        let bounds = view.bounds
+        let representation = try #require(
+            view.bitmapImageRepForCachingDisplay(in: bounds),
+        )
+        view.cacheDisplay(
+            in: bounds,
+            to: representation,
+        )
+        let bitmapData = try #require(representation.bitmapData)
+        return Data(
+            bytes: bitmapData,
+            count:
+                representation.bytesPerRow
+                * representation.pixelsHigh,
+        )
+    }
+
+    private func pixelDifferenceFraction(
+        _ first: Data,
+        _ second: Data,
+    ) -> Double {
+        guard first.count == second.count else {
+            return 1
+        }
+        let differences = zip(first, second).count {
+            $0 != $1
+        }
+        return Double(differences) / Double(first.count)
     }
 }

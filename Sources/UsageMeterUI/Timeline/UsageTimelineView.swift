@@ -2,8 +2,6 @@ import SwiftUI
 import UsageMeterCore
 
 public struct UsageTimelineView: View {
-  @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
   private let accounts: [AccountViewState]
   private let now: Date
   private let timeZone: TimeZone
@@ -49,12 +47,6 @@ public struct UsageTimelineView: View {
         balanceSection(timeline.balanceRows)
       }
     }
-    .animation(
-      reduceMotion
-        ? nil
-        : .easeInOut(duration: 0.15),
-      value: collapsedSections,
-    )
   }
 
   private func timelineSection(
