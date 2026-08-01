@@ -14,16 +14,46 @@ public struct SuperGrokUsageAdapter:
 
     public init(
         credentialStore: any CredentialStore,
-        transport: any HTTPTransport =
-            URLSessionHTTPTransport(),
         decoder: SuperGrokUsageDecoder =
             SuperGrokUsageDecoder()
+    ) {
+        self.init(
+            credentialStore: credentialStore,
+            transport: URLSessionHTTPTransport(),
+            refreshTransport:
+                URLSessionHTTPTransport(
+                    configuration: .ephemeral,
+                    followsRedirects: false
+                ),
+            decoder: decoder
+        )
+    }
+
+    public init(
+        credentialStore: any CredentialStore,
+        transport: any HTTPTransport,
+        decoder: SuperGrokUsageDecoder =
+            SuperGrokUsageDecoder()
+    ) {
+        self.init(
+            credentialStore: credentialStore,
+            transport: transport,
+            refreshTransport: transport,
+            decoder: decoder
+        )
+    }
+
+    private init(
+        credentialStore: any CredentialStore,
+        transport: any HTTPTransport,
+        refreshTransport: any HTTPTransport,
+        decoder: SuperGrokUsageDecoder
     ) {
         self.credentialStore = credentialStore
         self.transport = transport
         self.decoder = decoder
         refreshClient = SuperGrokOIDCRefreshClient(
-            transport: transport
+            transport: refreshTransport
         )
     }
 
@@ -61,7 +91,10 @@ public struct SuperGrokUsageAdapter:
         }
 
         var didRefreshCredential = false
-        if credential.needsRefresh(at: now) {
+        if
+            credential.hasRefreshMaterial,
+            credential.needsRefresh(at: now)
+        {
             credential = try await refreshClient
                 .refresh(credential, now: now)
             try await credentialStore.save(
@@ -74,17 +107,17 @@ public struct SuperGrokUsageAdapter:
         var response = try await transport.send(
             billingRequest(for: credential)
         )
-        if
-            !didRefreshCredential,
-            response.statusCode == 401
-                || response.statusCode == 403
+        if response.statusCode == 401
+            || response.statusCode == 403
         {
-            credential = try await refreshClient
-                .refresh(credential, now: now)
-            try await credentialStore.save(
-                credential,
-                for: account.id
-            )
+            if !didRefreshCredential {
+                credential = try await refreshClient
+                    .refresh(credential, now: now)
+                try await credentialStore.save(
+                    credential,
+                    for: account.id
+                )
+            }
             response = try await transport.send(
                 billingRequest(for: credential)
             )

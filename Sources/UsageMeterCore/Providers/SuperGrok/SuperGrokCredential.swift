@@ -69,6 +69,17 @@ public struct SuperGrokCredential:
         return false
     }
 
+    var hasRefreshMaterial: Bool {
+        authMode?
+            .trimmingCharacters(
+                in: .whitespacesAndNewlines
+            )
+            .lowercased() == "oidc"
+            && hasValue(refreshToken)
+            && hasValue(oidcIssuer)
+            && hasValue(oidcClientID)
+    }
+
     private func normalized(
         _ value: String?
     ) -> String? {
@@ -82,5 +93,15 @@ public struct SuperGrokCredential:
             return nil
         }
         return value.lowercased()
+    }
+
+    private func hasValue(
+        _ value: String?
+    ) -> Bool {
+        value?
+            .trimmingCharacters(
+                in: .whitespacesAndNewlines
+            )
+            .isEmpty == false
     }
 }

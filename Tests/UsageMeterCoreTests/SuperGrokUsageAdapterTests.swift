@@ -296,6 +296,124 @@ struct SuperGrokUsageAdapterTests {
     }
 
     @Test
+    func legacyCredentialNearExpiryUsesItsStillValidAccessToken()
+        async throws
+    {
+        let now = Date(
+            timeIntervalSince1970: 1_785_000_000
+        )
+        let account = SubscriptionAccount(
+            provider: .superGrok,
+            displayName: "Grok",
+            displayOrder: 0
+        )
+        let store = SuperGrokTestCredentialStore()
+        try await store.save(
+            SuperGrokCredential(
+                accessToken: "legacy-token",
+                email: "user@example.com",
+                teamID: "team-1",
+                userID: "user-1",
+                authMode: "oidc",
+                expiresAt:
+                    now.addingTimeInterval(4 * 60)
+            ),
+            for: account.id
+        )
+        let transport = SuperGrokSequencedTransport(
+            responses: [
+                HTTPResponse(
+                    data: currentUsageResponse(),
+                    statusCode: 200,
+                    headers: [:]
+                )
+            ]
+        )
+        let adapter = SuperGrokUsageAdapter(
+            credentialStore: store,
+            transport: transport
+        )
+
+        _ = try await adapter.fetchUsage(
+            for: account,
+            now: now
+        )
+
+        let requests = await transport.requests
+        #expect(requests.count == 1)
+        #expect(
+            requests[0].value(
+                forHTTPHeaderField: "Authorization"
+            ) == "Bearer legacy-token"
+        )
+    }
+
+    @Test
+    func proactivelyRefreshedCredentialRetriesBillingOnceAfterUnauthorized()
+        async throws
+    {
+        let now = Date(
+            timeIntervalSince1970: 1_785_000_000
+        )
+        let account = SubscriptionAccount(
+            provider: .superGrok,
+            displayName: "Grok",
+            displayOrder: 0
+        )
+        let store = SuperGrokTestCredentialStore()
+        try await store.save(
+            refreshableCredential(
+                accessToken: "near-expiry-token",
+                refreshToken: "old-refresh",
+                expiresAt:
+                    now.addingTimeInterval(4 * 60)
+            ),
+            for: account.id
+        )
+        let transport = SuperGrokSequencedTransport(
+            responses: [
+                discoveryResponse(),
+                try tokenResponse(
+                    accessToken: "fresh-token",
+                    refreshToken: "new-refresh"
+                ),
+                HTTPResponse(
+                    data: Data(),
+                    statusCode: 401,
+                    headers: [:]
+                ),
+                HTTPResponse(
+                    data: currentUsageResponse(),
+                    statusCode: 200,
+                    headers: [:]
+                ),
+            ]
+        )
+        let adapter = SuperGrokUsageAdapter(
+            credentialStore: store,
+            transport: transport
+        )
+
+        _ = try await adapter.fetchUsage(
+            for: account,
+            now: now
+        )
+
+        let requests = await transport.requests
+        #expect(requests.count == 4)
+        #expect(
+            requests[2].value(
+                forHTTPHeaderField: "Authorization"
+            ) == "Bearer fresh-token"
+        )
+        #expect(
+            requests[3].value(
+                forHTTPHeaderField: "Authorization"
+            ) == "Bearer fresh-token"
+        )
+    }
+
+    @Test
     func unauthorizedBillingRefreshesOnceAndRetriesWithRotatedToken()
         async throws
     {

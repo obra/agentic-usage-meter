@@ -37,6 +37,20 @@ public struct URLSessionHTTPTransport: HTTPTransport {
         self.session = session
     }
 
+    public init(
+        configuration: URLSessionConfiguration,
+        followsRedirects: Bool
+    ) {
+        session = URLSession(
+            configuration: configuration,
+            delegate:
+                followsRedirects
+                ? nil
+                : RedirectRejectingSessionDelegate(),
+            delegateQueue: nil
+        )
+    }
+
     public func send(_ request: URLRequest) async throws -> HTTPResponse {
         let (data, response) = try await session.data(for: request)
         guard let response = response as? HTTPURLResponse else {
@@ -57,6 +71,25 @@ public struct URLSessionHTTPTransport: HTTPTransport {
             statusCode: response.statusCode,
             headers: headers
         )
+    }
+}
+
+final class RedirectRejectingSessionDelegate:
+    NSObject,
+    URLSessionTaskDelegate,
+    @unchecked Sendable
+{
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        willPerformHTTPRedirection response:
+            HTTPURLResponse,
+        newRequest request: URLRequest,
+        completionHandler: @escaping @Sendable (
+            URLRequest?
+        ) -> Void
+    ) {
+        completionHandler(nil)
     }
 }
 
