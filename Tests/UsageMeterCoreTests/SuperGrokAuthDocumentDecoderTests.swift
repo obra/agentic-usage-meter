@@ -44,7 +44,7 @@ struct SuperGrokAuthDocumentDecoderTests {
     }
 
     @Test
-    func directCredentialFallsBackToEmailIdentity() throws {
+    func credentialWithoutBillingUserIDIsRejected() throws {
         let data = Data(
             """
             {
@@ -54,11 +54,14 @@ struct SuperGrokAuthDocumentDecoderTests {
             """.utf8
         )
 
-        let credential = try SuperGrokAuthDocumentDecoder()
-            .decode(data)
-
-        #expect(credential.accessToken == "direct-token")
-        #expect(credential.identityKey == "user@example.com")
+        #expect(
+            throws:
+                ProviderClientError
+                .unsupportedResponse
+        ) {
+            _ = try SuperGrokAuthDocumentDecoder()
+                .decode(data)
+        }
     }
 
     @Test

@@ -44,7 +44,10 @@ public struct SuperGrokAuthDocumentDecoder:
                 entry["expires_at"]
             )
         )
-        guard credential.identityKey != nil else {
+        guard
+            credential.identityKey != nil,
+            nonEmptyString(credential.userID) != nil
+        else {
             throw ProviderClientError
                 .unsupportedResponse
         }
