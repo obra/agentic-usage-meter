@@ -18,7 +18,7 @@ explicitly obtains a safe display identity.
 | Factory | Per-account API key and billing-limits API | Automated adapter complete | Selectable, experimental |
 | OpenCode Go | Isolated web session and workspace dashboard | Automated adapter complete | Selectable, experimental |
 | OpenCode Zen | Isolated web session and workspace billing | Automated adapter complete | Selectable, experimental |
-| SuperGrok | Account-scoped device OAuth and billing API | One-account live refresh qualified | Selectable, experimental |
+| SuperGrok | Account-scoped device OAuth and billing API | One-account live usage qualified | Selectable, experimental |
 
 `Automated adapter complete` means fixture, request, error, persistence, and
 cleanup contracts pass, but no real two-account qualification has completed.
@@ -239,6 +239,14 @@ identity and client headers required by the Grok proxy.
 - A missing `creditUsagePercent` on an otherwise valid current period is zero
   used. The provider's protobuf JSON omits zero-valued scalar fields.
 - `prepaidBalance` is presented as an optional USD extra-usage balance.
+- New device authorizations retain Grok's account-scoped OIDC refresh material
+  in the same Keychain record. The adapter refreshes within five minutes of
+  expiry, uses Grok's 30-day creation-time fallback when expiry is absent, and
+  retries billing once after a 401 or 403. Rotated credentials are saved before
+  the retried request.
+- Keychain records created before refresh material was retained remain readable.
+  They continue working with their access token, but require one reconnect after
+  that token expires before silent rotation is available.
 - Unsupported responses emit one bounded diagnostic containing only field
   presence, period kind, and timestamp parseability. Credentials, identity,
   balances, percentages, and raw payloads are never logged.
@@ -256,9 +264,10 @@ identity and client headers required by the Grok proxy.
   using the exact provider start and reset timestamps.
 - Rebuilding and relaunching a binary with a different code hash but the same
   Developer ID designated requirement did not produce another Keychain prompt.
-- Two-account authorization, independent refresh-token rotation, dashboard
-  comparison, and independent deletion remain outstanding. SuperGrok therefore
-  remains experimental.
+- Automated refresh-token rotation is covered with isolated account-scoped
+  credential stores and first-party endpoint validation. Live rotation,
+  two-account authorization, dashboard comparison, and independent deletion
+  remain outstanding. SuperGrok therefore remains experimental.
 
 ## Factory
 
