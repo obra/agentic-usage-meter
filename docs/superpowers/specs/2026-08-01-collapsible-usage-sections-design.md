@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-01
 
-**Status:** Approved interaction and visual direction; awaiting written-spec review
+**Status:** Approved
 
 ## Context
 
@@ -120,4 +120,3 @@ Live macOS acceptance should verify:
 - **Independent `@AppStorage` inside each timeline:** persistence is easy, but it hides state in leaf views and weakens synchronization, rollback, and testing.
 - **One aggregate or concentric donut per account:** obscures distinct quota pools and requires invented aggregation or hard-to-read ring semantics.
 - **Progress donuts for Extra Credits:** misleading when the provider exposes a balance without a total allowance.
-
