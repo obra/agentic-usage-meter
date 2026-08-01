@@ -70,6 +70,8 @@ public final class AppModel {
     public private(set) var isFloatingWidgetVisible = false
     public private(set) var floatingWidgetPlacement:
         FloatingWidgetPlacement?
+    public private(set) var collapsedUsageSections:
+        Set<UsageSectionID> = []
     public let isSampleData: Bool
 
     @ObservationIgnored
@@ -132,6 +134,8 @@ public final class AppModel {
                 loaded.isFloatingWidgetVisible
             floatingWidgetPlacement =
                 loaded.floatingWidgetPlacement
+            collapsedUsageSections =
+                loaded.collapsedUsageSections
             accounts = loaded.accounts
                 .sorted(by: accountComesBefore)
                 .map {
@@ -234,6 +238,26 @@ public final class AppModel {
         } catch {
             floatingWidgetPlacement = previous
             persistedState.floatingWidgetPlacement = previous
+            throw error
+        }
+    }
+
+    public func toggleUsageSection(
+        _ section: UsageSectionID,
+    ) async throws {
+        let previous = collapsedUsageSections
+        if collapsedUsageSections.contains(section) {
+            collapsedUsageSections.remove(section)
+        } else {
+            collapsedUsageSections.insert(section)
+        }
+        persistedState.collapsedUsageSections =
+            collapsedUsageSections
+        do {
+            try await stateStore.save(persistedState)
+        } catch {
+            collapsedUsageSections = previous
+            persistedState.collapsedUsageSections = previous
             throw error
         }
     }

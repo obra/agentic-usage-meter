@@ -56,7 +56,7 @@
 - Consumes: `AppStatePersisting`, `PersistedAppState`, and the existing save-and-rollback pattern used by floating-widget preferences.
 - Produces: `UsageSectionID`, `AppModel.collapsedUsageSections`, and `AppModel.toggleUsageSection(_:) async throws`.
 
-- [ ] **Step 1: Write the failing persisted-state compatibility tests**
+- [x] **Step 1: Write the failing persisted-state compatibility tests**
 
 Extend `AppStateStoreTests` with a round-trip assertion using a nonempty collapsed set and a direct decoder test for the previous JSON shape:
 
@@ -87,7 +87,7 @@ func stateSavedBeforeCollapseSupportDefaultsExpanded() throws {
 }
 ```
 
-- [ ] **Step 2: Run the focused core tests and verify RED**
+- [x] **Step 2: Run the focused core tests and verify RED**
 
 Run:
 
@@ -98,7 +98,7 @@ swift test --filter stateSavedBeforeCollapseSupportDefaultsExpanded
 
 Expected: compilation fails because `UsageSectionID` and `collapsedUsageSections` do not exist.
 
-- [ ] **Step 3: Add stable section identifiers and compatible state coding**
+- [x] **Step 3: Add stable section identifiers and compatible state coding**
 
 Create `UsageSectionID.swift`:
 
@@ -146,7 +146,7 @@ collapsedUsageSections = try container.decodeIfPresent(
 
 Keep `.empty.collapsedUsageSections` empty.
 
-- [ ] **Step 4: Run the focused core tests and verify GREEN**
+- [x] **Step 4: Run the focused core tests and verify GREEN**
 
 Run:
 
@@ -158,7 +158,7 @@ swift test --filter stateStore
 
 Expected: PASS.
 
-- [ ] **Step 5: Write failing model persistence and rollback tests**
+- [x] **Step 5: Write failing model persistence and rollback tests**
 
 Extend `TestAppStateStore` with a default-nil `saveError: TestAppStateStoreError?` and throw it before assigning state. Define:
 
@@ -221,7 +221,7 @@ func rejectedCollapseSaveRollsBackObservableState() async {
 }
 ```
 
-- [ ] **Step 6: Run the model tests and verify RED**
+- [x] **Step 6: Run the model tests and verify RED**
 
 Run:
 
@@ -232,7 +232,7 @@ swift test --filter rejectedCollapseSaveRollsBackObservableState
 
 Expected: compilation fails because `AppModel` does not expose or toggle collapse state.
 
-- [ ] **Step 7: Implement shared AppModel ownership**
+- [x] **Step 7: Implement shared AppModel ownership**
 
 Add the observable state:
 
@@ -261,7 +261,7 @@ public func toggleUsageSection(_ section: UsageSectionID) async throws {
 }
 ```
 
-- [ ] **Step 8: Run focused and full model tests**
+- [x] **Step 8: Run focused and full model tests**
 
 Run:
 
@@ -273,7 +273,7 @@ swift test --filter AppModelTests
 
 Expected: PASS.
 
-- [ ] **Step 9: Commit persisted collapse state**
+- [x] **Step 9: Commit persisted collapse state**
 
 ```bash
 git add Sources/UsageMeterCore/Persistence/UsageSectionID.swift Sources/UsageMeterCore/Persistence/PersistedAppState.swift Sources/UsageMeterUI/AppModel.swift Tests/UsageMeterCoreTests/AppStateStoreTests.swift Tests/UsageMeterUITests/AppModelTests.swift Tests/UsageMeterUITests/TestSupport.swift

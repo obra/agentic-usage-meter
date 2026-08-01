@@ -752,6 +752,66 @@ struct AppModelTests {
     }
 
     @Test
+    func collapsedUsageSectionsLoadAndPersist() async throws {
+        let stateStore = TestAppStateStore(
+            state: PersistedAppState(
+                accounts: [],
+                snapshots: [:],
+                collapsedUsageSections: [.weekly],
+            ),
+        )
+        let model = AppModel(
+            stateStore: stateStore,
+            credentialStore: TestCredentialStore(),
+            adapters: [],
+            now: { self.reference },
+        )
+
+        await model.start()
+
+        #expect(model.collapsedUsageSections == [.weekly])
+
+        try await model.toggleUsageSection(.short)
+
+        #expect(
+            model.collapsedUsageSections
+                == [.short, .weekly],
+        )
+        #expect(
+            await stateStore.state.collapsedUsageSections
+                == [.short, .weekly],
+        )
+    }
+
+    @Test
+    func rejectedCollapseSaveRollsBackObservableState() async {
+        let stateStore = TestAppStateStore(
+            state: .empty,
+            saveError: .saveRejected,
+        )
+        let model = AppModel(
+            stateStore: stateStore,
+            credentialStore: TestCredentialStore(),
+            adapters: [],
+            now: { self.reference },
+        )
+
+        await model.start()
+
+        await #expect(
+            throws: TestAppStateStoreError.saveRejected,
+        ) {
+            try await model.toggleUsageSection(.weekly)
+        }
+
+        #expect(model.collapsedUsageSections.isEmpty)
+        #expect(
+            await stateStore.state.collapsedUsageSections
+                .isEmpty,
+        )
+    }
+
+    @Test
     func floatingWidgetOpensAtItsIntendedSize() async throws {
         let stateStore = TestAppStateStore(
             state: try populatedState(

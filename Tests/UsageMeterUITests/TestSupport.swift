@@ -3,18 +3,30 @@ import UsageMeterCore
 
 @testable import UsageMeterUI
 
+enum TestAppStateStoreError: Error, Equatable, Sendable {
+    case saveRejected
+}
+
 actor TestAppStateStore: AppStatePersisting {
     private(set) var state: PersistedAppState
+    private let saveError: TestAppStateStoreError?
 
-    init(state: PersistedAppState) {
+    init(
+        state: PersistedAppState,
+        saveError: TestAppStateStoreError? = nil,
+    ) {
         self.state = state
+        self.saveError = saveError
     }
 
     func load() -> PersistedAppState {
         state
     }
 
-    func save(_ state: PersistedAppState) {
+    func save(_ state: PersistedAppState) throws {
+        if let saveError {
+            throw saveError
+        }
         self.state = state
     }
 }

@@ -24,6 +24,40 @@ func stateStoreReturnsEmptyStateWhenFileDoesNotExist() async throws {
 }
 
 @Test
+func persistedStateRoundTripsCollapsedUsageSections() throws {
+    let state = PersistedAppState(
+        accounts: [],
+        snapshots: [:],
+        collapsedUsageSections: [.short, .extraCredits],
+    )
+
+    let data = try JSONEncoder().encode(state)
+    let decoded = try JSONDecoder().decode(
+        PersistedAppState.self,
+        from: data,
+    )
+
+    #expect(
+        decoded.collapsedUsageSections
+            == [.short, .extraCredits],
+    )
+}
+
+@Test
+func stateSavedBeforeCollapseSupportDefaultsExpanded() throws {
+    let data = Data(
+        #"{"accounts":[],"snapshots":[],"refreshStates":[],"isFloatingWidgetVisible":false,"floatingWidgetPlacement":null}"#.utf8,
+    )
+
+    let decoded = try JSONDecoder().decode(
+        PersistedAppState.self,
+        from: data,
+    )
+
+    #expect(decoded.collapsedUsageSections.isEmpty)
+}
+
+@Test
 func stateStoreAtomicallyReplacesExistingState() async throws {
     let directory = try makeTemporaryDirectory()
     defer { try? FileManager.default.removeItem(at: directory) }
