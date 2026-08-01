@@ -10,6 +10,7 @@ public struct SuperGrokUsageAdapter:
     private let credentialStore: any CredentialStore
     private let transport: any HTTPTransport
     private let decoder: SuperGrokUsageDecoder
+    private let refreshClient: SuperGrokOIDCRefreshClient
 
     public init(
         credentialStore: any CredentialStore,
@@ -21,6 +22,13 @@ public struct SuperGrokUsageAdapter:
         self.credentialStore = credentialStore
         self.transport = transport
         self.decoder = decoder
+        refreshClient = SuperGrokOIDCRefreshClient(
+            transport: transport
+        )
+    }
+
+    public var canRecoverAuthenticationWithoutReconnect: Bool {
+        true
     }
 
     public func fetchUsage(
@@ -32,9 +40,9 @@ public struct SuperGrokUsageAdapter:
                 .credentialMismatch
         }
 
-        let credential: SuperGrokCredential?
+        let storedCredential: SuperGrokCredential?
         do {
-            credential =
+            storedCredential =
                 try await credentialStore.load(
                     SuperGrokCredential.self,
                     for: account.id
@@ -44,15 +52,53 @@ public struct SuperGrokUsageAdapter:
                 .credentialMismatch
         }
         guard
-            let credential,
+            var credential = storedCredential,
             !credential.accessToken.isEmpty,
-            let userID = credential.userID,
-            !userID.isEmpty
+            credential.userID?.isEmpty == false
         else {
             throw ProviderClientError
                 .reauthenticationRequired
         }
 
+        var didRefreshCredential = false
+        if credential.needsRefresh(at: now) {
+            credential = try await refreshClient
+                .refresh(credential, now: now)
+            try await credentialStore.save(
+                credential,
+                for: account.id
+            )
+            didRefreshCredential = true
+        }
+
+        var response = try await transport.send(
+            billingRequest(for: credential)
+        )
+        if
+            !didRefreshCredential,
+            response.statusCode == 401
+                || response.statusCode == 403
+        {
+            credential = try await refreshClient
+                .refresh(credential, now: now)
+            try await credentialStore.save(
+                credential,
+                for: account.id
+            )
+            response = try await transport.send(
+                billingRequest(for: credential)
+            )
+        }
+        return try decode(
+            response,
+            accountID: account.id,
+            now: now
+        )
+    }
+
+    private func billingRequest(
+        for credential: SuperGrokCredential
+    ) -> URLRequest {
         var request = URLRequest(
             url: URL(
                 string:
@@ -69,7 +115,7 @@ public struct SuperGrokUsageAdapter:
             forHTTPHeaderField: "X-XAI-Token-Auth"
         )
         request.setValue(
-            userID,
+            credential.userID,
             forHTTPHeaderField: "x-userid"
         )
         request.setValue(
@@ -82,15 +128,19 @@ public struct SuperGrokUsageAdapter:
             forHTTPHeaderField:
                 "x-grok-client-mode"
         )
+        return request
+    }
 
-        let response =
-            try await transport
-            .send(request)
+    private func decode(
+        _ response: HTTPResponse,
+        accountID: UUID,
+        now: Date
+    ) throws -> UsageSnapshot {
         switch response.statusCode {
         case 200...299:
             return try decoder.decode(
                 response.data,
-                accountID: account.id,
+                accountID: accountID,
                 fetchedAt: now
             )
         case 401, 403:

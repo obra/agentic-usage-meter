@@ -11,6 +11,10 @@ public struct SuperGrokCredential:
     public let userID: String?
     public let authMode: String?
     public let expiresAt: Date?
+    public let refreshToken: String?
+    public let oidcIssuer: String?
+    public let oidcClientID: String?
+    public let createdAt: Date?
 
     public init(
         accessToken: String,
@@ -18,7 +22,11 @@ public struct SuperGrokCredential:
         teamID: String?,
         userID: String?,
         authMode: String?,
-        expiresAt: Date?
+        expiresAt: Date?,
+        refreshToken: String? = nil,
+        oidcIssuer: String? = nil,
+        oidcClientID: String? = nil,
+        createdAt: Date? = nil
     ) {
         self.accessToken = accessToken
         self.email = email
@@ -26,6 +34,10 @@ public struct SuperGrokCredential:
         self.userID = userID
         self.authMode = authMode
         self.expiresAt = expiresAt
+        self.refreshToken = refreshToken
+        self.oidcIssuer = oidcIssuer
+        self.oidcClientID = oidcClientID
+        self.createdAt = createdAt
     }
 
     public var identityKey: String? {
@@ -40,6 +52,21 @@ public struct SuperGrokCredential:
     public var displayIdentity: String? {
         normalized(email) ?? normalized(userID)
             ?? normalized(teamID)
+    }
+
+    func needsRefresh(at date: Date) -> Bool {
+        let refreshDeadline = date.addingTimeInterval(
+            5 * 60
+        )
+        if let expiresAt {
+            return expiresAt <= refreshDeadline
+        }
+        if let createdAt {
+            return createdAt.addingTimeInterval(
+                30 * 24 * 60 * 60
+            ) <= refreshDeadline
+        }
+        return false
     }
 
     private func normalized(

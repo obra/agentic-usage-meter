@@ -42,6 +42,18 @@ public struct SuperGrokAuthDocumentDecoder:
             ),
             expiresAt: parseDate(
                 entry["expires_at"]
+            ),
+            refreshToken: nonEmptyString(
+                entry["refresh_token"]
+            ),
+            oidcIssuer: nonEmptyString(
+                entry["oidc_issuer"]
+            ),
+            oidcClientID: nonEmptyString(
+                entry["oidc_client_id"]
+            ),
+            createdAt: parseDate(
+                entry["create_time"]
             )
         )
         guard

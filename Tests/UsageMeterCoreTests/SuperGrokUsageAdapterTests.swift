@@ -6,6 +6,19 @@ import Testing
 @Suite
 struct SuperGrokUsageAdapterTests {
     @Test
+    func adapterCanRetryPersistedAuthenticationFailure() {
+        let adapter = SuperGrokUsageAdapter(
+            credentialStore:
+                SuperGrokTestCredentialStore()
+        )
+
+        #expect(
+            adapter
+                .canRecoverAuthenticationWithoutReconnect
+        )
+    }
+
+    @Test
     func adapterUsesCurrentGrokBuildBillingContract()
         async throws
     {
@@ -191,6 +204,278 @@ struct SuperGrokUsageAdapterTests {
         }
         #expect(await transport.lastRequest == nil)
     }
+
+    @Test
+    func credentialNearExpiryRefreshesBeforeBillingAndPersistsRotation()
+        async throws
+    {
+        let now = Date(
+            timeIntervalSince1970: 1_785_000_000
+        )
+        let account = SubscriptionAccount(
+            provider: .superGrok,
+            displayName: "Grok",
+            displayOrder: 0
+        )
+        let store = SuperGrokTestCredentialStore()
+        try await store.save(
+            refreshableCredential(
+                accessToken: "near-expiry-token",
+                refreshToken: "old-refresh",
+                expiresAt:
+                    now.addingTimeInterval(4 * 60)
+            ),
+            for: account.id
+        )
+        let transport = SuperGrokSequencedTransport(
+            responses: [
+                discoveryResponse(),
+                try tokenResponse(
+                    accessToken: "fresh-token",
+                    refreshToken: "new-refresh"
+                ),
+                HTTPResponse(
+                    data: currentUsageResponse(),
+                    statusCode: 200,
+                    headers: [:]
+                ),
+            ]
+        )
+        let adapter = SuperGrokUsageAdapter(
+            credentialStore: store,
+            transport: transport
+        )
+
+        let snapshot = try await adapter.fetchUsage(
+            for: account,
+            now: now
+        )
+
+        #expect(snapshot.accountID == account.id)
+        let requests = await transport.requests
+        #expect(requests.count == 3)
+        #expect(
+            requests[0].url?.absoluteString
+                == "https://auth.x.ai/.well-known/openid-configuration"
+        )
+        #expect(requests[0].httpMethod == "GET")
+        #expect(
+            requests[1].url?.absoluteString
+                == "https://auth.x.ai/token"
+        )
+        #expect(requests[1].httpMethod == "POST")
+        #expect(
+            requests[1].value(
+                forHTTPHeaderField: "Content-Type"
+            ) == "application/x-www-form-urlencoded"
+        )
+        let form = try oauthFormValues(
+            from: requests[1]
+        )
+        #expect(form["grant_type"] == "refresh_token")
+        #expect(form["refresh_token"] == "old-refresh")
+        #expect(form["client_id"] == "client-1")
+        #expect(
+            requests[2].value(
+                forHTTPHeaderField: "Authorization"
+            ) == "Bearer fresh-token"
+        )
+        let stored = try #require(
+            try await store.load(
+                SuperGrokCredential.self,
+                for: account.id
+            )
+        )
+        #expect(stored.accessToken == "fresh-token")
+        #expect(stored.refreshToken == "new-refresh")
+        #expect(
+            stored.expiresAt
+                == now.addingTimeInterval(3_600)
+        )
+        #expect(stored.createdAt == now)
+    }
+
+    @Test
+    func unauthorizedBillingRefreshesOnceAndRetriesWithRotatedToken()
+        async throws
+    {
+        let now = Date(
+            timeIntervalSince1970: 1_785_000_000
+        )
+        let account = SubscriptionAccount(
+            provider: .superGrok,
+            displayName: "Grok",
+            displayOrder: 0
+        )
+        let store = SuperGrokTestCredentialStore()
+        try await store.save(
+            refreshableCredential(
+                accessToken: "rejected-token",
+                refreshToken: "old-refresh",
+                expiresAt:
+                    now.addingTimeInterval(3_600)
+            ),
+            for: account.id
+        )
+        let transport = SuperGrokSequencedTransport(
+            responses: [
+                HTTPResponse(
+                    data: Data(),
+                    statusCode: 401,
+                    headers: [:]
+                ),
+                discoveryResponse(),
+                try tokenResponse(
+                    accessToken: "fresh-token",
+                    refreshToken: nil
+                ),
+                HTTPResponse(
+                    data: currentUsageResponse(),
+                    statusCode: 200,
+                    headers: [:]
+                ),
+            ]
+        )
+        let adapter = SuperGrokUsageAdapter(
+            credentialStore: store,
+            transport: transport
+        )
+
+        _ = try await adapter.fetchUsage(
+            for: account,
+            now: now
+        )
+
+        let requests = await transport.requests
+        #expect(requests.count == 4)
+        #expect(
+            requests[0].value(
+                forHTTPHeaderField: "Authorization"
+            ) == "Bearer rejected-token"
+        )
+        #expect(
+            requests[3].value(
+                forHTTPHeaderField: "Authorization"
+            ) == "Bearer fresh-token"
+        )
+        let stored = try #require(
+            try await store.load(
+                SuperGrokCredential.self,
+                for: account.id
+            )
+        )
+        #expect(stored.accessToken == "fresh-token")
+        #expect(stored.refreshToken == "old-refresh")
+    }
+
+    @Test
+    func untrustedOIDCIssuerIsRejectedWithoutSendingARequest()
+        async throws
+    {
+        let now = Date(
+            timeIntervalSince1970: 1_785_000_000
+        )
+        let account = SubscriptionAccount(
+            provider: .superGrok,
+            displayName: "Grok",
+            displayOrder: 0
+        )
+        let store = SuperGrokTestCredentialStore()
+        try await store.save(
+            SuperGrokCredential(
+                accessToken: "expired-token",
+                email: "user@example.com",
+                teamID: "team-1",
+                userID: "user-1",
+                authMode: "oidc",
+                expiresAt:
+                    now.addingTimeInterval(-1),
+                refreshToken: "refresh-token",
+                oidcIssuer:
+                    "https://attacker.example",
+                oidcClientID: "client-1",
+                createdAt:
+                    now.addingTimeInterval(-3_600)
+            ),
+            for: account.id
+        )
+        let transport = SuperGrokSequencedTransport(
+            responses: []
+        )
+        let adapter = SuperGrokUsageAdapter(
+            credentialStore: store,
+            transport: transport
+        )
+
+        await #expect(throws: ProviderClientError
+            .reauthenticationRequired) {
+            _ = try await adapter.fetchUsage(
+                for: account,
+                now: now
+            )
+        }
+        #expect(await transport.requests.isEmpty)
+    }
+}
+
+private func refreshableCredential(
+    accessToken: String,
+    refreshToken: String,
+    expiresAt: Date
+) -> SuperGrokCredential {
+    SuperGrokCredential(
+        accessToken: accessToken,
+        email: "user@example.com",
+        teamID: "team-1",
+        userID: "user-1",
+        authMode: "oidc",
+        expiresAt: expiresAt,
+        refreshToken: refreshToken,
+        oidcIssuer: "https://auth.x.ai",
+        oidcClientID: "client-1",
+        createdAt:
+            expiresAt.addingTimeInterval(-3_600)
+    )
+}
+
+private func discoveryResponse() -> HTTPResponse {
+    HTTPResponse(
+        data: Data(
+            #"""
+            {
+              "issuer": "https://auth.x.ai",
+              "authorization_endpoint": "https://auth.x.ai/authorize",
+              "token_endpoint": "https://auth.x.ai/token",
+              "jwks_uri": "https://auth.x.ai/.well-known/jwks.json"
+            }
+            """#.utf8
+        ),
+        statusCode: 200,
+        headers: [
+            "Content-Type": "application/json"
+        ]
+    )
+}
+
+private func tokenResponse(
+    accessToken: String,
+    refreshToken: String?
+) throws -> HTTPResponse {
+    var object: [String: Any] = [
+        "access_token": accessToken,
+        "expires_in": 3_600,
+        "token_type": "Bearer",
+    ]
+    object["refresh_token"] = refreshToken
+    return HTTPResponse(
+        data: try JSONSerialization.data(
+            withJSONObject: object
+        ),
+        statusCode: 200,
+        headers: [
+            "Content-Type": "application/json"
+        ]
+    )
 }
 
 private func currentUsageResponse() -> Data {
@@ -227,6 +512,28 @@ private actor SuperGrokRecordingTransport:
     func send(_ request: URLRequest) -> HTTPResponse {
         lastRequest = request
         return response
+    }
+}
+
+private actor SuperGrokSequencedTransport:
+    HTTPTransport
+{
+    private(set) var requests: [URLRequest] = []
+    private var responses: [HTTPResponse]
+
+    init(responses: [HTTPResponse]) {
+        self.responses = responses
+    }
+
+    func send(
+        _ request: URLRequest
+    ) throws -> HTTPResponse {
+        requests.append(request)
+        guard !responses.isEmpty else {
+            throw ProviderClientError
+                .temporaryFailure
+        }
+        return responses.removeFirst()
     }
 }
 
