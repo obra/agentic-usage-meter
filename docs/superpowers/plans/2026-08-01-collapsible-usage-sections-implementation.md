@@ -879,7 +879,7 @@ git commit -m "Render collapsible usage donut shelves" -m "Turn compact-surface 
 - Consumes: the complete persisted-state, presentation, and SwiftUI implementation from Tasks 1 through 3.
 - Produces: automated, assembled-app, persistence, shared-surface, and live visual acceptance evidence.
 
-- [ ] **Step 1: Run the complete Swift package test suite**
+- [x] **Step 1: Run the complete Swift package test suite**
 
 Run:
 
@@ -889,7 +889,7 @@ swift test
 
 Expected: every suite passes with no failures.
 
-- [ ] **Step 2: Build the executable product**
+- [x] **Step 2: Build the executable product**
 
 Run:
 
@@ -899,7 +899,7 @@ swift build --product AgenticUsageMeter
 
 Expected: the debug executable builds successfully.
 
-- [ ] **Step 3: Assemble and verify the application bundle**
+- [x] **Step 3: Assemble and verify the application bundle**
 
 Run:
 
@@ -911,7 +911,7 @@ codesign --verify --deep --strict --verbose=2 "build/Agentic Usage Meter.app"
 
 Expected: the current executable is copied into `build/Agentic Usage Meter.app` and strict ad-hoc signature verification succeeds.
 
-- [ ] **Step 4: Launch representative sample data**
+- [x] **Step 4: Launch representative sample data**
 
 Run:
 
@@ -922,6 +922,12 @@ open -n "build/Agentic Usage Meter.app" --args --sample-data --show-widget
 Expected: the newly assembled floating widget opens with representative timed and balance sections.
 
 - [ ] **Step 5: Perform live interaction and visual acceptance**
+
+The assembled sample widget was launched and its expanded Gantt rendering was
+visually inspected. Automated tests cover shared persistence, per-pool shelves,
+resource decoding, intrinsic collapse height, and real `NSPanel` shrink/grow
+behavior. Direct click-through remains a human acceptance boundary because the
+macOS accessibility controller cannot attach to this `LSUIElement` process.
 
 Verify on the running product:
 
@@ -937,7 +943,7 @@ Verify on the running product:
 - clicking a shelf cell opens the correct account dashboard;
 - VoiceOver/help text includes the full provider, account, pool, percentage, and reset or balance-cycle context.
 
-- [ ] **Step 6: Inspect the final diff and working tree**
+- [x] **Step 6: Inspect the final diff and working tree**
 
 Run:
 
