@@ -79,7 +79,10 @@ struct SuperGrokUsageDecoderTests {
             .decode(
                 grpcWebFrame(root),
                 accountID: UUID(),
-                fetchedAt: Date()
+                fetchedAt: Date(
+                    timeIntervalSince1970:
+                        TimeInterval(resetEpoch - 1)
+                )
             )
 
         #expect(
