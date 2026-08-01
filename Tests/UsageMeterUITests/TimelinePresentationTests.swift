@@ -7,7 +7,7 @@ import UsageMeterCore
 @Suite
 struct TimelinePresentationTests {
   @Test
-  func inactiveWindowRendersEmptyFromNowWithoutInventingAReset() throws {
+  func inactiveWindowShowsFullCapacityFromNowWithoutInventingAReset() throws {
     let account = SubscriptionAccount(
       provider: .factory,
       displayName: "Factory",
@@ -33,7 +33,7 @@ struct TimelinePresentationTests {
 
     #expect(presentation.outerXFraction == 0.5)
     #expect(presentation.outerWidthFraction == 0.5)
-    #expect(presentation.fillFraction == 0)
+    #expect(presentation.fillFraction == 1)
     #expect(presentation.remainingPercentageText == "100%")
     #expect(presentation.relativeResetText == "5h 0m")
     #expect(presentation.exactResetText == nil)
@@ -71,7 +71,7 @@ struct TimelinePresentationTests {
     )
 
     #expect(presentation.outerWidthFraction == 0.5)
-    #expect(presentation.fillFraction == 0.66)
+    #expect(abs(presentation.fillFraction - 0.34) < 0.0001)
     #expect(presentation.nowXFraction == 0.5)
     #expect(presentation.providerText == "Codex")
     #expect(presentation.accountText == "Work")
@@ -110,7 +110,7 @@ struct TimelinePresentationTests {
 
     #expect(presentation.outerXFraction == 0.25)
     #expect(presentation.outerWidthFraction == 0.5)
-    #expect(presentation.fillFraction == 0.25)
+    #expect(presentation.fillFraction == 0.75)
     #expect(presentation.remainingPercentageText == "75%")
     #expect(presentation.relativeResetText == "2h 30m")
   }

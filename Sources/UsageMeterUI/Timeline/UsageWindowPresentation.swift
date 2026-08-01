@@ -41,7 +41,7 @@ public struct UsageWindowPresentation: Equatable, Sendable {
     )!
     outerXFraction = layout.xFraction(for: window)
     outerWidthFraction = layout.widthFraction(for: window)
-    fillFraction = window.consumedFraction
+    fillFraction = window.remainingFraction
     nowXFraction = 0.5
 
     let remainingPercent = Int(
