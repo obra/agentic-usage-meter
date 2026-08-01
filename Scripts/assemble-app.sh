@@ -29,6 +29,9 @@ binary_directory=$(
 /bin/cp \
     "${binary_directory}/${executable_name}" \
     "${contents_path}/MacOS/${executable_name}"
+"${script_directory}/copy-swiftpm-resource-bundles.sh" \
+    "${binary_directory}" \
+    "${bundle_path}"
 /bin/chmod 755 "${contents_path}/MacOS/${executable_name}"
 
 echo "${bundle_path}"

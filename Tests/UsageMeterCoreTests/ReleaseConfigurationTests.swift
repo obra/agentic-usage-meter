@@ -62,7 +62,7 @@ struct ReleaseConfigurationTests {
         process.executableURL = URL(fileURLWithPath: "/bin/zsh")
         process.arguments = [
             repositoryRoot.appending(
-                path: "scripts/copy-swiftpm-resource-bundles.sh",
+                path: "Scripts/copy-swiftpm-resource-bundles.sh",
             ).path,
             binaryDirectory.path,
             applicationBundle.path,
