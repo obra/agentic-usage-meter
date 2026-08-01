@@ -10,62 +10,45 @@ public struct SuperGrokUsageDecoder:
         accountID: UUID,
         fetchedAt: Date
     ) throws -> UsageSnapshot {
-        let frames = dataFrames(in: data)
-        guard !frames.isEmpty else {
+        let response: BillingResponse
+        do {
+            response = try JSONDecoder()
+                .decode(
+                    BillingResponse.self,
+                    from: data
+                )
+        } catch {
             throw ProviderClientError
                 .unsupportedResponse
         }
 
-        var scan = ProtobufScan()
-        var order = 0
-        for frame in frames {
-            scanProtobuf(
-                frame,
-                path: [],
-                depth: 0,
-                order: &order,
-                scan: &scan
-            )
-        }
-
-        let usageCandidates =
-            scan.fixed32Fields
-            .filter {
-                $0.path.last == 1
-                    && (0...100).contains(
-                        $0.value
-                    )
-            }
-            .sorted {
-                if $0.path.count
-                    != $1.path.count
-                {
-                    return $0.path.count
-                        < $1.path.count
-                }
-                return $0.order < $1.order
-            }
-        let observedPath =
-            usageCandidates.filter {
-                $0.path == [1, 1]
-            }
         guard
+            let config = response.config,
             let usedPercent =
-                (observedPath.isEmpty
-                ? usageCandidates
-                : observedPath).first?
-                .value,
-            let resetAt = resetDate(
-                in: scan,
-                fetchedAt: fetchedAt
+                config.creditUsagePercent,
+            usedPercent.isFinite,
+            (0 ... 100).contains(
+                usedPercent
             ),
+            let period = config.currentPeriod,
+            period.type
+                == "USAGE_PERIOD_TYPE_WEEKLY",
+            let resetAt = parseDate(period.end),
+            let reportedStartAt =
+                parseDate(period.start),
+            resetAt > reportedStartAt,
             let weekly = UsageWindow(
                 id: "supergrok-weekly",
                 kind: .weekly,
-                duration: 7 * 24 * 60 * 60,
+                duration:
+                    resetAt.timeIntervalSince(
+                        reportedStartAt
+                    ),
                 resetAt: resetAt,
                 consumedFraction:
-                    usedPercent / 100
+                    usedPercent / 100,
+                reportedStartAt:
+                    reportedStartAt
             )
         else {
             throw ProviderClientError
@@ -75,228 +58,119 @@ public struct SuperGrokUsageDecoder:
         return UsageSnapshot(
             accountID: accountID,
             fetchedAt: fetchedAt,
-            windows: [weekly]
+            windows: [weekly],
+            balances: try balances(
+                from: config
+            )
         )
     }
 
-    private func resetDate(
-        in scan: ProtobufScan,
-        fetchedAt: Date
-    ) -> Date? {
-        let candidates =
-            scan.varintFields.compactMap {
-                field -> (
-                    path: [Int],
-                    date: Date
-                )?
-                in
-                guard
-                    (1_700_000_000...2_100_000_000)
-                        .contains(field.value)
-                else {
-                    return nil
-                }
-                let date = Date(
-                    timeIntervalSince1970:
-                        TimeInterval(field.value)
-                )
-                guard date > fetchedAt else {
-                    return nil
-                }
-                return (field.path, date)
-            }
-        let observedPath =
-            candidates
-            .filter { $0.path == [1, 5, 1] }
-            .map(\.date)
-        return
-            (observedPath.isEmpty
-            ? candidates.map(\.date)
-            : observedPath).min()
-    }
-
-    private func dataFrames(
-        in data: Data
-    ) -> [Data] {
-        var frames: [Data] = []
-        var index = 0
-
-        while index + 5 <= data.count {
-            let flags = data[index]
-            let length =
-                Int(data[index + 1]) << 24
-                | Int(data[index + 2]) << 16
-                | Int(data[index + 3]) << 8
-                | Int(data[index + 4])
-            let start = index + 5
-            let end = start + length
-            guard end <= data.count else {
-                break
-            }
-            if flags & 0x80 == 0 {
-                frames.append(
-                    Data(data[start..<end])
-                )
-            }
-            index = end
+    private func balances(
+        from config: BillingConfig
+    ) throws -> [UsageBalance] {
+        guard
+            let prepaidBalance =
+                config.prepaidBalance
+        else {
+            return []
         }
-        return frames
-    }
-
-    private func scanProtobuf(
-        _ data: Data,
-        path: [Int],
-        depth: Int,
-        order: inout Int,
-        scan: inout ProtobufScan
-    ) {
-        var index = 0
-        while index < data.count {
-            let fieldStart = index
-            guard
-                let key = readVarint(
-                    data,
-                    index: &index
+        guard prepaidBalance.val >= 0 else {
+            throw ProviderClientError
+                .unsupportedResponse
+        }
+        guard
+            let cents = Decimal(
+                string: String(
+                    prepaidBalance.val
                 ),
-                key != 0
-            else {
-                index = min(
-                    fieldStart + 1,
-                    data.count
+                locale: Locale(
+                    identifier: "en_US_POSIX"
                 )
-                continue
-            }
-
-            let fieldNumber = Int(key >> 3)
-            let wireType = Int(key & 0x07)
-            let fieldPath =
-                path + [fieldNumber]
-
-            switch wireType {
-            case 0:
-                guard
-                    let value = readVarint(
-                        data,
-                        index: &index
-                    )
-                else {
-                    index = min(
-                        fieldStart + 1,
-                        data.count
-                    )
-                    continue
-                }
-                scan.varintFields.append(
-                    .init(
-                        path: fieldPath,
-                        value: value
-                    )
+            ),
+            let balance = UsageBalance(
+                id: "supergrok-prepaid",
+                label: "Extra usage",
+                value: .available(
+                    amount: cents / 100,
+                    unit: "USD"
                 )
-            case 1:
-                guard index + 8 <= data.count
-                else {
-                    return
-                }
-                index += 8
-            case 2:
-                guard
-                    let rawLength = readVarint(
-                        data,
-                        index: &index
-                    ),
-                    rawLength
-                        <= UInt64(data.count - index)
-                else {
-                    index = min(
-                        fieldStart + 1,
-                        data.count
-                    )
-                    continue
-                }
-                let length = Int(rawLength)
-                let start = index
-                let end = start + length
-                if depth < 4 {
-                    scanProtobuf(
-                        Data(data[start..<end]),
-                        path: fieldPath,
-                        depth: depth + 1,
-                        order: &order,
-                        scan: &scan
-                    )
-                }
-                index = end
-            case 5:
-                guard index + 4 <= data.count
-                else {
-                    return
-                }
-                let bits =
-                    UInt32(data[index])
-                    | UInt32(data[index + 1])
-                    << 8
-                    | UInt32(data[index + 2])
-                    << 16
-                    | UInt32(data[index + 3])
-                    << 24
-                index += 4
-                let value = Double(
-                    Float(bitPattern: bits)
-                )
-                if value.isFinite {
-                    scan.fixed32Fields
-                        .append(
-                            .init(
-                                path: fieldPath,
-                                value: value,
-                                order: order
-                            )
-                        )
-                    order += 1
-                }
-            default:
-                index = min(
-                    fieldStart + 1,
-                    data.count
-                )
-            }
+            )
+        else {
+            throw ProviderClientError
+                .unsupportedResponse
         }
+        return [balance]
     }
 
-    private func readVarint(
-        _ data: Data,
-        index: inout Int
-    ) -> UInt64? {
-        var value: UInt64 = 0
-        var shift: UInt64 = 0
-        while index < data.count,
-            shift < 64
-        {
-            let byte = data[index]
-            index += 1
-            value |=
-                UInt64(byte & 0x7F) << shift
-            if byte & 0x80 == 0 {
-                return value
-            }
-            shift += 7
+    private func parseDate(
+        _ value: String?
+    ) -> Date? {
+        guard let value else {
+            return nil
         }
-        return nil
+
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [
+            .withInternetDateTime,
+            .withFractionalSeconds,
+        ]
+        if let date = fractional.date(
+            from: value
+        ) {
+            return date
+        }
+
+        let internet = ISO8601DateFormatter()
+        internet.formatOptions = [
+            .withInternetDateTime
+        ]
+        return internet.date(from: value)
     }
 }
 
-private struct ProtobufScan {
-    struct VarintField {
-        let path: [Int]
-        let value: UInt64
+private struct BillingResponse:
+    Decodable
+{
+    let config: BillingConfig?
+}
+
+private struct BillingConfig:
+    Decodable
+{
+    let creditUsagePercent: Double?
+    let currentPeriod: UsagePeriod?
+    let prepaidBalance: Cent?
+}
+
+private struct UsagePeriod:
+    Decodable
+{
+    let type: String?
+    let start: String?
+    let end: String?
+}
+
+private struct Cent:
+    Decodable
+{
+    let val: Int64
+
+    private enum CodingKeys:
+        String,
+        CodingKey
+    {
+        case val
     }
 
-    struct Fixed32Field {
-        let path: [Int]
-        let value: Double
-        let order: Int
+    init(from decoder: Decoder) throws {
+        let container = try decoder
+            .container(
+                keyedBy: CodingKeys.self
+            )
+        val = try container
+            .decodeIfPresent(
+                Int64.self,
+                forKey: .val
+            ) ?? 0
     }
-
-    var varintFields: [VarintField] = []
-    var fixed32Fields: [Fixed32Field] = []
 }

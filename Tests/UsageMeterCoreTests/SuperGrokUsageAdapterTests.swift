@@ -6,7 +6,7 @@ import Testing
 @Suite
 struct SuperGrokUsageAdapterTests {
     @Test
-    func adapterUsesOnlyItsAccountCredential()
+    func adapterUsesCurrentGrokBuildBillingContract()
         async throws
     {
         let account = SubscriptionAccount(
@@ -28,7 +28,7 @@ struct SuperGrokUsageAdapterTests {
         )
         let transport = SuperGrokRecordingTransport(
             response: HTTPResponse(
-                data: validUsageResponse(),
+                data: currentUsageResponse(),
                 statusCode: 200,
                 headers: [:]
             )
@@ -52,9 +52,10 @@ struct SuperGrokUsageAdapterTests {
         )
         #expect(
             request.url?.absoluteString
-                == "https://grok.com/grok_api_v2.GrokBuildBilling/GetGrokCreditsConfig"
+                == "https://cli-chat-proxy.grok.com/v1/billing?format=credits"
         )
-        #expect(request.httpMethod == "POST")
+        #expect(request.httpMethod == "GET")
+        #expect(request.httpBody == nil)
         #expect(
             request.value(
                 forHTTPHeaderField: "Authorization"
@@ -62,10 +63,26 @@ struct SuperGrokUsageAdapterTests {
         )
         #expect(
             request.value(
-                forHTTPHeaderField: "Content-Type"
-            ) == "application/grpc-web+proto"
+                forHTTPHeaderField: "X-XAI-Token-Auth"
+            ) == "xai-grok-cli"
         )
-        #expect(request.httpBody == Data([0, 0, 0, 0, 0]))
+        #expect(
+            request.value(
+                forHTTPHeaderField: "x-userid"
+            ) == "user-1"
+        )
+        #expect(
+            request.value(
+                forHTTPHeaderField:
+                    "x-grok-client-version"
+            ) == "0.2.81"
+        )
+        #expect(
+            request.value(
+                forHTTPHeaderField:
+                    "x-grok-client-mode"
+            ) == "headless"
+        )
     }
 
     @Test
@@ -152,7 +169,7 @@ struct SuperGrokUsageAdapterTests {
         )
         let transport = SuperGrokRecordingTransport(
             response: HTTPResponse(
-                data: validUsageResponse(),
+                data: currentUsageResponse(),
                 statusCode: 200,
                 headers: [:]
             )
@@ -174,6 +191,27 @@ struct SuperGrokUsageAdapterTests {
         }
         #expect(await transport.lastRequest == nil)
     }
+}
+
+private func currentUsageResponse() -> Data {
+    Data(
+        #"""
+        {
+          "config": {
+            "creditUsagePercent": 20,
+            "currentPeriod": {
+              "type": "USAGE_PERIOD_TYPE_WEEKLY",
+              "start": "2026-07-30T00:00:00Z",
+              "end": "2026-08-06T00:00:00Z"
+            },
+            "prepaidBalance": { "val": 0 },
+            "isUnifiedBillingUser": true
+          },
+          "onDemandEnabled": true,
+          "subscriptionTier": "SuperGrok"
+        }
+        """#.utf8
+    )
 }
 
 private actor SuperGrokRecordingTransport:
@@ -215,104 +253,4 @@ private actor SuperGrokTestCredentialStore:
             forKey: accountID
         )
     }
-}
-
-private func validUsageResponse() -> Data {
-    let resetEpoch: UInt64 = 1_785_600_000
-    var weekly = Data()
-    weekly.append(superGrokFixed32Field(1, 20))
-    weekly.append(
-        superGrokLengthDelimitedField(
-            5,
-            superGrokVarintField(
-                1,
-                resetEpoch
-            )
-        )
-    )
-    return superGrokGrpcWebFrame(
-        superGrokLengthDelimitedField(
-            1,
-            weekly
-        )
-    )
-}
-
-private func superGrokEncodeVarint(
-    _ value: UInt64
-) -> Data {
-    var remaining = value
-    var data = Data()
-    while remaining >= 0x80 {
-        data.append(
-            UInt8(remaining & 0x7F) | 0x80
-        )
-        remaining >>= 7
-    }
-    data.append(UInt8(remaining))
-    return data
-}
-
-private func superGrokVarintField(
-    _ fieldNumber: UInt8,
-    _ value: UInt64
-) -> Data {
-    var data = Data(
-        [(fieldNumber << 3) | 0]
-    )
-    data.append(
-        superGrokEncodeVarint(value)
-    )
-    return data
-}
-
-private func superGrokLengthDelimitedField(
-    _ fieldNumber: UInt8,
-    _ payload: Data
-) -> Data {
-    var data = Data(
-        [(fieldNumber << 3) | 2]
-    )
-    data.append(
-        superGrokEncodeVarint(
-            UInt64(payload.count)
-        )
-    )
-    data.append(payload)
-    return data
-}
-
-private func superGrokFixed32Field(
-    _ fieldNumber: UInt8,
-    _ value: Float
-) -> Data {
-    var data = Data(
-        [(fieldNumber << 3) | 5]
-    )
-    let bits = value.bitPattern
-    data.append(
-        contentsOf: [
-            UInt8(bits & 0xFF),
-            UInt8((bits >> 8) & 0xFF),
-            UInt8((bits >> 16) & 0xFF),
-            UInt8((bits >> 24) & 0xFF),
-        ]
-    )
-    return data
-}
-
-private func superGrokGrpcWebFrame(
-    _ payload: Data
-) -> Data {
-    var frame = Data([0])
-    frame.append(
-        contentsOf: [
-            UInt8((payload.count >> 24) & 0xFF),
-            UInt8((payload.count >> 16) & 0xFF),
-            UInt8((payload.count >> 8) & 0xFF),
-            UInt8(payload.count & 0xFF),
-        ]
-    )
-    frame.append(payload)
-    return frame
 }

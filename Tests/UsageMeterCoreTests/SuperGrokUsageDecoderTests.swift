@@ -6,31 +6,30 @@ import Testing
 @Suite
 struct SuperGrokUsageDecoderTests {
     @Test
-    func weeklyUsedPercentAndResetBecomeAWeeklyWindow()
+    func currentBillingJSONBecomesWeeklyUsageAndPrepaidBalance()
         throws
     {
         let accountID = UUID()
         let fetchedAt = Date(
             timeIntervalSince1970: 1_785_000_000
         )
-        let resetAt = Date(
-            timeIntervalSince1970: 1_785_600_000
-        )
-        var weekly = Data()
-        weekly.append(fixed32Field(1, 42.5))
-        weekly.append(
-            lengthDelimitedField(
-                5,
-                varintField(
-                    1,
-                    UInt64(
-                        resetAt.timeIntervalSince1970
-                    )
-                )
-            )
-        )
-        let response = grpcWebFrame(
-            lengthDelimitedField(1, weekly)
+        let response = Data(
+            #"""
+            {
+              "config": {
+                "creditUsagePercent": 42.5,
+                "currentPeriod": {
+                  "type": "USAGE_PERIOD_TYPE_WEEKLY",
+                  "start": "2026-07-30T00:00:00Z",
+                  "end": "2026-08-06T00:00:00Z"
+                },
+                "prepaidBalance": { "val": 1234 },
+                "isUnifiedBillingUser": true
+              },
+              "onDemandEnabled": true,
+              "subscriptionTier": "SuperGrok Heavy"
+            }
+            """#.utf8
         )
 
         let snapshot = try SuperGrokUsageDecoder()
@@ -47,47 +46,33 @@ struct SuperGrokUsageDecoderTests {
         )
         #expect(window.id == "supergrok-weekly")
         #expect(window.kind == .weekly)
-        #expect(window.duration == 7 * 24 * 60 * 60)
-        #expect(window.resetAt == resetAt)
+        #expect(window.duration == 604_800)
+        #expect(window.consumedFraction == 0.425)
         #expect(
-            abs(window.consumedFraction - 0.425)
-                < 0.0001
-        )
-        #expect(snapshot.balances.isEmpty)
-    }
-
-    @Test
-    func observedWeeklyPathWinsOverOtherFloatFields()
-        throws
-    {
-        let resetEpoch: UInt64 = 1_785_600_000
-        var weekly = Data()
-        weekly.append(fixed32Field(1, 25))
-        weekly.append(
-            lengthDelimitedField(
-                5,
-                varintField(1, resetEpoch)
-            )
-        )
-        var root = Data()
-        root.append(fixed32Field(1, 99))
-        root.append(
-            lengthDelimitedField(1, weekly)
-        )
-
-        let snapshot = try SuperGrokUsageDecoder()
-            .decode(
-                grpcWebFrame(root),
-                accountID: UUID(),
-                fetchedAt: Date(
+            window.reportedStartAt
+                == Date(
                     timeIntervalSince1970:
-                        TimeInterval(resetEpoch - 1)
+                        1_785_369_600
                 )
-            )
-
+        )
         #expect(
-            snapshot.windows.only?
-                .consumedFraction == 0.25
+            window.resetAt
+                == Date(
+                    timeIntervalSince1970:
+                        1_785_974_400
+                )
+        )
+        let balance = try #require(
+            snapshot.balances.only
+        )
+        #expect(balance.id == "supergrok-prepaid")
+        #expect(balance.label == "Extra usage")
+        #expect(
+            balance.value
+                == .available(
+                    amount: Decimal(string: "12.34")!,
+                    unit: "USD"
+                )
         )
     }
 
@@ -100,7 +85,7 @@ struct SuperGrokUsageDecoderTests {
         ) {
             _ = try SuperGrokUsageDecoder()
                 .decode(
-                    grpcWebFrame(Data()),
+                    Data(#"{"config":{}}"#.utf8),
                     accountID: UUID(),
                     fetchedAt: Date()
                 )
@@ -112,79 +97,4 @@ extension Collection {
     fileprivate var only: Element? {
         count == 1 ? first : nil
     }
-}
-
-private func encodeVarint(
-    _ value: UInt64
-) -> Data {
-    var remaining = value
-    var data = Data()
-    while remaining >= 0x80 {
-        data.append(
-            UInt8(remaining & 0x7F) | 0x80
-        )
-        remaining >>= 7
-    }
-    data.append(UInt8(remaining))
-    return data
-}
-
-private func varintField(
-    _ fieldNumber: UInt8,
-    _ value: UInt64
-) -> Data {
-    var data = Data(
-        [(fieldNumber << 3) | 0]
-    )
-    data.append(encodeVarint(value))
-    return data
-}
-
-private func lengthDelimitedField(
-    _ fieldNumber: UInt8,
-    _ payload: Data
-) -> Data {
-    var data = Data(
-        [(fieldNumber << 3) | 2]
-    )
-    data.append(
-        encodeVarint(UInt64(payload.count))
-    )
-    data.append(payload)
-    return data
-}
-
-private func fixed32Field(
-    _ fieldNumber: UInt8,
-    _ value: Float
-) -> Data {
-    var data = Data(
-        [(fieldNumber << 3) | 5]
-    )
-    let bits = value.bitPattern
-    data.append(
-        contentsOf: [
-            UInt8(bits & 0xFF),
-            UInt8((bits >> 8) & 0xFF),
-            UInt8((bits >> 16) & 0xFF),
-            UInt8((bits >> 24) & 0xFF),
-        ]
-    )
-    return data
-}
-
-private func grpcWebFrame(
-    _ payload: Data
-) -> Data {
-    var frame = Data([0])
-    frame.append(
-        contentsOf: [
-            UInt8((payload.count >> 24) & 0xFF),
-            UInt8((payload.count >> 16) & 0xFF),
-            UInt8((payload.count >> 8) & 0xFF),
-            UInt8(payload.count & 0xFF),
-        ]
-    )
-    frame.append(payload)
-    return frame
 }

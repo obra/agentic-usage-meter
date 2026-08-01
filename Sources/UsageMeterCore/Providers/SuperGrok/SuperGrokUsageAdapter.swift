@@ -44,7 +44,8 @@ public struct SuperGrokUsageAdapter:
         guard
             let credential,
             !credential.accessToken.isEmpty,
-            credential.identityKey != nil
+            let userID = credential.userID,
+            !userID.isEmpty
         else {
             throw ProviderClientError
                 .reauthenticationRequired
@@ -53,40 +54,31 @@ public struct SuperGrokUsageAdapter:
         var request = URLRequest(
             url: URL(
                 string:
-                    "https://grok.com/grok_api_v2.GrokBuildBilling/GetGrokCreditsConfig"
+                    "https://cli-chat-proxy.grok.com/v1/billing?format=credits"
             )!
         )
-        request.httpMethod = "POST"
-        request.httpBody = Data(
-            [0, 0, 0, 0, 0]
-        )
+        request.httpMethod = "GET"
         request.setValue(
             "Bearer \(credential.accessToken)",
             forHTTPHeaderField: "Authorization"
         )
         request.setValue(
-            "https://grok.com",
-            forHTTPHeaderField: "Origin"
+            "xai-grok-cli",
+            forHTTPHeaderField: "X-XAI-Token-Auth"
         )
         request.setValue(
-            "https://grok.com/?_s=usage",
-            forHTTPHeaderField: "Referer"
+            userID,
+            forHTTPHeaderField: "x-userid"
         )
         request.setValue(
-            "*/*",
-            forHTTPHeaderField: "Accept"
+            "0.2.81",
+            forHTTPHeaderField:
+                "x-grok-client-version"
         )
         request.setValue(
-            "application/grpc-web+proto",
-            forHTTPHeaderField: "Content-Type"
-        )
-        request.setValue(
-            "1",
-            forHTTPHeaderField: "x-grpc-web"
-        )
-        request.setValue(
-            "connect-es/2.1.1",
-            forHTTPHeaderField: "x-user-agent"
+            "headless",
+            forHTTPHeaderField:
+                "x-grok-client-mode"
         )
 
         let response =
