@@ -292,7 +292,7 @@ git commit -m "Persist collapsed usage sections" -m "Add stable section identifi
 - Consumes: `UsageTimelineRowPresentation`, `UsageBalanceRowPresentation`, `UsageWindow.remainingFraction`, and existing accessibility strings.
 - Produces: `UsagePoolShelfItemPresentation` and `UsageBalanceShelfItemPresentation`, each preserving the source row ID and account routing information.
 
-- [ ] **Step 1: Write failing timed-pool shelf tests**
+- [x] **Step 1: Write failing timed-pool shelf tests**
 
 Add a test that constructs a Factory short section with active Standard and Droid Core pools, then maps every section row into a shelf item:
 
@@ -347,7 +347,7 @@ func collapsedShelfKeepsEachPoolAndUsesRemainingCapacity() throws {
 }
 ```
 
-- [ ] **Step 2: Write the failing Extra Credits shelf test**
+- [x] **Step 2: Write the failing Extra Credits shelf test**
 
 Add this test using the real balance presentation:
 
@@ -382,7 +382,7 @@ func collapsedBalanceShelfUsesActualStatus() throws {
 
 The balance presentation intentionally has no remaining-fraction property.
 
-- [ ] **Step 3: Run the presentation tests and verify RED**
+- [x] **Step 3: Run the presentation tests and verify RED**
 
 Run:
 
@@ -393,7 +393,7 @@ swift test --filter collapsedBalanceShelfUsesActualStatus
 
 Expected: compilation fails because the shelf presentation types do not exist.
 
-- [ ] **Step 4: Implement the focused shelf presentation values**
+- [x] **Step 4: Implement the focused shelf presentation values**
 
 Create `UsageShelfPresentation.swift` with value types shaped as follows:
 
@@ -439,7 +439,7 @@ struct UsageBalanceShelfItemPresentation: Equatable, Identifiable, Sendable {
 
 Do not regroup rows by account. Existing section and balance ordering remains authoritative.
 
-- [ ] **Step 5: Run the presentation suite and verify GREEN**
+- [x] **Step 5: Run the presentation suite and verify GREEN**
 
 Run:
 
@@ -451,7 +451,7 @@ swift test --filter TimelinePresentationTests
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit collapsed shelf presentation**
+- [x] **Step 6: Commit collapsed shelf presentation**
 
 ```bash
 git add Sources/UsageMeterUI/Timeline/UsageShelfPresentation.swift Tests/UsageMeterUITests/TimelinePresentationTests.swift

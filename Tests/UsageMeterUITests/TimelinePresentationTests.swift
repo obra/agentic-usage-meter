@@ -549,6 +549,96 @@ struct TimelinePresentationTests {
   }
 
   @Test
+  func collapsedShelfKeepsEachPoolAndUsesRemainingCapacity() throws {
+    let account = SubscriptionAccount(
+      provider: .factory,
+      displayName: "Factory Work",
+      displayOrder: 0,
+    )
+    let windows = [
+      UsageWindow(
+        id: "standard",
+        kind: .short,
+        duration: 18_000,
+        resetAt: Date(timeIntervalSince1970: 2_000_018_000),
+        consumedFraction: 0.4,
+        label: "Standard",
+      ),
+      UsageWindow(
+        id: "core",
+        kind: .short,
+        duration: 18_000,
+        resetAt: Date(timeIntervalSince1970: 2_000_018_000),
+        consumedFraction: 0.2,
+        label: "Droid Core",
+      ),
+    ].compactMap { $0 }
+    let state = AccountViewState(
+      account: account,
+      snapshot: UsageSnapshot(
+        accountID: account.id,
+        fetchedAt: Date(timeIntervalSince1970: 2_000_000_000),
+        windows: windows,
+      ),
+    )
+    let section = UsageTimelineSectionPresentation(
+      kind: .short,
+      accounts: [state],
+      now: Date(timeIntervalSince1970: 2_000_000_000),
+      timeZone: TimeZone(secondsFromGMT: 0)!,
+    )
+
+    let items = section.rows.map(
+      UsagePoolShelfItemPresentation.init,
+    )
+
+    #expect(items.map(\.id) == section.rows.map(\.id))
+    #expect(
+      items.map(\.accountText)
+        == ["Factory Work", "Factory Work"],
+    )
+    #expect(
+      items.map(\.detailText)
+        == ["60% · Standard", "80% · Droid Core"],
+    )
+    #expect(items.map(\.remainingFraction) == [0.6, 0.8])
+    #expect(
+      items[1].accessibilityValue.contains(
+        "Droid Core five-hour window",
+      ),
+    )
+  }
+
+  @Test
+  func collapsedBalanceShelfUsesActualStatus() throws {
+    let account = SubscriptionAccount(
+      provider: .claude,
+      displayName: "Prime",
+      displayOrder: 0,
+    )
+    let balance = try #require(
+      UsageBalance(
+        id: "usage-credits",
+        label: "Usage credits",
+        value: .disabled,
+      ),
+    )
+    let row = UsageBalanceRowPresentation(
+      account: account,
+      balance: balance,
+      timeZone: TimeZone(secondsFromGMT: 0)!,
+    )
+
+    let item = UsageBalanceShelfItemPresentation(row)
+
+    #expect(item.accountText == "Prime")
+    #expect(item.detailText == "Off")
+    #expect(
+      item.accessibilityValue.contains("Usage credits"),
+    )
+  }
+
+  @Test
   func extraCreditRowsFormatEveryExplicitState() throws {
     let account = SubscriptionAccount(
       provider: .claude,
