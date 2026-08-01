@@ -32,10 +32,13 @@ extension Provider {
 }
 
 enum ProviderMarkImageLoader {
+  private static let resourceBundleName =
+    "AgenticUsageMeter_UsageMeterUI.bundle"
+
   static func image(for provider: Provider) -> NSImage? {
     guard
       let resourceName = provider.markResourceName,
-      let url = Bundle.module.url(
+      let url = providerMarkBundle.url(
         forResource: resourceName,
         withExtension: "svg",
       )
@@ -43,6 +46,20 @@ enum ProviderMarkImageLoader {
       return nil
     }
     return NSImage(contentsOf: url)
+  }
+
+  private static var providerMarkBundle: Bundle {
+    guard
+      let resourceURL = Bundle.main.resourceURL,
+      let applicationBundle = Bundle(
+        url: resourceURL.appending(
+          path: resourceBundleName,
+        ),
+      )
+    else {
+      return Bundle.module
+    }
+    return applicationBundle
   }
 }
 

@@ -5,10 +5,7 @@ import Testing
 struct ReleaseConfigurationTests {
     @Test
     func applicationBundleDeclaresMenuBarReleaseContract() throws {
-        let plistURL = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
+        let plistURL = repositoryRoot
             .appending(path: "Resources/Info.plist")
         let data = try Data(contentsOf: plistURL)
         let plist = try #require(
@@ -30,5 +27,68 @@ struct ReleaseConfigurationTests {
         #expect(plist["CFBundlePackageType"] as? String == "APPL")
         #expect(plist["LSUIElement"] as? Bool == true)
         #expect(plist["LSMinimumSystemVersion"] as? String == "26.0")
+    }
+
+    @Test
+    func swiftPMResourceBundleIsCopiedIntoAppResources() throws {
+        let temporaryRoot = FileManager.default.temporaryDirectory
+            .appending(path: UUID().uuidString)
+        defer {
+            try? FileManager.default.removeItem(
+                at: temporaryRoot,
+            )
+        }
+        let binaryDirectory = temporaryRoot.appending(
+            path: "bin",
+        )
+        let sourceBundle = binaryDirectory.appending(
+            path: "AgenticUsageMeter_UsageMeterUI.bundle",
+        )
+        let applicationBundle = temporaryRoot.appending(
+            path: "Agentic Usage Meter.app",
+        )
+        try FileManager.default.createDirectory(
+            at: sourceBundle,
+            withIntermediateDirectories: true,
+        )
+        try FileManager.default.createDirectory(
+            at: applicationBundle,
+            withIntermediateDirectories: true,
+        )
+        try Data("provider mark".utf8).write(
+            to: sourceBundle.appending(path: "mark.svg"),
+        )
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        process.arguments = [
+            repositoryRoot.appending(
+                path: "scripts/copy-swiftpm-resource-bundles.sh",
+            ).path,
+            binaryDirectory.path,
+            applicationBundle.path,
+        ]
+        process.standardError = Pipe()
+
+        try process.run()
+        process.waitUntilExit()
+
+        #expect(process.terminationStatus == 0)
+        let copiedResource = applicationBundle
+            .appending(path: "Contents/Resources")
+            .appending(
+                path: "AgenticUsageMeter_UsageMeterUI.bundle",
+            )
+            .appending(path: "mark.svg")
+        #expect(
+            try Data(contentsOf: copiedResource)
+                == Data("provider mark".utf8),
+        )
+    }
+
+    private var repositoryRoot: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
     }
 }
