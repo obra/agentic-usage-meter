@@ -49,6 +49,263 @@ struct ReleaseConfigurationTests {
     }
 
     @Test
+    func releaseVersionMapsSemanticTagsToMonotonicBuildNumbers() throws {
+        #expect(try releaseVersion("v0.1.0") == "0.1.0\t1000")
+        #expect(try releaseVersion("v0.1.1") == "0.1.1\t1001")
+        #expect(try releaseVersion("v1.0.0") == "1.0.0\t1000000")
+    }
+
+    @Test
+    func releaseVersionRejectsMalformedOrOutOfRangeTags() throws {
+        #expect(try releaseVersion("1.0.0") == nil)
+        #expect(try releaseVersion("v1.0") == nil)
+        #expect(try releaseVersion("v1.2.3-beta") == nil)
+        #expect(try releaseVersion("v1000.0.0") == nil)
+    }
+
+    @Test
+    func releaseNotesExtractOnlyTheRequestedChangelogSection() throws {
+        let temporaryRoot = FileManager.default.temporaryDirectory
+            .appending(path: UUID().uuidString)
+        defer {
+            try? FileManager.default.removeItem(at: temporaryRoot)
+        }
+        try FileManager.default.createDirectory(
+            at: temporaryRoot,
+            withIntermediateDirectories: true,
+        )
+        let changelog = temporaryRoot.appending(path: "CHANGELOG.md")
+        try Data(
+            """
+            # Changelog
+
+            ## 0.2.0 - 2026-08-02
+
+            - Later release.
+
+            ## 0.1.0 - 2026-08-01
+
+            - First release.
+            - Second detail.
+
+            ## 0.0.1 - 2026-07-31
+
+            - Earlier release.
+
+            """.utf8,
+        ).write(to: changelog)
+
+        let result = try runScript(
+            repositoryRoot.appending(
+                path: "Scripts/extract-release-notes.sh",
+            ),
+            arguments: ["0.1.0", changelog.path],
+        )
+
+        #expect(result.terminationStatus == 0)
+        #expect(
+            result.output.trimmingCharacters(in: .whitespacesAndNewlines)
+                == """
+                ## 0.1.0 - 2026-08-01
+
+                - First release.
+                - Second detail.
+                """,
+        )
+    }
+
+    @Test
+    func releaseNotesFailWithoutProducingOutputForAnAbsentVersion() throws {
+        let temporaryRoot = FileManager.default.temporaryDirectory
+            .appending(path: UUID().uuidString)
+        defer {
+            try? FileManager.default.removeItem(at: temporaryRoot)
+        }
+        try FileManager.default.createDirectory(
+            at: temporaryRoot,
+            withIntermediateDirectories: true,
+        )
+        let changelog = temporaryRoot.appending(path: "CHANGELOG.md")
+        try Data("## 0.1.0 - 2026-08-01\n\n- First release.\n".utf8)
+            .write(to: changelog)
+
+        let result = try runScript(
+            repositoryRoot.appending(
+                path: "Scripts/extract-release-notes.sh",
+            ),
+            arguments: ["0.2.0", changelog.path],
+        )
+
+        #expect(result.terminationStatus != 0)
+        #expect(result.output.isEmpty)
+    }
+
+    @Test
+    func assembledReleaseUsesRequestedVersions() throws {
+        let temporaryRoot = FileManager.default.temporaryDirectory
+            .appending(path: UUID().uuidString)
+        defer {
+            try? FileManager.default.removeItem(at: temporaryRoot)
+        }
+        let scriptsDirectory = temporaryRoot.appending(path: "Scripts")
+        let resourcesDirectory = temporaryRoot.appending(path: "Resources")
+        let toolsDirectory = temporaryRoot.appending(path: "tools")
+        let binaryDirectory = temporaryRoot.appending(path: "bin")
+        for directory in [
+            scriptsDirectory,
+            resourcesDirectory,
+            toolsDirectory,
+            binaryDirectory,
+        ] {
+            try FileManager.default.createDirectory(
+                at: directory,
+                withIntermediateDirectories: true,
+            )
+        }
+        try FileManager.default.copyItem(
+            at: repositoryRoot.appending(path: "Scripts/assemble-app.sh"),
+            to: scriptsDirectory.appending(path: "assemble-app.sh"),
+        )
+        try FileManager.default.copyItem(
+            at: repositoryRoot.appending(path: "Resources/Info.plist"),
+            to: resourcesDirectory.appending(path: "Info.plist"),
+        )
+        for helper in [
+            "embed-sparkle-framework.sh",
+            "copy-swiftpm-resource-bundles.sh",
+        ] {
+            try writeExecutableScript(
+                "#!/bin/zsh\nexit 0\n",
+                to: scriptsDirectory.appending(path: helper),
+            )
+        }
+        try writeExecutableScript(
+            """
+            #!/bin/zsh
+            if [[ " $* " == *" --show-bin-path "* ]]; then
+                print -r -- "$BINARY_DIRECTORY"
+            fi
+
+            """,
+            to: toolsDirectory.appending(path: "swift"),
+        )
+        try Data("test executable".utf8).write(
+            to: binaryDirectory.appending(path: "AgenticUsageMeter"),
+        )
+
+        let result = try runScript(
+            scriptsDirectory.appending(path: "assemble-app.sh"),
+            environment: [
+                "APP_VERSION": "1.2.3",
+                "APP_BUILD": "1002003",
+                "BINARY_DIRECTORY": binaryDirectory.path,
+                "PATH": toolsDirectory.path + ":"
+                    + (ProcessInfo.processInfo.environment["PATH"] ?? ""),
+            ],
+        )
+
+        #expect(result.terminationStatus == 0)
+        let generatedPlist = temporaryRoot.appending(
+            path: "build/Agentic Usage Meter.app/Contents/Info.plist",
+        )
+        let plist = try #require(
+            PropertyListSerialization.propertyList(
+                from: Data(contentsOf: generatedPlist),
+                format: nil,
+            ) as? [String: Any],
+        )
+        #expect(plist["CFBundleShortVersionString"] as? String == "1.2.3")
+        #expect(plist["CFBundleVersion"] as? String == "1002003")
+    }
+
+    @Test
+    func releasePreflightRejectsDirtyWorktreeBeforeGitHubCalls() throws {
+        let temporaryRoot = FileManager.default.temporaryDirectory
+            .appending(path: UUID().uuidString)
+        defer {
+            try? FileManager.default.removeItem(at: temporaryRoot)
+        }
+        let fixture = try makeReleaseRepositoryFixture(at: temporaryRoot)
+        try Data("uncommitted\n".utf8).write(
+            to: temporaryRoot.appending(path: "dirty.txt"),
+        )
+
+        let result = try runScript(
+            fixture.releaseScript,
+            arguments: ["v0.1.0"],
+            environment: fixture.environment,
+        )
+
+        #expect(result.terminationStatus != 0)
+        #expect(result.error.contains("Release requires a clean worktree."))
+        #expect(!FileManager.default.fileExists(atPath: fixture.ghLog.path))
+    }
+
+    @Test
+    func releasePreflightRejectsLightweightTagBeforeGitHubCalls() throws {
+        let temporaryRoot = FileManager.default.temporaryDirectory
+            .appending(path: UUID().uuidString)
+        defer {
+            try? FileManager.default.removeItem(at: temporaryRoot)
+        }
+        let fixture = try makeReleaseRepositoryFixture(at: temporaryRoot)
+        let tagResult = try runExecutable(
+            URL(fileURLWithPath: "/usr/bin/git"),
+            arguments: ["-C", temporaryRoot.path, "tag", "v0.1.0"],
+        )
+        try #require(tagResult.terminationStatus == 0)
+        let statusResult = try runExecutable(
+            URL(fileURLWithPath: "/usr/bin/git"),
+            arguments: ["-C", temporaryRoot.path, "status", "--porcelain"],
+        )
+        try #require(statusResult.output.isEmpty)
+
+        let result = try runScript(
+            fixture.releaseScript,
+            arguments: ["v0.1.0"],
+            environment: fixture.environment,
+        )
+
+        #expect(result.terminationStatus != 0)
+        #expect(result.error.contains("v0.1.0 must be an annotated tag."))
+        #expect(!FileManager.default.fileExists(atPath: fixture.ghLog.path))
+    }
+
+    @Test
+    func releasePreflightRejectsMismatchedRemoteTagBeforeGitHubCalls() throws {
+        let temporaryRoot = FileManager.default.temporaryDirectory
+            .appending(path: UUID().uuidString)
+        defer {
+            try? FileManager.default.removeItem(at: temporaryRoot)
+        }
+        let fixture = try makeReleaseRepositoryFixture(at: temporaryRoot)
+        for arguments in [
+            ["-C", temporaryRoot.path, "tag", "-a", "v0.1.0", "-m",
+             "Release v0.1.0"],
+            ["-C", temporaryRoot.path, "remote", "add", "origin",
+             "https://github.com/obra/agentic-usage-meter.git"],
+        ] {
+            let result = try runExecutable(
+                URL(fileURLWithPath: "/usr/bin/git"),
+                arguments: arguments,
+            )
+            try #require(result.terminationStatus == 0)
+        }
+        var environment = fixture.environment
+        environment["REMOTE_TAG_OBJECT"] = String(repeating: "0", count: 40)
+
+        let result = try runScript(
+            fixture.releaseScript,
+            arguments: ["v0.1.0"],
+            environment: environment,
+        )
+
+        #expect(result.terminationStatus != 0)
+        #expect(result.error.contains("Remote tag v0.1.0 does not match"))
+        #expect(!FileManager.default.fileExists(atPath: fixture.ghLog.path))
+    }
+
+    @Test
     func swiftPMResourceBundleIsCopiedIntoAppResources() throws {
         let temporaryRoot = FileManager.default.temporaryDirectory
             .appending(path: UUID().uuidString)
@@ -634,6 +891,154 @@ struct ReleaseConfigurationTests {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
+    }
+
+    private struct ScriptResult {
+        let terminationStatus: Int32
+        let output: String
+        let error: String
+    }
+
+    private struct ReleaseRepositoryFixture {
+        let releaseScript: URL
+        let ghLog: URL
+        let environment: [String: String]
+    }
+
+    private func makeReleaseRepositoryFixture(at root: URL) throws
+        -> ReleaseRepositoryFixture
+    {
+        let scriptsDirectory = root.appending(path: "Scripts")
+        let toolsDirectory = root.appending(path: "tools")
+        try FileManager.default.createDirectory(
+            at: scriptsDirectory,
+            withIntermediateDirectories: true,
+        )
+        try FileManager.default.createDirectory(
+            at: toolsDirectory,
+            withIntermediateDirectories: true,
+        )
+        try FileManager.default.copyItem(
+            at: repositoryRoot.appending(path: "Scripts/release-version.sh"),
+            to: scriptsDirectory.appending(path: "release-version.sh"),
+        )
+        let releaseScript = scriptsDirectory.appending(path: "release.sh")
+        let sourceReleaseScript = repositoryRoot.appending(
+            path: "Scripts/release.sh",
+        )
+        if FileManager.default.fileExists(atPath: sourceReleaseScript.path) {
+            try FileManager.default.copyItem(
+                at: sourceReleaseScript,
+                to: releaseScript,
+            )
+        }
+        let ghLog = root.appending(path: "gh.log")
+        try writeExecutableScript(
+            """
+            #!/bin/zsh
+            print -r -- "$@" >> "$GH_LOG"
+            exit 99
+
+            """,
+            to: toolsDirectory.appending(path: "gh"),
+        )
+        try writeExecutableScript(
+            """
+            #!/bin/zsh
+            if [[ "$1" == ls-remote && -n "${REMOTE_TAG_OBJECT:-}" ]]; then
+                /usr/bin/printf '%s\t%s\n' "$REMOTE_TAG_OBJECT" "$4"
+                exit 0
+            fi
+            exec /usr/bin/git "$@"
+
+            """,
+            to: toolsDirectory.appending(path: "git"),
+        )
+        try Data("fixture\n".utf8).write(
+            to: root.appending(path: "README.md"),
+        )
+        for arguments in [
+            ["-C", root.path, "init", "-q"],
+            ["-C", root.path, "config", "user.name", "Release Test"],
+            [
+                "-C", root.path, "config", "user.email",
+                "release-test@example.invalid",
+            ],
+            ["-C", root.path, "add", "README.md", "Scripts", "tools"],
+            ["-C", root.path, "commit", "-q", "-m", "Release fixture"],
+        ] {
+            let result = try runExecutable(
+                URL(fileURLWithPath: "/usr/bin/git"),
+                arguments: arguments,
+            )
+            try #require(result.terminationStatus == 0)
+        }
+        return ReleaseRepositoryFixture(
+            releaseScript: releaseScript,
+            ghLog: ghLog,
+            environment: [
+                "GH_BIN": toolsDirectory.appending(path: "gh").path,
+                "GH_LOG": ghLog.path,
+                "GIT_BIN": toolsDirectory.appending(path: "git").path,
+                "PATH": toolsDirectory.path + ":"
+                    + (ProcessInfo.processInfo.environment["PATH"] ?? ""),
+            ],
+        )
+    }
+
+    private func releaseVersion(_ tag: String) throws -> String? {
+        let result = try runScript(
+            repositoryRoot.appending(path: "Scripts/release-version.sh"),
+            arguments: [tag],
+        )
+        guard result.terminationStatus == 0 else {
+            return nil
+        }
+        return result.output.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func runScript(
+        _ script: URL,
+        arguments: [String] = [],
+        environment: [String: String] = [:],
+    ) throws -> ScriptResult {
+        try runExecutable(
+            URL(fileURLWithPath: "/bin/zsh"),
+            arguments: [script.path] + arguments,
+            environment: environment,
+        )
+    }
+
+    private func runExecutable(
+        _ executable: URL,
+        arguments: [String] = [],
+        environment: [String: String] = [:],
+    ) throws -> ScriptResult {
+        let process = Process()
+        let output = Pipe()
+        let error = Pipe()
+        process.executableURL = executable
+        process.arguments = arguments
+        process.environment = ProcessInfo.processInfo.environment.merging(
+            environment,
+        ) { _, new in new }
+        process.standardOutput = output
+        process.standardError = error
+
+        try process.run()
+        process.waitUntilExit()
+
+        return ScriptResult(
+            terminationStatus: process.terminationStatus,
+            output: String(
+                decoding: output.fileHandleForReading.readDataToEndOfFile(),
+                as: UTF8.self,
+            ),
+            error: String(
+                decoding: error.fileHandleForReading.readDataToEndOfFile(),
+                as: UTF8.self,
+            ),
+        )
     }
 
     private func writeExecutableScript(

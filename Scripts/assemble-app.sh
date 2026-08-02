@@ -29,6 +29,16 @@ binary_directory=$(
 /bin/cp \
     "${repository_root}/Resources/Info.plist" \
     "${contents_path}/Info.plist"
+if [[ -n "${APP_VERSION:-}" ]]; then
+    /usr/bin/plutil -replace CFBundleShortVersionString \
+        -string "${APP_VERSION}" \
+        "${contents_path}/Info.plist"
+fi
+if [[ -n "${APP_BUILD:-}" ]]; then
+    /usr/bin/plutil -replace CFBundleVersion \
+        -string "${APP_BUILD}" \
+        "${contents_path}/Info.plist"
+fi
 /bin/cp \
     "${binary_directory}/${executable_name}" \
     "${contents_path}/MacOS/${executable_name}"

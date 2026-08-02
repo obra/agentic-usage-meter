@@ -93,10 +93,11 @@ data limitations.
 
 ## Release and updates
 
-Published builds are direct downloads from GitHub Releases. The release script
-signs with a Developer ID identity, submits the app to Apple notarization, and
-verifies the resulting bundle. In-app automatic updates are not part of the
-current app; download newer releases from the Releases page.
+Published builds are direct downloads from the
+[latest GitHub Release](https://github.com/obra/agentic-usage-meter/releases/latest).
+The app checks the signed Sparkle feed automatically and asks for confirmation
+before installing an update. Maintainers build, sign, notarize, verify, and
+publish releases locally by following the [release guide](docs/releasing.md).
 
 ## License
 
