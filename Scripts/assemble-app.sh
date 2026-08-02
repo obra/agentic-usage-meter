@@ -22,12 +22,19 @@ binary_directory=$(
 )
 
 /bin/rm -rf "${bundle_path}"
-/bin/mkdir -p "${contents_path}/MacOS" "${contents_path}/Resources"
+/bin/mkdir -p \
+    "${contents_path}/Frameworks" \
+    "${contents_path}/MacOS" \
+    "${contents_path}/Resources"
 /bin/cp \
     "${repository_root}/Resources/Info.plist" \
     "${contents_path}/Info.plist"
 /bin/cp \
     "${binary_directory}/${executable_name}" \
+    "${contents_path}/MacOS/${executable_name}"
+"${script_directory}/embed-sparkle-framework.sh" \
+    "${repository_root}" \
+    "${bundle_path}" \
     "${contents_path}/MacOS/${executable_name}"
 "${script_directory}/copy-swiftpm-resource-bundles.sh" \
     "${binary_directory}" \

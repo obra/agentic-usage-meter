@@ -12,13 +12,9 @@ archive_path="${repository_root}/build/Agentic Usage Meter.zip"
 
 "${script_directory}/assemble-app.sh"
 
-/usr/bin/codesign \
-    --force \
-    --deep \
-    --options runtime \
-    --timestamp \
-    --sign "${DEVELOPER_ID_APPLICATION}" \
-    "${application_path}"
+RELEASE_SIGNING=1 "${script_directory}/sign-app.sh" \
+    "${application_path}" \
+    "${DEVELOPER_ID_APPLICATION}"
 
 /bin/rm -f "${archive_path}"
 /usr/bin/ditto \

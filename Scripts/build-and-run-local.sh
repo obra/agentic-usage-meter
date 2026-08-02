@@ -17,12 +17,9 @@ else
 fi
 
 "${script_directory}/assemble-app.sh"
-/usr/bin/codesign \
-    --force \
-    --deep \
-    --options runtime \
-    --sign "${signing_identity}" \
-    "${application_path}"
+"${script_directory}/sign-app.sh" \
+    "${application_path}" \
+    "${signing_identity}"
 /usr/bin/codesign \
     --verify \
     --deep \
@@ -30,7 +27,8 @@ fi
     --verbose=2 \
     "${application_path}"
 
-/usr/bin/pkill -x "${executable_name}" 2>/dev/null || true
-/usr/bin/open "${application_path}"
+"${script_directory}/relaunch-application.sh" \
+    "${executable_name}" \
+    "${application_path}"
 
 echo "Launched ${application_path} signed as ${signing_identity}"
