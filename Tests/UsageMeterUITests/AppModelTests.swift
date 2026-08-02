@@ -723,6 +723,26 @@ struct AppModelTests {
     }
 
     @Test
+    func sampleDataContainsNoAuthenticatedIdentitiesOrOrganizations() {
+        let state = AppEnvironment.sampleState(showWidget: false)
+        let allowedNames = Set([
+            "Work",
+            "Personal",
+            "Kimi",
+            "Factory",
+        ])
+
+        #expect(state.accounts.allSatisfy {
+            allowedNames.contains($0.displayName)
+        })
+        #expect(state.accounts.allSatisfy {
+            $0.authenticatedIdentity == nil
+                && $0.claudeProfileID == nil
+                && $0.claudeOrganizationID == nil
+        })
+    }
+
+    @Test
     func floatingWidgetPreferenceAndPlacementPersist() async throws {
         let stateStore = TestAppStateStore(state: .empty)
         let model = AppModel(

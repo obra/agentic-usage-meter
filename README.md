@@ -3,6 +3,8 @@
 Agentic Usage Meter is a macOS menu-bar app that shows coding-agent
 subscription quota windows and balances across your accounts.
 
+![Agentic Usage Meter showing synthetic quota windows](docs/images/usage-popover.png)
+
 Built by [fsck.com](https://fsck.com).
 
 ## What it shows
@@ -47,6 +49,8 @@ Keychain items. Claude and OpenCode cookies stay in account-scoped WebKit
 profiles. Cached usage is stored in Application Support.
 
 The app has no analytics or telemetry.
+
+![Synthetic account management in Agentic Usage Meter](docs/images/account-management.png)
 
 ## Install
 
