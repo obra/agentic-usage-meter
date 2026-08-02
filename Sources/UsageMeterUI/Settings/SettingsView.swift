@@ -548,7 +548,7 @@ private struct AddAccountView: View {
 
             if let providerRequestURL = route.providerRequestURL {
                 Link(
-                    "Want a provider that's not shown here? Please request it.",
+                    "Want a provider that's not shown here? please request it.",
                     destination: providerRequestURL,
                 )
                 .font(.callout)
