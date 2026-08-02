@@ -22,6 +22,8 @@ public final class OpenCodeWebAccountUsageClient:
             UUID
         ) async -> String?
     public typealias EvictAuthCookieProfile =
+        @MainActor @Sendable (UUID) async -> Void
+    public typealias FinishAuthCookieProfile =
         @MainActor @Sendable (UUID) -> Void
 
     private let base: any ProviderAccountAdapter
@@ -30,6 +32,8 @@ public final class OpenCodeWebAccountUsageClient:
     private let loadAuthCookie: LoadAuthCookie
     private let evictAuthCookieProfile:
         EvictAuthCookieProfile
+    private let finishAuthCookieProfile:
+        FinishAuthCookieProfile
     private let removeProfile: RemoveProfile
 
     public init(
@@ -38,6 +42,8 @@ public final class OpenCodeWebAccountUsageClient:
         loadAuthCookie: LoadAuthCookie? = nil,
         evictAuthCookieProfile:
             EvictAuthCookieProfile? = nil,
+        finishAuthCookieProfile:
+            FinishAuthCookieProfile? = nil,
         removeProfile:
             @escaping RemoveProfile = {
                 try await AccountWebProfileStore
@@ -56,6 +62,8 @@ public final class OpenCodeWebAccountUsageClient:
                 loadAuthCookie
             self.evictAuthCookieProfile =
                 evictAuthCookieProfile ?? { _ in }
+            self.finishAuthCookieProfile =
+                finishAuthCookieProfile ?? { _ in }
         } else {
             let source =
                 OpenCodeProfileAuthCookieSource()
@@ -66,7 +74,12 @@ public final class OpenCodeWebAccountUsageClient:
                 )
             }
             self.evictAuthCookieProfile = {
-                source.evict(accountID: $0)
+                await source.prepareForRemoval(
+                    accountID: $0
+                )
+            }
+            self.finishAuthCookieProfile = {
+                source.finishRemoval(accountID: $0)
             }
         }
         self.removeProfile = removeProfile
@@ -108,7 +121,10 @@ public final class OpenCodeWebAccountUsageClient:
         try await base.removeAuthentication(
             for: account
         )
-        evictAuthCookieProfile(account.id)
+        await evictAuthCookieProfile(account.id)
+        defer {
+            finishAuthCookieProfile(account.id)
+        }
         try await removeProfile(account.id)
     }
 }
@@ -134,6 +150,9 @@ final class OpenCodeProfileAuthCookieSource {
             UUID:
                 any OpenCodeProfileCookieLoading
         ] = [:]
+    private var activeLoads:
+        [UUID: [UUID: Task<String?, Never>]] = [:]
+    private var preparingRemovalAccountIDs: Set<UUID> = []
 
     convenience init() {
         self.init(
@@ -162,6 +181,50 @@ final class OpenCodeProfileAuthCookieSource {
     func authCookie(
         accountID: UUID
     ) async -> String? {
+        guard !preparingRemovalAccountIDs.contains(
+            accountID
+        ) else {
+            return nil
+        }
+
+        let loadID = UUID()
+        let load = startCookieLoad(accountID: accountID)
+        activeLoads[accountID, default: [:]][loadID] = load
+        let cookie = await load.value
+        activeLoads[accountID]?[loadID] = nil
+        if activeLoads[accountID]?.isEmpty == true {
+            activeLoads[accountID] = nil
+        }
+        return cookie
+    }
+
+    func prepareForRemoval(accountID: UUID) async {
+        preparingRemovalAccountIDs.insert(accountID)
+        profiles[accountID] = nil
+
+        let loads = activeLoads[accountID].map {
+            Array($0.values)
+        } ?? []
+        for load in loads {
+            load.cancel()
+        }
+        for load in loads {
+            _ = await load.value
+        }
+        activeLoads[accountID] = nil
+    }
+
+    func finishRemoval(accountID: UUID) {
+        preparingRemovalAccountIDs.remove(accountID)
+    }
+
+    func isPreparingRemoval(accountID: UUID) -> Bool {
+        preparingRemovalAccountIDs.contains(accountID)
+    }
+
+    private func startCookieLoad(
+        accountID: UUID
+    ) -> Task<String?, Never> {
         let profile: any
             OpenCodeProfileCookieLoading
         if let existing = profiles[accountID] {
@@ -173,10 +236,27 @@ final class OpenCodeProfileAuthCookieSource {
             profile = created
         }
 
-        if let authCookie = await authCookie(
-            from: profile
-        ) {
+        let retryDelays = self.retryDelays
+        return Task { @MainActor in
+            await Self.loadAuthCookie(
+                from: profile,
+                retryDelays: retryDelays
+            )
+        }
+    }
+
+    private static func loadAuthCookie(
+        from profile: any OpenCodeProfileCookieLoading,
+        retryDelays: [Duration]
+    ) async -> String? {
+        guard !Task.isCancelled else {
+            return nil
+        }
+        if let authCookie = await authCookie(from: profile) {
             return authCookie
+        }
+        guard !Task.isCancelled else {
+            return nil
         }
         profile.warmIfNeeded()
 
@@ -186,20 +266,17 @@ final class OpenCodeProfileAuthCookieSource {
             } catch {
                 return nil
             }
-            if let authCookie = await authCookie(
-                from: profile
-            ) {
+            guard !Task.isCancelled else {
+                return nil
+            }
+            if let authCookie = await authCookie(from: profile) {
                 return authCookie
             }
         }
         return nil
     }
 
-    func evict(accountID: UUID) {
-        profiles[accountID] = nil
-    }
-
-    private func authCookie(
+    private static func authCookie(
         from profile:
             any OpenCodeProfileCookieLoading
     ) async -> String? {

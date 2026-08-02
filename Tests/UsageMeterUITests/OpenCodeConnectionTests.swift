@@ -468,11 +468,84 @@ func openCodeCookieSourceReleasesAnEvictedProfile() async {
     #expect(createdProfiles == 1)
     #expect(retainedProfile != nil)
 
-    source.evict(accountID: accountID)
+    await source.prepareForRemoval(accountID: accountID)
 
     #expect(retainedProfile == nil)
+    source.finishRemoval(accountID: accountID)
     _ = await source.authCookie(accountID: accountID)
     #expect(createdProfiles == 2)
+}
+
+@Test
+@MainActor
+func preparingOpenCodeProfileRemovalCancelsAndDrainsInFlightLoad()
+    async throws
+{
+    let account = SubscriptionAccount(
+        provider: .openCodeGo,
+        displayName: "OpenCode",
+        displayOrder: 0,
+    )
+    let lifecycle = OpenCodeProfileLifecycleRecorder()
+    let readGate = OpenCodeCookieReadGate()
+    var createdProfiles = 0
+    weak var retainedProfile: SuspendedOpenCodeCookieProfile?
+    let source = OpenCodeProfileAuthCookieSource(
+        retryDelays: [],
+        profileFactory: { _ in
+            createdProfiles += 1
+            let profile = SuspendedOpenCodeCookieProfile(
+                readGate: readGate
+            )
+            retainedProfile = profile
+            return profile
+        }
+    )
+    let base = OpenCodeLifecycleTestAdapter(
+        lifecycle: lifecycle
+    )
+    let adapter = OpenCodeWebAccountUsageClient(
+        base: base,
+        credentialStore: TestCredentialStore(),
+        loadAuthCookie: { accountID in
+            await source.authCookie(accountID: accountID)
+        },
+        evictAuthCookieProfile: { accountID in
+            await source.prepareForRemoval(accountID: accountID)
+            lifecycle.record("evict/drain")
+        },
+        finishAuthCookieProfile: { accountID in
+            source.finishRemoval(accountID: accountID)
+        },
+        removeProfile: { accountID in
+            #expect(accountID == account.id)
+            #expect(retainedProfile == nil)
+            lifecycle.record("remove")
+        },
+    )
+
+    let fetch = Task {
+        try? await adapter.fetchUsage(for: account, now: Date())
+    }
+    await readGate.waitUntilReadStarts()
+
+    let removal = Task {
+        try await adapter.removeAuthentication(for: account)
+    }
+    await lifecycle.waitForEvent("credential")
+    while !source.isPreparingRemoval(accountID: account.id) {
+        await Task.yield()
+    }
+
+    _ = await source.authCookie(accountID: account.id)
+    #expect(createdProfiles == 1)
+    #expect(lifecycle.events == ["credential"])
+
+    readGate.resume()
+    try await removal.value
+    _ = await fetch.value
+
+    #expect(lifecycle.events == ["credential", "evict/drain", "remove"])
 }
 
 @Test
@@ -515,9 +588,10 @@ func evictedOpenCodeProfileCanBeRemovedAndRecreatedWithoutCookies()
     )
     profile = nil
 
-    source.evict(accountID: accountID)
+    await source.prepareForRemoval(accountID: accountID)
     #expect(retainedProfile == nil)
     try await AccountWebProfileStore.remove(accountID: accountID)
+    source.finishRemoval(accountID: accountID)
 
     var recreated: RetainedOpenCodeCookieProfile? =
         RetainedOpenCodeCookieProfile(accountID: accountID)
@@ -532,7 +606,7 @@ func evictedOpenCodeProfileCanBeRemovedAndRecreatedWithoutCookies()
 
 @Test
 @MainActor
-func removingOpenCodeAccountEvictsLoaderBeforeDeletingProfile()
+func removingOpenCodeAccountOrdersCredentialEvictionAndProfileDeletion()
     async throws
 {
     let account = SubscriptionAccount(
@@ -540,17 +614,20 @@ func removingOpenCodeAccountEvictsLoaderBeforeDeletingProfile()
         displayName: "OpenCode",
         displayOrder: 0,
     )
-    let base = TestProviderAccountAdapter(
-        provider: .openCodeGo,
-    )
     let lifecycle = OpenCodeProfileLifecycleRecorder()
+    let base = OpenCodeLifecycleTestAdapter(
+        lifecycle: lifecycle,
+    )
     let adapter = OpenCodeWebAccountUsageClient(
         base: base,
         credentialStore: TestCredentialStore(),
         loadAuthCookie: { _ in nil },
         evictAuthCookieProfile: { profileID in
             #expect(profileID == account.id)
-            lifecycle.record("evict")
+            lifecycle.record("evict/drain")
+        },
+        finishAuthCookieProfile: { profileID in
+            #expect(profileID == account.id)
         },
         removeProfile: { profileID in
             #expect(profileID == account.id)
@@ -562,11 +639,96 @@ func removingOpenCodeAccountEvictsLoaderBeforeDeletingProfile()
         for: account,
     )
 
-    #expect(
-        await base.removedAccountIDs
-            == [account.id],
+    #expect(lifecycle.events == ["credential", "evict/drain", "remove"])
+}
+
+@Test
+@MainActor
+func removingOpenCodeAccountStopsAfterCredentialDeletionFailure()
+    async
+{
+    let account = SubscriptionAccount(
+        provider: .openCodeGo,
+        displayName: "OpenCode",
+        displayOrder: 0,
     )
-    #expect(lifecycle.events == ["evict", "remove"])
+    let lifecycle = OpenCodeProfileLifecycleRecorder()
+    let adapter = OpenCodeWebAccountUsageClient(
+        base: OpenCodeLifecycleTestAdapter(
+            lifecycle: lifecycle,
+            removalError: .credential,
+        ),
+        credentialStore: TestCredentialStore(),
+        loadAuthCookie: { _ in nil },
+        evictAuthCookieProfile: { _ in
+            lifecycle.record("evict/drain")
+        },
+        finishAuthCookieProfile: { _ in
+            lifecycle.record("finish")
+        },
+        removeProfile: { _ in
+            lifecycle.record("remove")
+        },
+    )
+
+    await #expect(throws: OpenCodeLifecycleTestError.credential) {
+        try await adapter.removeAuthentication(for: account)
+    }
+
+    #expect(lifecycle.events == ["credential"])
+}
+
+@Test
+@MainActor
+func removingOpenCodeAccountPropagatesProfileRemovalFailureAfterEviction()
+    async
+{
+    let account = SubscriptionAccount(
+        provider: .openCodeGo,
+        displayName: "OpenCode",
+        displayOrder: 0,
+    )
+    let lifecycle = OpenCodeProfileLifecycleRecorder()
+    var createdProfiles = 0
+    let source = OpenCodeProfileAuthCookieSource(
+        retryDelays: [],
+        profileFactory: { _ in
+            createdProfiles += 1
+            return TestOpenCodeCookieProfile(responses: [[]])
+        }
+    )
+    let adapter = OpenCodeWebAccountUsageClient(
+        base: OpenCodeLifecycleTestAdapter(
+            lifecycle: lifecycle,
+        ),
+        credentialStore: TestCredentialStore(),
+        loadAuthCookie: { accountID in
+            await source.authCookie(accountID: accountID)
+        },
+        evictAuthCookieProfile: { accountID in
+            await source.prepareForRemoval(accountID: accountID)
+            lifecycle.record("evict/drain")
+        },
+        finishAuthCookieProfile: { accountID in
+            source.finishRemoval(accountID: accountID)
+            lifecycle.record("finish")
+        },
+        removeProfile: { _ in
+            lifecycle.record("remove")
+            throw OpenCodeLifecycleTestError.profile
+        },
+    )
+
+    await #expect(throws: OpenCodeLifecycleTestError.profile) {
+        try await adapter.removeAuthentication(for: account)
+    }
+
+    #expect(
+        lifecycle.events
+            == ["credential", "evict/drain", "remove", "finish"]
+    )
+    _ = await source.authCookie(accountID: account.id)
+    #expect(createdProfiles == 1)
 }
 
 @MainActor
@@ -581,10 +743,109 @@ private final class OpenCodeProfileRemovalRecorder {
 @MainActor
 private final class OpenCodeProfileLifecycleRecorder {
     private(set) var events: [String] = []
+    private var eventContinuations:
+        [String: CheckedContinuation<Void, Never>] = [:]
 
     func record(_ event: String) {
         events.append(event)
+        eventContinuations.removeValue(forKey: event)?
+            .resume()
     }
+
+    func waitForEvent(_ event: String) async {
+        guard !events.contains(event) else {
+            return
+        }
+        await withCheckedContinuation { continuation in
+            eventContinuations[event] = continuation
+        }
+    }
+}
+
+private enum OpenCodeLifecycleTestError: Error, Equatable {
+    case credential
+    case profile
+}
+
+@MainActor
+private final class OpenCodeLifecycleTestAdapter:
+    ProviderAccountAdapter
+{
+    nonisolated let provider = Provider.openCodeGo
+
+    private let lifecycle: OpenCodeProfileLifecycleRecorder
+    private let removalError: OpenCodeLifecycleTestError?
+
+    init(
+        lifecycle: OpenCodeProfileLifecycleRecorder,
+        removalError: OpenCodeLifecycleTestError? = nil,
+    ) {
+        self.lifecycle = lifecycle
+        self.removalError = removalError
+    }
+
+    func fetchUsage(
+        for _: SubscriptionAccount,
+        now _: Date,
+    ) throws -> UsageSnapshot {
+        throw ProviderClientError.temporaryFailure
+    }
+
+    func removeAuthentication(
+        for _: SubscriptionAccount,
+    ) throws {
+        lifecycle.record("credential")
+        if let removalError {
+            throw removalError
+        }
+    }
+}
+
+@MainActor
+private final class OpenCodeCookieReadGate {
+    private var readContinuation:
+        CheckedContinuation<[HTTPCookie], Never>?
+    private var startedContinuation:
+        CheckedContinuation<Void, Never>?
+
+    func readCookies() async -> [HTTPCookie] {
+        await withCheckedContinuation { continuation in
+            readContinuation = continuation
+            startedContinuation?.resume()
+            startedContinuation = nil
+        }
+    }
+
+    func waitUntilReadStarts() async {
+        guard readContinuation == nil else {
+            return
+        }
+        await withCheckedContinuation { continuation in
+            startedContinuation = continuation
+        }
+    }
+
+    func resume() {
+        readContinuation?.resume(returning: [])
+        readContinuation = nil
+    }
+}
+
+@MainActor
+private final class SuspendedOpenCodeCookieProfile:
+    OpenCodeProfileCookieLoading
+{
+    private let readGate: OpenCodeCookieReadGate
+
+    init(readGate: OpenCodeCookieReadGate) {
+        self.readGate = readGate
+    }
+
+    func cookies() async -> [HTTPCookie] {
+        await readGate.readCookies()
+    }
+
+    func warmIfNeeded() {}
 }
 
 @MainActor
