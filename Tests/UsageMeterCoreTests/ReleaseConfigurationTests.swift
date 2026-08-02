@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import UsageMeterCore
 
 @Suite
 struct ReleaseConfigurationTests {
@@ -17,7 +18,7 @@ struct ReleaseConfigurationTests {
 
         #expect(
             plist["CFBundleIdentifier"] as? String
-                == "com.jesse.agentic-usage-meter",
+                == "com.fsck.agentic-usage-meter",
         )
         #expect(
             plist["CFBundleName"] as? String
@@ -27,6 +28,14 @@ struct ReleaseConfigurationTests {
         #expect(plist["CFBundlePackageType"] as? String == "APPL")
         #expect(plist["LSUIElement"] as? Bool == true)
         #expect(plist["LSMinimumSystemVersion"] as? String == "26.0")
+    }
+
+    @Test
+    func keychainServiceUsesTheFsckProductNamespace() {
+        #expect(
+            KeychainCredentialStore.defaultService
+                == "com.fsck.agentic-usage-meter.credentials",
+        )
     }
 
     @Test

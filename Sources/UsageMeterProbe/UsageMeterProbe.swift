@@ -5,7 +5,7 @@ import UsageMeterCore
 @main
 enum UsageMeterProbe {
   private static let credentialStore = KeychainCredentialStore(
-    service: "com.jesse.agentic-usage-meter.probe.credentials"
+    service: "com.fsck.agentic-usage-meter.probe.credentials"
   )
 
   static func main() async {

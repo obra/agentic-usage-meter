@@ -280,7 +280,7 @@ public protocol CredentialStore: Sendable {
 ```
 
 `KeychainCredentialStore` uses generic-password items with service
-`com.jesse.agentic-usage-meter.credentials` and the account UUID as the
+`com.fsck.agentic-usage-meter.credentials` and the account UUID as the
 Keychain account. Encode one credential envelope as JSON only immediately
 before `SecItemAdd` or `SecItemUpdate`; decoded values are never logged.
 
@@ -999,7 +999,7 @@ git commit -m "Add secure multi-provider account setup"
 
 Load `Info.plist` with `PropertyListSerialization` and assert:
 
-- `CFBundleIdentifier` is `com.jesse.agentic-usage-meter`.
+- `CFBundleIdentifier` is `com.fsck.agentic-usage-meter`.
 - `CFBundleName` is `Agentic Usage Meter`.
 - `LSUIElement` is true.
 - `LSMinimumSystemVersion` is `26.0`.

@@ -7,7 +7,7 @@ public enum KeychainCredentialStoreError: Error, Equatable {
 }
 
 public actor KeychainCredentialStore: CredentialStore {
-    public static let defaultService = "com.jesse.agentic-usage-meter.credentials"
+    public static let defaultService = "com.fsck.agentic-usage-meter.credentials"
 
     private let service: String
 

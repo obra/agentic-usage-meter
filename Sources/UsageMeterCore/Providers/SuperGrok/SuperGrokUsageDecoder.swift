@@ -3,7 +3,7 @@ import OSLog
 
 private let superGrokLogger = Logger(
     subsystem:
-        "com.jesse.agentic-usage-meter",
+        "com.fsck.agentic-usage-meter",
     category: "SuperGrok"
 )
 
