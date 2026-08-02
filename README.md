@@ -1,27 +1,62 @@
 # Agentic Usage Meter
 
-Agentic Usage Meter is a macOS 26 menu-bar app for watching subscription quota
-windows across multiple coding-agent accounts. The optional floating widget
-aligns comparable five-hour windows on a shared ten-hour axis and weekly
-windows on a shared fourteen-day axis.
+Agentic Usage Meter is a macOS menu-bar app that shows coding-agent
+subscription quota windows and balances across your accounts.
 
-The app displays only windows actually returned by a provider. A provider that
-currently returns weekly usage but no five-hour usage gets a weekly row only.
-A returned zero-use window with no provider reset is shown as an empty meter
-beginning at **Now**; the app does not invent or persist a reset time.
+Built by [fsck.com](https://fsck.com).
 
-Authoritative monetary and provider-credit states appear in a separate
-**Extra Credits** section as an available balance, **Unlimited**, or **Off**.
-Unknown or absent credit data does not create a row.
+## What it shows
 
-## Develop
+The menu-bar panel and optional floating widget show the remaining quota and
+reset times returned for each connected account. Collapsible sections keep
+five-hour, weekly, monthly, and Extra Credits information readable when you
+have several accounts.
 
-Requirements:
+The app displays only quota windows and balances returned by the provider. It
+does not invent missing five-hour, weekly, monthly, or credit rows.
 
-- macOS 26
-- Xcode 26 with Swift 6.2
+## Providers
 
-Build and test:
+Qualified providers:
+
+- Claude — isolated browser session
+- Codex — ChatGPT OAuth in your browser
+- Kimi — device authorization
+
+Experimental providers:
+
+- MiniMax — Token Plan API key
+- GitHub — device OAuth
+- Factory — per-account API key
+- OpenCode Go — isolated OpenCode session
+- OpenCode Zen — isolated OpenCode session
+- SuperGrok — Grok device OAuth
+
+Antigravity is unavailable because its CLI uses the shared macOS Keychain,
+which cannot isolate separate accounts.
+
+Provider names and logos are trademarks of their respective owners; inclusion
+does not imply endorsement. See the
+[provider-mark attribution](Sources/UsageMeterUI/Resources/ProviderMarks/ATTRIBUTION.md).
+
+## Accounts and privacy
+
+Agentic Usage Meter has no application server: requests go directly from your
+Mac to each provider. OAuth tokens and API keys are stored in account-scoped
+Keychain items. Claude and OpenCode cookies stay in account-scoped WebKit
+profiles. Cached usage is stored in Application Support.
+
+The app has no analytics or telemetry.
+
+## Install
+
+When a public build is available, download the latest notarized app from
+[GitHub Releases](https://github.com/obra/agentic-usage-meter/releases), move
+it to Applications, and launch it.
+
+## Build from source
+
+Requirements: macOS 26 and Xcode 26 with Swift 6.2.
 
 ```sh
 swift build --product AgenticUsageMeter
@@ -29,72 +64,37 @@ swift test
 swift run AgenticUsageMeter --sample-data
 ```
 
-`--sample-data` uses synthetic acceptance values and marks the interface
-`SAMPLE DATA`; it never represents a connected subscription.
+`--sample-data` launches the app with synthetic values and a visible `SAMPLE
+DATA` marker; it does not connect to an account.
 
-The app runs as a menu-bar accessory and does not appear in the Dock. Open
-Settings from the menu-bar panel to add accounts:
-
-- Claude opens an embedded browser. Every account gets an independent
-  persistent WebKit profile, so Claude sessions do not replace each other.
-- Codex opens the regular browser for PKCE OAuth, shows the authenticated
-  identity before saving, and rejects a subscription already connected.
-- Kimi opens its device-authorization page in the regular browser and displays
-  the user code and expiry in Settings.
-
-The account picker also exposes experimental account flows for:
-
-- MiniMax Token Plan API keys;
-- GitHub Copilot device OAuth;
-- SuperGrok device OAuth;
-- OpenCode Go and Zen isolated workspace sessions; and
-- Factory API keys.
-
-Experimental providers remain explicitly unqualified until two real accounts
-pass the restart, refresh, reconnect, dashboard-isolation, and deletion gate.
-Antigravity remains unavailable because its CLI stores authentication in the
-shared macOS Keychain; changing `$HOME` does not isolate accounts.
-
-OAuth tokens and API keys are stored as separate account-scoped Keychain
-items. Claude and OpenCode cookies remain in their identified WebKit data
-stores and are not copied into application settings or Keychain. Removing an
-account deletes its credential or complete WebKit profile.
-
-Usage is cached on disk and shown immediately at launch. Scheduled, manual,
-menu-bar, and widget demand share the same per-account refresher. No account
-usage request is started less than one minute after that account's preceding
-request in a development build, or less than ten minutes after it in a release
-build. Provider retry times and transient-error backoff can extend that floor.
-
-## Assemble a local app
+For a locally signed app, run:
 
 ```sh
-scripts/build-and-run-local.sh
+Scripts/build-and-run-local.sh
 ```
 
-This produces and launches `build/Agentic Usage Meter.app` with the first
-available Developer ID Application identity. The stable signature lets macOS
-keep the app's existing Keychain grants across local rebuilds. Set
-`LOCAL_SIGNING_IDENTITY` to an exact Developer ID Application identity to
-override automatic selection. This is local verification only; it is not
-notarized distribution evidence.
+## Refresh behavior
 
-## Sign and notarize
+The development build refreshes automatically no more often than once per
+minute per provider account. Release builds use a ten-minute minimum.
+Manual and on-demand refreshes share the same per-account limit, and provider
+retry or backoff can make the interval longer.
 
-Create a notarytool Keychain profile outside this repository, then provide the
-exact existing Developer ID Application identity and profile name:
+## Provider diagnostics
 
-```sh
-DEVELOPER_ID_APPLICATION="Developer ID Application: Example (TEAMID)" \
-NOTARYTOOL_PROFILE="agentic-usage-meter" \
-scripts/sign-and-notarize.sh
-```
+Provider APIs and returned usage data can change. See the
+[provider qualification notes](docs/provider-qualification.md) for each
+provider's current qualification status, authentication surface, and known
+data limitations.
 
-The script assembles a fresh release, signs with the hardened runtime, submits
-a zip to Apple's notary service, staples the accepted ticket, and verifies the
-signature, Gatekeeper assessment, and staple. It never creates identities or
-stores signing credentials.
+## Release and updates
 
-The app deliberately has no App Sandbox entitlement. Direct distribution,
-Keychain access, provider networking, WebKit profiles, and the localhost Codex
-OAuth callback therefore do not require a sandbox entitlement file.
+Published builds are direct downloads from GitHub Releases. The release script
+signs with a Developer ID identity, submits the app to Apple notarization, and
+verifies the resulting bundle. In-app automatic updates are not part of the
+current app; download newer releases from the Releases page.
+
+## License
+
+Agentic Usage Meter is available under the [MIT License](LICENSE). See
+[third-party notices](THIRD_PARTY_NOTICES.md) for incorporated notices.
