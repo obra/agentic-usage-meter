@@ -7,6 +7,7 @@ import UsageMeterUI
 struct AgenticUsageMeterApp: App {
     @State private var model: AppModel
     @State private var widgetController: FloatingWidgetController
+    @State private var updateController: AppUpdateController
 
     init() {
         let model = AppEnvironment.makeModel()
@@ -14,15 +15,22 @@ struct AgenticUsageMeterApp: App {
         _widgetController = State(
             initialValue: FloatingWidgetController(model: model),
         )
+        _updateController = State(
+            initialValue: AppUpdateController(),
+        )
     }
 
     var body: some Scene {
         MenuBarExtra {
-            MenuBarContentView(model: model)
+            MenuBarContentView(
+                model: model,
+                updateController: updateController,
+            )
         } label: {
             MenuBarLabel(
                 model: model,
                 widgetController: widgetController,
+                updateController: updateController,
             )
         }
         .menuBarExtraStyle(.window)
@@ -36,6 +44,7 @@ struct AgenticUsageMeterApp: App {
 private struct MenuBarLabel: View {
     let model: AppModel
     let widgetController: FloatingWidgetController
+    let updateController: AppUpdateController
 
     var body: some View {
         Group {
@@ -50,6 +59,7 @@ private struct MenuBarLabel: View {
         }
         .task {
             NSApplication.shared.setActivationPolicy(.accessory)
+            updateController.start()
             await model.start()
             widgetController.synchronize()
             await model.runAutomaticRefresh()

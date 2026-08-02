@@ -28,6 +28,16 @@ struct ReleaseConfigurationTests {
         #expect(plist["CFBundlePackageType"] as? String == "APPL")
         #expect(plist["LSUIElement"] as? Bool == true)
         #expect(plist["LSMinimumSystemVersion"] as? String == "26.0")
+        #expect(
+            plist["SUFeedURL"] as? String
+                == "https://github.com/obra/agentic-usage-meter/releases/latest/download/appcast.xml",
+        )
+        #expect(plist["SUEnableAutomaticChecks"] as? Bool == true)
+        #expect(plist["SUAutomaticallyUpdate"] as? Bool == false)
+
+        let publicKey = try #require(plist["SUPublicEDKey"] as? String)
+        let publicKeyData = try #require(Data(base64Encoded: publicKey))
+        #expect(publicKeyData.count == 32)
     }
 
     @Test

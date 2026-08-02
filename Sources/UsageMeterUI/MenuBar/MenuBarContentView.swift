@@ -3,10 +3,15 @@ import SwiftUI
 
 public struct MenuBarContentView: View {
     private let model: AppModel
+    private let updateController: AppUpdateController
     @Environment(\.openSettings) private var openSettings
 
-    public init(model: AppModel) {
+    public init(
+        model: AppModel,
+        updateController: AppUpdateController = .disabled,
+    ) {
         self.model = model
+        self.updateController = updateController
     }
 
     public var body: some View {
@@ -71,6 +76,17 @@ public struct MenuBarContentView: View {
                 }
 
                 Spacer()
+
+                if updateController.canCheckForUpdates {
+                    Button {
+                        updateController.checkForUpdates()
+                    } label: {
+                        Label(
+                            "Check for Updates…",
+                            systemImage: "arrow.down.circle",
+                        )
+                    }
+                }
 
                 Button {
                     SettingsWindowPresenter().present {

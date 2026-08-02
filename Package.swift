@@ -18,6 +18,12 @@ let package = Package(
         .executable(name: "ClaudeWebProbe", targets: ["ClaudeWebProbe"]),
         .executable(name: "UsageMeterProbe", targets: ["UsageMeterProbe"])
     ],
+    dependencies: [
+        .package(
+            url: "https://github.com/sparkle-project/Sparkle",
+            exact: "2.9.4"
+        )
+    ],
     targets: [
         .target(name: "UsageMeterCore"),
         .target(name: "UsageMeterWeb"),
@@ -30,7 +36,8 @@ let package = Package(
             dependencies: [
                 "UsageMeterCore",
                 "UsageMeterClaudeWeb",
-                "UsageMeterWeb"
+                "UsageMeterWeb",
+                .product(name: "Sparkle", package: "Sparkle")
             ],
             resources: [
                 .process("Resources")
