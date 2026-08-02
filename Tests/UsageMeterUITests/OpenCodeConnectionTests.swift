@@ -478,6 +478,60 @@ func openCodeCookieSourceReleasesAnEvictedProfile() async {
 
 @Test
 @MainActor
+func cancelingOpenCodeCookieLoadReleasesItsProfile() async {
+    let accountID = UUID()
+    let warmupGate = OpenCodeWarmupGate()
+    weak var retainedProfile: WarmupOpenCodeCookieProfile?
+    let source = OpenCodeProfileAuthCookieSource(
+        retryDelays: [.seconds(60)],
+        profileFactory: { _ in
+            let profile = WarmupOpenCodeCookieProfile(
+                warmupGate: warmupGate
+            )
+            retainedProfile = profile
+            return profile
+        }
+    )
+
+    let load = Task {
+        await source.authCookie(accountID: accountID)
+    }
+    await warmupGate.waitUntilWarmupStarts()
+
+    load.cancel()
+    #expect(await load.value == nil)
+    #expect(retainedProfile == nil)
+}
+
+@Test
+@MainActor
+func overlappingOpenCodeRemovalLeasesKeepTheProfileFenced()
+    async
+{
+    let accountID = UUID()
+    var createdProfiles = 0
+    let source = OpenCodeProfileAuthCookieSource(
+        retryDelays: [],
+        profileFactory: { _ in
+            createdProfiles += 1
+            return TestOpenCodeCookieProfile(responses: [[]])
+        }
+    )
+
+    await source.prepareForRemoval(accountID: accountID)
+    await source.prepareForRemoval(accountID: accountID)
+    source.finishRemoval(accountID: accountID)
+
+    _ = await source.authCookie(accountID: accountID)
+    #expect(createdProfiles == 0)
+
+    source.finishRemoval(accountID: accountID)
+    _ = await source.authCookie(accountID: accountID)
+    #expect(createdProfiles == 1)
+}
+
+@Test
+@MainActor
 func preparingOpenCodeProfileRemovalCancelsAndDrainsInFlightLoad()
     async throws
 {
@@ -828,6 +882,46 @@ private final class OpenCodeCookieReadGate {
     func resume() {
         readContinuation?.resume(returning: [])
         readContinuation = nil
+    }
+}
+
+@MainActor
+private final class OpenCodeWarmupGate {
+    private var continuation: CheckedContinuation<Void, Never>?
+    private var didStartWarmup = false
+
+    func warmupStarted() {
+        didStartWarmup = true
+        continuation?.resume()
+        continuation = nil
+    }
+
+    func waitUntilWarmupStarts() async {
+        guard !didStartWarmup else {
+            return
+        }
+        await withCheckedContinuation { continuation in
+            self.continuation = continuation
+        }
+    }
+}
+
+@MainActor
+private final class WarmupOpenCodeCookieProfile:
+    OpenCodeProfileCookieLoading
+{
+    private let warmupGate: OpenCodeWarmupGate
+
+    init(warmupGate: OpenCodeWarmupGate) {
+        self.warmupGate = warmupGate
+    }
+
+    func cookies() async -> [HTTPCookie] {
+        []
+    }
+
+    func warmIfNeeded() {
+        warmupGate.warmupStarted()
     }
 }
 

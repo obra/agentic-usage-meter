@@ -152,7 +152,7 @@ final class OpenCodeProfileAuthCookieSource {
         ] = [:]
     private var activeLoads:
         [UUID: [UUID: Task<String?, Never>]] = [:]
-    private var preparingRemovalAccountIDs: Set<UUID> = []
+    private var removalLeaseCounts: [UUID: Int] = [:]
 
     convenience init() {
         self.init(
@@ -181,25 +181,33 @@ final class OpenCodeProfileAuthCookieSource {
     func authCookie(
         accountID: UUID
     ) async -> String? {
-        guard !preparingRemovalAccountIDs.contains(
-            accountID
-        ) else {
+        guard removalLeaseCounts[accountID] == nil else {
             return nil
         }
 
         let loadID = UUID()
         let load = startCookieLoad(accountID: accountID)
         activeLoads[accountID, default: [:]][loadID] = load
-        let cookie = await load.value
+        let cookie = await withTaskCancellationHandler {
+            await load.value
+        } onCancel: {
+            load.cancel()
+        }
         activeLoads[accountID]?[loadID] = nil
         if activeLoads[accountID]?.isEmpty == true {
             activeLoads[accountID] = nil
+        }
+        if
+            load.isCancelled,
+            activeLoads[accountID] == nil
+        {
+            profiles[accountID] = nil
         }
         return cookie
     }
 
     func prepareForRemoval(accountID: UUID) async {
-        preparingRemovalAccountIDs.insert(accountID)
+        removalLeaseCounts[accountID, default: 0] += 1
         profiles[accountID] = nil
 
         let loads = activeLoads[accountID].map {
@@ -215,11 +223,19 @@ final class OpenCodeProfileAuthCookieSource {
     }
 
     func finishRemoval(accountID: UUID) {
-        preparingRemovalAccountIDs.remove(accountID)
+        guard let leaseCount = removalLeaseCounts[accountID] else {
+            assertionFailure("OpenCode removal lease underflow")
+            return
+        }
+        if leaseCount == 1 {
+            removalLeaseCounts[accountID] = nil
+        } else {
+            removalLeaseCounts[accountID] = leaseCount - 1
+        }
     }
 
     func isPreparingRemoval(accountID: UUID) -> Bool {
-        preparingRemovalAccountIDs.contains(accountID)
+        removalLeaseCounts[accountID] != nil
     }
 
     private func startCookieLoad(
