@@ -21,17 +21,23 @@ public final class OpenCodeWebAccountUsageClient:
         @MainActor @Sendable (
             UUID
         ) async -> String?
+    public typealias EvictAuthCookieProfile =
+        @MainActor @Sendable (UUID) -> Void
 
     private let base: any ProviderAccountAdapter
     private let credentialStore:
         any CredentialStore
     private let loadAuthCookie: LoadAuthCookie
+    private let evictAuthCookieProfile:
+        EvictAuthCookieProfile
     private let removeProfile: RemoveProfile
 
     public init(
         base: any ProviderAccountAdapter,
         credentialStore: any CredentialStore,
         loadAuthCookie: LoadAuthCookie? = nil,
+        evictAuthCookieProfile:
+            EvictAuthCookieProfile? = nil,
         removeProfile:
             @escaping RemoveProfile = {
                 try await AccountWebProfileStore
@@ -48,6 +54,8 @@ public final class OpenCodeWebAccountUsageClient:
         if let loadAuthCookie {
             self.loadAuthCookie =
                 loadAuthCookie
+            self.evictAuthCookieProfile =
+                evictAuthCookieProfile ?? { _ in }
         } else {
             let source =
                 OpenCodeProfileAuthCookieSource()
@@ -56,6 +64,9 @@ public final class OpenCodeWebAccountUsageClient:
                 await source.authCookie(
                     accountID: accountID
                 )
+            }
+            self.evictAuthCookieProfile = {
+                source.evict(accountID: $0)
             }
         }
         self.removeProfile = removeProfile
@@ -97,6 +108,7 @@ public final class OpenCodeWebAccountUsageClient:
         try await base.removeAuthentication(
             for: account
         )
+        evictAuthCookieProfile(account.id)
         try await removeProfile(account.id)
     }
 }
@@ -181,6 +193,10 @@ final class OpenCodeProfileAuthCookieSource {
             }
         }
         return nil
+    }
+
+    func evict(accountID: UUID) {
+        profiles[accountID] = nil
     }
 
     private func authCookie(

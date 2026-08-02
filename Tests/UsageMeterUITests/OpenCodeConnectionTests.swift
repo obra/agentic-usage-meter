@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import UsageMeterCore
+import UsageMeterWeb
 
 @testable import UsageMeterUI
 
@@ -447,7 +448,91 @@ func openCodeCookieSourceWarmsAColdProfile()
 
 @Test
 @MainActor
-func removingOpenCodeAccountDeletesCredentialAndWebProfile()
+func openCodeCookieSourceReleasesAnEvictedProfile() async {
+    let accountID = UUID()
+    var createdProfiles = 0
+    weak var retainedProfile: TestOpenCodeCookieProfile?
+    let source = OpenCodeProfileAuthCookieSource(
+        retryDelays: [],
+        profileFactory: { _ in
+            createdProfiles += 1
+            let profile = TestOpenCodeCookieProfile(
+                responses: [[]]
+            )
+            retainedProfile = profile
+            return profile
+        }
+    )
+
+    _ = await source.authCookie(accountID: accountID)
+    #expect(createdProfiles == 1)
+    #expect(retainedProfile != nil)
+
+    source.evict(accountID: accountID)
+
+    #expect(retainedProfile == nil)
+    _ = await source.authCookie(accountID: accountID)
+    #expect(createdProfiles == 2)
+}
+
+@Test
+@MainActor
+func evictedOpenCodeProfileCanBeRemovedAndRecreatedWithoutCookies()
+    async throws
+{
+    let accountID = UUID()
+    weak var retainedProfile: RetainedOpenCodeCookieProfile?
+    let source = OpenCodeProfileAuthCookieSource(
+        retryDelays: [],
+        profileFactory: { id in
+            let profile = RetainedOpenCodeCookieProfile(
+                accountID: id
+            )
+            retainedProfile = profile
+            return profile
+        }
+    )
+    let cookie = try #require(
+        HTTPCookie(
+            properties: [
+                .name: "auth",
+                .value: "session-to-delete",
+                .domain: "opencode.ai",
+                .path: "/",
+            ]
+        )
+    )
+
+    _ = await source.authCookie(accountID: accountID)
+    var profile: RetainedOpenCodeCookieProfile? =
+        retainedProfile
+    #expect(profile != nil)
+    await profile?.setCookie(cookie)
+    #expect(
+        await profile?.cookies().contains {
+            $0.name == "auth"
+        } == true
+    )
+    profile = nil
+
+    source.evict(accountID: accountID)
+    #expect(retainedProfile == nil)
+    try await AccountWebProfileStore.remove(accountID: accountID)
+
+    var recreated: RetainedOpenCodeCookieProfile? =
+        RetainedOpenCodeCookieProfile(accountID: accountID)
+    #expect(
+        await recreated?.cookies().allSatisfy {
+            $0.name != "auth"
+        } == true
+    )
+    recreated = nil
+    try await AccountWebProfileStore.remove(accountID: accountID)
+}
+
+@Test
+@MainActor
+func removingOpenCodeAccountEvictsLoaderBeforeDeletingProfile()
     async throws
 {
     let account = SubscriptionAccount(
@@ -458,13 +543,18 @@ func removingOpenCodeAccountDeletesCredentialAndWebProfile()
     let base = TestProviderAccountAdapter(
         provider: .openCodeGo,
     )
-    let removal = OpenCodeProfileRemovalRecorder()
+    let lifecycle = OpenCodeProfileLifecycleRecorder()
     let adapter = OpenCodeWebAccountUsageClient(
         base: base,
         credentialStore: TestCredentialStore(),
         loadAuthCookie: { _ in nil },
+        evictAuthCookieProfile: { profileID in
+            #expect(profileID == account.id)
+            lifecycle.record("evict")
+        },
         removeProfile: { profileID in
-            removal.remove(profileID)
+            #expect(profileID == account.id)
+            lifecycle.record("remove")
         },
     )
 
@@ -476,7 +566,7 @@ func removingOpenCodeAccountDeletesCredentialAndWebProfile()
         await base.removedAccountIDs
             == [account.id],
     )
-    #expect(removal.profileIDs == [account.id])
+    #expect(lifecycle.events == ["evict", "remove"])
 }
 
 @MainActor
@@ -485,6 +575,15 @@ private final class OpenCodeProfileRemovalRecorder {
 
     func remove(_ profileID: UUID) {
         profileIDs.append(profileID)
+    }
+}
+
+@MainActor
+private final class OpenCodeProfileLifecycleRecorder {
+    private(set) var events: [String] = []
+
+    func record(_ event: String) {
+        events.append(event)
     }
 }
 
@@ -511,5 +610,38 @@ private final class TestOpenCodeCookieProfile:
 
     func warmIfNeeded() {
         warmCount += 1
+    }
+}
+
+@MainActor
+private final class RetainedOpenCodeCookieProfile:
+    OpenCodeProfileCookieLoading
+{
+    private let profileStore: AccountWebProfileStore
+
+    init(accountID: UUID) {
+        profileStore = AccountWebProfileStore(
+            accountID: accountID
+        )
+    }
+
+    func cookies() async -> [HTTPCookie] {
+        await withCheckedContinuation { continuation in
+            profileStore.dataStore.httpCookieStore
+                .getAllCookies { cookies in
+                    continuation.resume(returning: cookies)
+                }
+        }
+    }
+
+    func warmIfNeeded() {}
+
+    func setCookie(_ cookie: HTTPCookie) async {
+        await withCheckedContinuation { continuation in
+            profileStore.dataStore.httpCookieStore
+                .setCookie(cookie) {
+                    continuation.resume()
+                }
+        }
     }
 }
