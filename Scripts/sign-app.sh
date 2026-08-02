@@ -9,6 +9,8 @@ sparkle_framework="${application_path}/Contents/Frameworks/Sparkle.framework"
 signing_arguments=(--force --options runtime)
 if [[ "${RELEASE_SIGNING:-0}" == 1 ]]; then
     signing_arguments+=(--timestamp)
+else
+    signing_arguments+=(--timestamp=none)
 fi
 signing_arguments+=(--sign "${signing_identity}")
 

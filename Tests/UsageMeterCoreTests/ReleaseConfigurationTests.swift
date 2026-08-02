@@ -195,11 +195,16 @@ struct ReleaseConfigurationTests {
                     ).path,
             ),
         )
+        let installNameToolArguments = try String(
+            contentsOf: invocationLog,
+            encoding: .utf8,
+        ).split(separator: "\n").map(String.init)
         #expect(
-            try String(contentsOf: invocationLog, encoding: .utf8)
-                .contains(
-                    "Agentic Usage Meter.app/Contents/MacOS/AgenticUsageMeter",
-                ),
+            installNameToolArguments == [
+                "-add_rpath",
+                "@executable_path/../Frameworks",
+                applicationExecutable.path,
+            ],
         )
     }
 
@@ -210,91 +215,185 @@ struct ReleaseConfigurationTests {
         defer {
             try? FileManager.default.removeItem(at: temporaryRoot)
         }
+        let fixture = try makeSigningFixture(at: temporaryRoot)
+        let invocations = try runSignApp(
+            fixture: fixture,
+            releaseSigning: false,
+        )
+        for invocation in invocations {
+            #expect(
+                invocation.filter { $0.hasPrefix("--timestamp") }
+                    == ["--timestamp=none"],
+            )
+        }
+
+        let targets = invocations.compactMap(\.last)
+        let applicationIndex = try #require(
+            targets.firstIndex(of: fixture.applicationBundle.path),
+        )
+        let executableIndex = try #require(
+            targets.firstIndex(where: {
+                $0.hasSuffix("Contents/MacOS/AgenticUsageMeter")
+            }),
+        )
+        let frameworkIndex = try #require(
+            targets.firstIndex(where: { $0.hasSuffix("Sparkle.framework") }),
+        )
+        let resourceBundleIndex = try #require(
+            targets.firstIndex(where: { $0.hasSuffix("Resources.bundle") }),
+        )
+        let nestedSparkleIndices = try [
+            "Installer.xpc",
+            "Downloader.xpc",
+            "Autoupdate",
+            "Updater.app",
+        ].map { suffix in
+            try #require(
+                targets.firstIndex(where: { $0.hasSuffix(suffix) }),
+            )
+        }
+
+        for nestedIndex in nestedSparkleIndices {
+            #expect(nestedIndex < frameworkIndex)
+        }
+        #expect(frameworkIndex < executableIndex)
+        #expect(resourceBundleIndex < executableIndex)
+        #expect(executableIndex < applicationIndex)
+    }
+
+    @Test
+    func releaseSigningUsesSecureTimestamp() throws {
+        let temporaryRoot = FileManager.default.temporaryDirectory
+            .appending(path: UUID().uuidString)
+        defer {
+            try? FileManager.default.removeItem(at: temporaryRoot)
+        }
+        let fixture = try makeSigningFixture(at: temporaryRoot)
+        let invocations = try runSignApp(
+            fixture: fixture,
+            releaseSigning: true,
+        )
+
+        for invocation in invocations {
+            #expect(
+                invocation.filter { $0.hasPrefix("--timestamp") }
+                    == ["--timestamp"],
+            )
+        }
+    }
+
+    private struct SigningFixture {
+        let applicationBundle: URL
+        let fakeCodesign: URL
+        let invocationLog: URL
+    }
+
+    private func makeSigningFixture(at temporaryRoot: URL) throws
+        -> SigningFixture
+    {
         let applicationBundle = temporaryRoot.appending(
             path: "Agentic Usage Meter.app",
         )
         let sparkleFramework = applicationBundle.appending(
             path: "Contents/Frameworks/Sparkle.framework",
         )
-        let installer = sparkleFramework.appending(
-            path: "Versions/B/XPCServices/Installer.xpc",
-        )
-        let downloader = sparkleFramework.appending(
-            path: "Versions/B/XPCServices/Downloader.xpc",
-        )
-        let autoupdate = sparkleFramework.appending(
-            path: "Versions/B/Autoupdate",
-        )
-        let updater = sparkleFramework.appending(
-            path: "Versions/B/Updater.app",
-        )
-        let applicationExecutable = applicationBundle.appending(
-            path: "Contents/MacOS/AgenticUsageMeter",
-        )
-        let resourcesDirectory = applicationBundle.appending(
-            path: "Contents/Resources",
-        )
         for directory in [
-            installer,
-            downloader,
-            updater,
-            applicationExecutable.deletingLastPathComponent(),
-            resourcesDirectory,
+            sparkleFramework.appending(
+                path: "Versions/B/XPCServices/Installer.xpc",
+            ),
+            sparkleFramework.appending(
+                path: "Versions/B/XPCServices/Downloader.xpc",
+            ),
+            sparkleFramework.appending(path: "Versions/B/Updater.app"),
+            applicationBundle.appending(
+                path: "Contents/Resources/UsageMeterResources.bundle",
+            ),
+            applicationBundle.appending(path: "Contents/MacOS"),
         ] {
             try FileManager.default.createDirectory(
                 at: directory,
                 withIntermediateDirectories: true,
             )
         }
-        try Data().write(to: autoupdate)
-        try Data().write(to: applicationExecutable)
+        try Data().write(
+            to: sparkleFramework.appending(path: "Versions/B/Autoupdate"),
+        )
+        try Data().write(
+            to: applicationBundle.appending(
+                path: "Contents/MacOS/AgenticUsageMeter",
+            ),
+        )
+        try Data(
+            """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+            <plist version="1.0"><dict>
+            <key>CFBundleIdentifier</key>
+            <string>com.fsck.agentic-usage-meter.test-resources</string>
+            <key>CFBundlePackageType</key><string>BNDL</string>
+            <key>CFBundleVersion</key><string>1</string>
+            </dict></plist>
+
+            """.utf8,
+        ).write(
+            to: applicationBundle.appending(
+                path: "Contents/Resources/UsageMeterResources.bundle/Info.plist",
+            ),
+        )
 
         let fakeCodesign = temporaryRoot.appending(path: "codesign")
         let invocationLog = temporaryRoot.appending(path: "invocations.log")
-        try Data(
+        try writeExecutableScript(
             """
             #!/bin/zsh
-            /usr/bin/printf '%s\\n' "${@[-1]}" >> "$INVOCATION_LOG"
+            {
+                separator=
+                for argument in "$@"; do
+                    print -rn -- "${separator}${argument}"
+                    separator=$'\\t'
+                done
+                print
+            } >> "$INVOCATION_LOG"
 
-            """.utf8,
-        ).write(to: fakeCodesign)
-        try FileManager.default.setAttributes(
-            [.posixPermissions: 0o755],
-            ofItemAtPath: fakeCodesign.path,
+            """,
+            to: fakeCodesign,
         )
 
+        return SigningFixture(
+            applicationBundle: applicationBundle,
+            fakeCodesign: fakeCodesign,
+            invocationLog: invocationLog,
+        )
+    }
+
+    private func runSignApp(
+        fixture: SigningFixture,
+        releaseSigning: Bool,
+    ) throws -> [[String]] {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/zsh")
         process.arguments = [
             repositoryRoot.appending(path: "Scripts/sign-app.sh").path,
-            applicationBundle.path,
+            fixture.applicationBundle.path,
             "Developer ID Application: Example (TEAMID)",
         ]
         process.environment = ProcessInfo.processInfo.environment.merging([
-            "CODESIGN_BIN": fakeCodesign.path,
-            "INVOCATION_LOG": invocationLog.path,
+            "CODESIGN_BIN": fixture.fakeCodesign.path,
+            "INVOCATION_LOG": fixture.invocationLog.path,
+            "RELEASE_SIGNING": releaseSigning ? "1" : "0",
         ]) { _, new in new }
         process.standardError = Pipe()
 
         try process.run()
         process.waitUntilExit()
 
-        #expect(process.terminationStatus == 0)
-        let targets = try String(contentsOf: invocationLog, encoding: .utf8)
-            .split(separator: "\n")
-            .map(String.init)
-        let applicationIndex = try #require(
-            targets.firstIndex(of: applicationBundle.path),
-        )
-        let installerIndex = try #require(
-            targets.firstIndex(where: { $0.hasSuffix("Installer.xpc") }),
-        )
-        let frameworkIndex = try #require(
-            targets.firstIndex(where: { $0.hasSuffix("Sparkle.framework") }),
-        )
-        #expect(targets.last == applicationBundle.path)
-        #expect(installerIndex < applicationIndex)
-        #expect(frameworkIndex < applicationIndex)
+        try #require(process.terminationStatus == 0)
+        return try String(
+            contentsOf: fixture.invocationLog,
+            encoding: .utf8,
+        ).split(separator: "\n").map { line in
+            line.split(separator: "\t").map(String.init)
+        }
     }
 
     @Test
