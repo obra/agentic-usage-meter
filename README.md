@@ -5,7 +5,7 @@ subscription quota windows and balances across your accounts.
 
 ![Agentic Usage Meter showing synthetic quota windows](docs/images/usage-popover.png)
 
-Built by [fsck.com](https://fsck.com).
+Built by [Jesse Vincent](https://fsck.com).
 
 ## What it shows
 

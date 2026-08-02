@@ -11,7 +11,8 @@
 ## Global Constraints
 
 - The public repository target is `obra/agentic-usage-meter`; repository creation occurs in the Sparkle/publication plan after all release code is ready.
-- The public homepage is `https://fsck.com`.
+- Jesse Vincent is the project's author and maker; its public homepage is
+  `https://fsck.com`, Jesse's personal domain.
 - The project is MIT licensed with copyright held by Jesse Vincent.
 - Every live product identifier uses `com.fsck.agentic-usage-meter`; do not add a legacy namespace fallback.
 - Screenshots must come from `--sample-data`, visibly say **SAMPLE DATA**, and contain no real names, domains, emails, identities, organizations, or quotas.
@@ -175,7 +176,8 @@ The privacy section must state:
 - cached usage in Application Support;
 - no analytics or telemetry.
 
-Link the author/homepage as `[fsck.com](https://fsck.com)` and never publish an email address.
+Attribute the app as `Built by [Jesse Vincent](https://fsck.com)`, linking to
+Jesse's personal homepage, and never publish an email address.
 
 - [ ] **Step 3: Verify documentation claims against live code**
 

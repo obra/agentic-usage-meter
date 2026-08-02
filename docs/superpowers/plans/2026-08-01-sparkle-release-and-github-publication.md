@@ -14,6 +14,7 @@
 - Use Sparkle 2.9.4 exactly until a separate dependency update is reviewed.
 - Feed URL: `https://github.com/obra/agentic-usage-meter/releases/latest/download/appcast.xml`.
 - Sparkle Keychain account: `agentic-usage-meter`; never export or commit its private EdDSA key.
+- Jesse Vincent is the app's author and maker; `https://fsck.com` is his personal homepage and remains the repository homepage.
 - Check automatically and expose **Check for Updates…**, but require confirmation before installation.
 - Sign and staple the application before Sparkle signs the final update archive.
 - Use `com.fsck.agentic-usage-meter` and the stable Developer ID Application identity.

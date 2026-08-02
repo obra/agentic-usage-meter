@@ -6,7 +6,7 @@
 
 ## Context
 
-Agentic Usage Meter is ready to move from a local development repository to a public macOS project under Jesse's `obra` GitHub account. The public release needs to explain the product clearly, show the real interface without exposing account data, use Jesse's `fsck.com` namespace, and provide a secure update path for direct-distribution builds.
+Agentic Usage Meter, made by Jesse Vincent, is ready to move from a local development repository to a public macOS project under Jesse's `obra` GitHub account. The public release needs to explain the product clearly, show the real interface without exposing account data, use the `com.fsck` technical namespace, list Jesse's personal homepage at `https://fsck.com`, and provide a secure update path for direct-distribution builds.
 
 The existing `obra/winby` project supplies the reference user experience: automatic update checks, explicit confirmation before installation, and a manual **Check for Updates...** action. Its release workflow is useful precedent, but Agentic Usage Meter will use Sparkle's current appcast tooling and Keychain-backed EdDSA key instead of hand-writing the feed or copying the private key into a temporary file.
 
@@ -31,7 +31,7 @@ The existing `obra/winby` project supplies the reference user experience: automa
 
 ## Public repository and README
 
-The repository will be public at `https://github.com/obra/agentic-usage-meter`, with `main` as its default branch and `https://fsck.com` as its homepage. The root MIT `LICENSE` will name Jesse Vincent as the copyright holder.
+The repository will be public at `https://github.com/obra/agentic-usage-meter`, with `main` as its default branch and Jesse's personal homepage, `https://fsck.com`, as its homepage. Jesse Vincent is the app's author and maker; the root MIT `LICENSE` will name him as the copyright holder.
 
 The README will lead with what the app does and the primary screenshot. It will then cover:
 
@@ -44,7 +44,7 @@ The README will lead with what the app does and the primary screenshot. It will 
 - the one-minute development and ten-minute release refresh floors;
 - direct-download updates and the explicit provider-response-change caveat.
 
-The README will link to `https://fsck.com`, the MIT license, provider qualification notes, and the GitHub release page. It will not use an email address as public attribution.
+The README will attribute the app to Jesse Vincent and link to his personal homepage, `https://fsck.com`, as well as the MIT license, provider qualification notes, and the GitHub release page. It will not use an email address as public attribution.
 
 ## Screenshots and privacy
 
