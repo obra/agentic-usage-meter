@@ -4,18 +4,27 @@ import Testing
 @Suite
 struct ReleaseAutomationTests {
     @Test
-    func appcastValidatorAcceptsOneCorrelatedEnclosure() throws {
+    func appcastValidatorAcceptsRealSparkleSiblingElements() throws {
         let result = try validateAppcast(
             """
-            <?xml version="1.0" encoding="UTF-8"?>
-            <rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+            <?xml version="1.0" standalone="yes"?>
+            <rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
               <channel>
-                <link>https://github.com/obra/agentic-usage-meter</link>
+                <title>Agentic Usage Meter</title>
                 <item>
+                  <title>0.1.0</title>
+                  <pubDate>Sun, 02 Aug 2026 12:23:10 -0700</pubDate>
+                  <link>https://github.com/obra/agentic-usage-meter</link>
+                  <sparkle:version>1000</sparkle:version>
+                  <sparkle:shortVersionString>0.1.0</sparkle:shortVersionString>
+                  <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+                  <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+                  <sparkle:releaseNotesLink>https://github.com/obra/agentic-usage-meter/releases/latest/download/Agentic-Usage-Meter-0.1.0.md</sparkle:releaseNotesLink>
                   <enclosure
                     url="https://github.com/obra/agentic-usage-meter/releases/download/v0.1.0/Agentic-Usage-Meter-0.1.0.zip"
-                    sparkle:version="1000"
-                    sparkle:shortVersionString="0.1.0" />
+                    length="2466625"
+                    type="application/octet-stream"
+                    sparkle:edSignature="fixture-signature" />
                 </item>
               </channel>
             </rss>
@@ -32,13 +41,17 @@ struct ReleaseAutomationTests {
             <?xml version="1.0" encoding="UTF-8"?>
             <rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
               <channel>
-                <link>https://github.com/obra/agentic-usage-meter</link>
-                <!-- url="https://github.com/obra/agentic-usage-meter/releases/download/v0.1.0/Agentic-Usage-Meter-0.1.0.zip" sparkle:version="1000" sparkle:shortVersionString="0.1.0" -->
                 <item>
+                  <link>https://github.com/obra/agentic-usage-meter</link>
+                  <!--
+                    <sparkle:version>1000</sparkle:version>
+                    <sparkle:shortVersionString>0.1.0</sparkle:shortVersionString>
+                    <enclosure url="https://github.com/obra/agentic-usage-meter/releases/download/v0.1.0/Agentic-Usage-Meter-0.1.0.zip" />
+                  -->
+                  <sparkle:version>999</sparkle:version>
+                  <sparkle:shortVersionString>9.9.9</sparkle:shortVersionString>
                   <enclosure
-                    url="https://invalid.example/app.zip"
-                    sparkle:version="999"
-                    sparkle:shortVersionString="9.9.9" />
+                    url="https://invalid.example/app.zip" />
                 </item>
               </channel>
             </rss>
@@ -49,24 +62,71 @@ struct ReleaseAutomationTests {
     }
 
     @Test
-    func appcastValidatorRejectsAttributesSplitAcrossEnclosures() throws {
+    func appcastValidatorRejectsMetadataSplitAcrossItems() throws {
         let result = try validateAppcast(
             """
             <?xml version="1.0" encoding="UTF-8"?>
             <rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
               <channel>
-                <link>https://github.com/obra/agentic-usage-meter</link>
                 <item>
+                  <link>https://github.com/obra/agentic-usage-meter</link>
                   <enclosure
-                    url="https://github.com/obra/agentic-usage-meter/releases/download/v0.1.0/Agentic-Usage-Meter-0.1.0.zip"
-                    sparkle:version="999"
-                    sparkle:shortVersionString="9.9.9" />
+                    url="https://github.com/obra/agentic-usage-meter/releases/download/v0.1.0/Agentic-Usage-Meter-0.1.0.zip" />
                 </item>
                 <item>
+                  <sparkle:version>1000</sparkle:version>
+                  <sparkle:shortVersionString>0.1.0</sparkle:shortVersionString>
+                </item>
+              </channel>
+            </rss>
+            """,
+        )
+
+        #expect(result.terminationStatus != 0)
+    }
+
+    @Test
+    func appcastValidatorRejectsMetadataOutsideTheReleaseItem() throws {
+        let result = try validateAppcast(
+            """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+              <channel>
+                <sparkle:version>1000</sparkle:version>
+                <sparkle:shortVersionString>0.1.0</sparkle:shortVersionString>
+                <item>
+                  <link>https://github.com/obra/agentic-usage-meter</link>
                   <enclosure
-                    url="https://invalid.example/app.zip"
-                    sparkle:version="1000"
-                    sparkle:shortVersionString="0.1.0" />
+                    url="https://github.com/obra/agentic-usage-meter/releases/download/v0.1.0/Agentic-Usage-Meter-0.1.0.zip" />
+                </item>
+              </channel>
+            </rss>
+            """,
+        )
+
+        #expect(result.terminationStatus != 0)
+    }
+
+    @Test
+    func appcastValidatorRejectsDuplicateMatchingItemsAndEnclosures() throws {
+        let result = try validateAppcast(
+            """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+              <channel>
+                <item>
+                  <link>https://github.com/obra/agentic-usage-meter</link>
+                  <sparkle:version>1000</sparkle:version>
+                  <sparkle:shortVersionString>0.1.0</sparkle:shortVersionString>
+                  <enclosure
+                    url="https://github.com/obra/agentic-usage-meter/releases/download/v0.1.0/Agentic-Usage-Meter-0.1.0.zip" />
+                </item>
+                <item>
+                  <link>https://github.com/obra/agentic-usage-meter</link>
+                  <sparkle:version>1000</sparkle:version>
+                  <sparkle:shortVersionString>0.1.0</sparkle:shortVersionString>
+                  <enclosure
+                    url="https://github.com/obra/agentic-usage-meter/releases/download/v0.1.0/Agentic-Usage-Meter-0.1.0.zip" />
                 </item>
               </channel>
             </rss>
@@ -83,12 +143,12 @@ struct ReleaseAutomationTests {
             <?xml version="1.0" encoding="UTF-8"?>
             <rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
               <channel>
-                <link>https://invalid.example</link>
                 <item>
+                  <link>https://invalid.example</link>
+                  <sparkle:version>1000</sparkle:version>
+                  <sparkle:shortVersionString>0.1.0</sparkle:shortVersionString>
                   <enclosure
-                    url="https://github.com/obra/agentic-usage-meter/releases/download/v0.1.0/Agentic-Usage-Meter-0.1.0.zip"
-                    sparkle:version="1000"
-                    sparkle:shortVersionString="0.1.0" />
+                    url="https://github.com/obra/agentic-usage-meter/releases/download/v0.1.0/Agentic-Usage-Meter-0.1.0.zip" />
                 </item>
               </channel>
             </rss>
@@ -722,15 +782,15 @@ struct ReleaseAutomationTests {
                 shift
             done
             if [[ "${FAIL_PHASE:-}" == appcast-validation ]]; then
-                enclosure='<!-- url="https://github.com/obra/agentic-usage-meter/releases/download/v0.1.0/Agentic-Usage-Meter-0.1.0.zip" sparkle:version="1000" sparkle:shortVersionString="0.1.0" --><enclosure url="https://invalid.example/app.zip" sparkle:version="999" sparkle:shortVersionString="9.9.9" />'
+                item='<!-- <sparkle:version>1000</sparkle:version><sparkle:shortVersionString>0.1.0</sparkle:shortVersionString><enclosure url="https://github.com/obra/agentic-usage-meter/releases/download/v0.1.0/Agentic-Usage-Meter-0.1.0.zip" /> --><link>https://github.com/obra/agentic-usage-meter</link><sparkle:version>999</sparkle:version><sparkle:shortVersionString>9.9.9</sparkle:shortVersionString><enclosure url="https://invalid.example/app.zip" />'
             else
-                enclosure='<enclosure url="https://github.com/obra/agentic-usage-meter/releases/download/v0.1.0/Agentic-Usage-Meter-0.1.0.zip" sparkle:version="1000" sparkle:shortVersionString="0.1.0" />'
+                item='<link>https://github.com/obra/agentic-usage-meter</link><sparkle:version>1000</sparkle:version><sparkle:shortVersionString>0.1.0</sparkle:shortVersionString><enclosure url="https://github.com/obra/agentic-usage-meter/releases/download/v0.1.0/Agentic-Usage-Meter-0.1.0.zip" />'
             fi
             /usr/bin/printf '%s\n' \
                 '<?xml version="1.0" encoding="UTF-8"?>' \
                 '<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"><channel>' \
-                '<link>https://github.com/obra/agentic-usage-meter</link><item>' \
-                "$enclosure" \
+                '<item>' \
+                "$item" \
                 '</item></channel></rss>' \
                 > "$output"
 

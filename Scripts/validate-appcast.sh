@@ -31,11 +31,11 @@ enclosure_count=$("${xmllint_bin}" --xpath \
     exit 1
 }
 
-matching_enclosure_count=$("${xmllint_bin}" --xpath \
-    "count(/*[local-name()='rss']/*[local-name()='channel']/*[local-name()='item']/*[local-name()='enclosure' and @url='${asset_url}' and @*[local-name()='version' and namespace-uri()='${sparkle_namespace}']='${build}' and @*[local-name()='shortVersionString' and namespace-uri()='${sparkle_namespace}']='${version}'])" \
+matching_item_count=$("${xmllint_bin}" --xpath \
+    "count(/*[local-name()='rss']/*[local-name()='channel']/*[local-name()='item' and count(*[local-name()='enclosure' and @url='${asset_url}'])=1 and count(*[local-name()='version' and namespace-uri()='${sparkle_namespace}'])=1 and *[local-name()='version' and namespace-uri()='${sparkle_namespace}']='${build}' and count(*[local-name()='shortVersionString' and namespace-uri()='${sparkle_namespace}'])=1 and *[local-name()='shortVersionString' and namespace-uri()='${sparkle_namespace}']='${version}'])" \
     "${appcast}")
-[[ "${matching_enclosure_count}" == 1 ]] || {
-    echo 'Appcast enclosure does not match the release artifact.' >&2
+[[ "${matching_item_count}" == 1 ]] || {
+    echo 'Appcast item does not match the release artifact.' >&2
     exit 1
 }
 
@@ -43,10 +43,10 @@ channel_count=$("${xmllint_bin}" --xpath \
     "count(/*[local-name()='rss']/*[local-name()='channel'])" \
     "${appcast}")
 link_count=$("${xmllint_bin}" --xpath \
-    "count(/*[local-name()='rss']/*[local-name()='channel']/*[local-name()='link'])" \
+    "count(/*[local-name()='rss']/*[local-name()='channel']/*[local-name()='item']/*[local-name()='link'])" \
     "${appcast}")
 matching_link_count=$("${xmllint_bin}" --xpath \
-    "count(/*[local-name()='rss']/*[local-name()='channel']/*[local-name()='link' and text()='${link}'])" \
+    "count(/*[local-name()='rss']/*[local-name()='channel']/*[local-name()='item']/*[local-name()='link' and text()='${link}'])" \
     "${appcast}")
 [[ "${channel_count}" == 1 \
     && "${link_count}" == 1 \
