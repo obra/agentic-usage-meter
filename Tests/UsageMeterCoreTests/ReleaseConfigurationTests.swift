@@ -53,6 +53,10 @@ struct ReleaseConfigurationTests {
         #expect(try releaseVersion("v0.1.0") == "0.1.0\t1000")
         #expect(try releaseVersion("v0.1.1") == "0.1.1\t1001")
         #expect(try releaseVersion("v1.0.0") == "1.0.0\t1000000")
+        #expect(
+            try releaseVersion("v999.999.999")
+                == "999.999.999\t999999999",
+        )
     }
 
     @Test
@@ -60,7 +64,14 @@ struct ReleaseConfigurationTests {
         #expect(try releaseVersion("1.0.0") == nil)
         #expect(try releaseVersion("v1.0") == nil)
         #expect(try releaseVersion("v1.2.3-beta") == nil)
+        #expect(try releaseVersion("v01.0.0") == nil)
+        #expect(try releaseVersion("v1.00.0") == nil)
         #expect(try releaseVersion("v1000.0.0") == nil)
+        #expect(
+            try releaseVersion(
+                "v999999999999999999999999999999999999999999.0.0",
+            ) == nil,
+        )
     }
 
     @Test
@@ -134,6 +145,51 @@ struct ReleaseConfigurationTests {
                 path: "Scripts/extract-release-notes.sh",
             ),
             arguments: ["0.2.0", changelog.path],
+        )
+
+        #expect(result.terminationStatus != 0)
+        #expect(result.output.isEmpty)
+    }
+
+    @Test
+    func releaseNotesRejectAdjacentDuplicateVersionHeadings() throws {
+        let result = try releaseNotes(
+            """
+            ## 0.1.0 - 2026-08-01
+            - First copy.
+            ## 0.1.0 - 2026-08-02
+            - Second copy.
+            """,
+            arguments: ["0.1.0"],
+        )
+
+        #expect(result.terminationStatus != 0)
+        #expect(result.output.isEmpty)
+    }
+
+    @Test
+    func releaseNotesRejectSeparatedDuplicateVersionHeadings() throws {
+        let result = try releaseNotes(
+            """
+            ## 0.1.0 - 2026-08-01
+            - First copy.
+            ## 0.2.0 - 2026-08-02
+            - Another release.
+            ## 0.1.0 - 2026-08-03
+            - Second copy.
+            """,
+            arguments: ["0.1.0"],
+        )
+
+        #expect(result.terminationStatus != 0)
+        #expect(result.output.isEmpty)
+    }
+
+    @Test
+    func releaseNotesRejectExtraArguments() throws {
+        let result = try releaseNotes(
+            "## 0.1.0 - 2026-08-01\n- First release.\n",
+            arguments: ["0.1.0", "unexpected"],
         )
 
         #expect(result.terminationStatus != 0)
@@ -995,6 +1051,30 @@ struct ReleaseConfigurationTests {
             return nil
         }
         return result.output.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func releaseNotes(
+        _ changelogContents: String,
+        arguments: [String],
+    ) throws -> ScriptResult {
+        let temporaryRoot = FileManager.default.temporaryDirectory
+            .appending(path: UUID().uuidString)
+        defer {
+            try? FileManager.default.removeItem(at: temporaryRoot)
+        }
+        try FileManager.default.createDirectory(
+            at: temporaryRoot,
+            withIntermediateDirectories: true,
+        )
+        let changelog = temporaryRoot.appending(path: "CHANGELOG.md")
+        try Data(changelogContents.utf8).write(to: changelog)
+        return try runScript(
+            repositoryRoot.appending(
+                path: "Scripts/extract-release-notes.sh",
+            ),
+            arguments: [arguments[0], changelog.path]
+                + Array(arguments.dropFirst()),
+        )
     }
 
     private func runScript(

@@ -36,6 +36,7 @@ suite before tagging. Create an annotated tag at `HEAD`:
 
 ```sh
 git tag -a v0.1.0 -m "Release v0.1.0"
+git push origin v0.1.0
 ```
 
 Export the two local credential selectors without recording their values in
@@ -51,7 +52,9 @@ The tag must have the exact `vMAJOR.MINOR.PATCH` form, with each component in
 lightweight or non-`HEAD` tag, a different origin or GitHub user, an existing
 release, a remote tag that differs from the local annotated tag, unavailable
 credentials, or a failing test suite. Only after those checks and the full test
-suite pass does it push an absent annotated tag as the first release upload.
+suite pass does it create the GitHub Release. The script never creates or pushes
+a tag; the exact annotated tag must already exist on `origin` before it starts,
+and the script checks the remote object again immediately before upload.
 
 The local output for `v0.1.0` is:
 
@@ -75,16 +78,18 @@ Inspect the published release and its three assets:
 gh release view v0.1.0 --repo obra/agentic-usage-meter --web
 ```
 
-Download the public appcast and validate both the XML and release asset URL:
+Download the public appcast and validate its correlated release metadata:
 
 ```sh
 curl --fail --location \
   https://github.com/obra/agentic-usage-meter/releases/latest/download/appcast.xml \
   --output /tmp/agentic-usage-meter-appcast.xml
-xmllint --noout /tmp/agentic-usage-meter-appcast.xml
-grep -F \
+Scripts/validate-appcast.sh \
+  /tmp/agentic-usage-meter-appcast.xml \
   'https://github.com/obra/agentic-usage-meter/releases/download/v0.1.0/Agentic-Usage-Meter-0.1.0.zip' \
-  /tmp/agentic-usage-meter-appcast.xml
+  1000 \
+  0.1.0 \
+  'https://github.com/obra/agentic-usage-meter'
 ```
 
 Also download the zip from the release, expand it, launch the installed app,
@@ -93,9 +98,11 @@ script does not replace that installed-app update check.
 
 ## Failure recovery
 
-The script deletes only the exact local `build/releases/<tag>` directory before
-building. It never deletes a GitHub Release or tag. If GitHub upload fails after
-release creation, treat the release as partial: inspect its assets, preserve the
-local release directory, and complete or supersede it deliberately. Do not
-delete and recreate the tag, rotate signing identities, or rerun the release
-command until the partial public state has been reconciled.
+The script never deletes or replaces an existing `build/releases/<tag>` path.
+If that path already exists, inspect it and move or remove it deliberately
+before starting a new attempt. The script never deletes a GitHub Release or
+tag. If GitHub upload fails after release creation, treat the release as
+partial: inspect its assets, preserve the local release directory, and complete
+or supersede it deliberately. Do not delete and recreate the tag, rotate
+signing identities, or rerun the release command until the partial public state
+has been reconciled.
