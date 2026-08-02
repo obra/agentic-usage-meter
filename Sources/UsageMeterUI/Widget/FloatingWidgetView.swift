@@ -13,7 +13,7 @@ public struct FloatingWidgetView: View {
                 Text("Agentic Usage")
                     .font(.headline)
                 if model.isSampleData {
-                    sampleDataBadge
+                    SampleDataBadge(label: "SAMPLE DATA")
                 }
                 Spacer()
                 Button {
@@ -85,13 +85,4 @@ public struct FloatingWidgetView: View {
             )
     }
 
-    private var sampleDataBadge: some View {
-        Text("SAMPLE DATA")
-            .font(.caption2.weight(.bold))
-            .foregroundStyle(.orange)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(.orange.opacity(0.14), in: Capsule())
-            .accessibilityLabel("Sample data")
-    }
 }

@@ -15,7 +15,7 @@ public struct MenuBarContentView: View {
                 Text("Usage")
                     .font(.title3.weight(.semibold))
                 if model.isSampleData {
-                    sampleDataBadge
+                    SampleDataBadge(label: "SAMPLE DATA")
                 }
                 Spacer()
                 Button {
@@ -131,13 +131,4 @@ public struct MenuBarContentView: View {
             )
     }
 
-    private var sampleDataBadge: some View {
-        Text("SAMPLE DATA")
-            .font(.caption2.weight(.bold))
-            .foregroundStyle(.orange)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(.orange.opacity(0.14), in: Capsule())
-            .accessibilityLabel("Sample data")
-    }
 }

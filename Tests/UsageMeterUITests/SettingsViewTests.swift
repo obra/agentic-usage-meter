@@ -5,6 +5,20 @@ import UsageMeterCore
 @testable import UsageMeterUI
 
 @Test
+func settingsHeaderMarksOnlySampleData() {
+    #expect(
+        SettingsHeaderPresentation(
+            isSampleData: true,
+        ).sampleDataLabel == "SAMPLE DATA",
+    )
+    #expect(
+        SettingsHeaderPresentation(
+            isSampleData: false,
+        ).sampleDataLabel == nil,
+    )
+}
+
+@Test
 func reconnectRouteLocksTheExistingProvider() {
     let account = SubscriptionAccount(
         provider: .codex,

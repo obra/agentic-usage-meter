@@ -14,7 +14,7 @@ The existing `obra/winby` project supplies the reference user experience: automa
 
 - Publish the complete repository publicly as `obra/agentic-usage-meter` under the MIT license.
 - Present the app with a concise product-focused README and synthetic screenshots.
-- Change the product namespace from `com.jesse.agentic-usage-meter` to `com.fsck.agentic-usage-meter` everywhere it identifies this app.
+- Change the product namespace from the previous namespace to `com.fsck.agentic-usage-meter` everywhere it identifies this app.
 - Add signed Sparkle updates for direct-distribution builds.
 - Check for updates automatically while requiring confirmation before installation.
 - Automate local release construction, signing, notarization, appcast generation, and GitHub upload as far as existing credentials allow.
@@ -114,7 +114,7 @@ Before public release, the cookie source will expose account eviction, the remov
 
 Automated and mechanical verification will cover:
 
-- the exact `com.fsck.agentic-usage-meter` bundle identifier and absence of live `com.jesse` product identifiers;
+- the exact `com.fsck.agentic-usage-meter` bundle identifier and absence of live previous-namespace product identifiers;
 - the updater's enabled and disabled configuration paths;
 - the presence and shape of Sparkle feed and public-key values in assembled releases;
 - Sparkle framework embedding, hardened-runtime signing, notarization, staple, and Gatekeeper assessment;
@@ -131,6 +131,6 @@ Live acceptance will verify that a signed installed build starts automatic check
 - **Copy Winby's release workflow verbatim:** it hand-builds appcast XML and handles the Sparkle private key through a temporary file; current Sparkle tooling provides a safer and less brittle path.
 - **Silent updates:** removes meaningful user control and contradicts Jesse's explicit confirmation choice.
 - **Custom GitHub API updater:** duplicates Sparkle's signature, installation, rollback, and user-interface work.
-- **Keep `com.jesse` as a legacy Keychain namespace:** leaves the product identity knowingly wrong and adds indefinite pre-release compatibility baggage.
+- **Keep the previous namespace as a legacy Keychain namespace:** leaves the product identity knowingly wrong and adds indefinite pre-release compatibility baggage.
 - **Real-data screenshots with redaction:** redaction can miss PII and makes repeatable documentation harder than capturing the existing synthetic mode.
 - **Publish before the history audit:** a clean current tree is insufficient if a reachable commit contains a credential.

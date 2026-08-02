@@ -74,6 +74,16 @@ struct ProviderPresentation {
     }
 }
 
+struct SettingsHeaderPresentation {
+    let sampleDataLabel: String?
+
+    init(isSampleData: Bool) {
+        sampleDataLabel = isSampleData
+            ? "SAMPLE DATA"
+            : nil
+    }
+}
+
 struct AccountConnectionFormState {
     struct ViewID: Hashable {
         let attemptID: UUID
@@ -180,8 +190,17 @@ public struct SettingsView: View {
         )
         .toolbar {
             ToolbarItem(placement: .principal) {
-                Text("Accounts")
-                    .font(.headline)
+                HStack {
+                    Text("Accounts")
+                        .font(.headline)
+                    if let sampleDataLabel =
+                        SettingsHeaderPresentation(
+                            isSampleData: model.isSampleData,
+                        ).sampleDataLabel
+                    {
+                        SampleDataBadge(label: sampleDataLabel)
+                    }
+                }
             }
             ToolbarItem(placement: .primaryAction) {
                 Button {
