@@ -34,6 +34,16 @@ enum AccountSheetRoute: Identifiable {
     var isProviderLocked: Bool {
         reconnectingAccount != nil
     }
+
+    var providerRequestURL: URL? {
+        guard case .add = self else {
+            return nil
+        }
+        return URL(
+            string:
+                "https://github.com/obra/agentic-usage-meter/issues/new",
+        )
+    }
 }
 
 struct AccountProviderSelection {
@@ -534,6 +544,15 @@ private struct AddAccountView: View {
                         },
                     )
                 }
+            }
+
+            if let providerRequestURL = route.providerRequestURL {
+                Link(
+                    "Want a provider that's not shown here? Please request it.",
+                    destination: providerRequestURL,
+                )
+                .font(.callout)
+                .foregroundStyle(.secondary)
             }
         }
     }

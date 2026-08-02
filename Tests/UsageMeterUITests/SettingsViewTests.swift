@@ -42,6 +42,26 @@ func addRouteStartsWithClaudeAndAllowsProviderChanges() {
 }
 
 @Test
+func providerRequestIsAvailableOnlyWhenAddingAnAccount() {
+    let account = SubscriptionAccount(
+        provider: .codex,
+        displayName: "Work",
+        displayOrder: 0,
+    )
+
+    #expect(
+        AccountSheetRoute.add.providerRequestURL
+            == URL(
+                string:
+                    "https://github.com/obra/agentic-usage-meter/issues/new",
+            ),
+    )
+    #expect(
+        AccountSheetRoute.reconnect(account).providerRequestURL == nil,
+    )
+}
+
+@Test
 func accountNameEditRejectsBlankDraftWithoutDiscardingIt() {
     let edit = AccountNameEdit(
         originalName: "Work",
