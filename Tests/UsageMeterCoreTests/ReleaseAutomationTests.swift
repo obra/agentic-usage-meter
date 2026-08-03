@@ -159,6 +159,30 @@ struct ReleaseAutomationTests {
     }
 
     @Test
+    func appcastValidatorRejectsProjectLinkOnDifferentItem() throws {
+        let result = try validateAppcast(
+            """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+              <channel>
+                <item>
+                  <sparkle:version>1000</sparkle:version>
+                  <sparkle:shortVersionString>0.1.0</sparkle:shortVersionString>
+                  <enclosure
+                    url="https://github.com/obra/agentic-usage-meter/releases/download/v0.1.0/Agentic-Usage-Meter-0.1.0.zip" />
+                </item>
+                <item>
+                  <link>https://github.com/obra/agentic-usage-meter</link>
+                </item>
+              </channel>
+            </rss>
+            """,
+        )
+
+        #expect(result.terminationStatus != 0)
+    }
+
+    @Test
     func releaseOrchestrationPublishesExpectedAssetsInOrder() throws {
         let temporaryRoot = FileManager.default.temporaryDirectory
             .appending(path: UUID().uuidString)

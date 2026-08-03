@@ -32,7 +32,7 @@ enclosure_count=$("${xmllint_bin}" --xpath \
 }
 
 matching_item_count=$("${xmllint_bin}" --xpath \
-    "count(/*[local-name()='rss']/*[local-name()='channel']/*[local-name()='item' and count(*[local-name()='enclosure' and @url='${asset_url}'])=1 and count(*[local-name()='version' and namespace-uri()='${sparkle_namespace}'])=1 and *[local-name()='version' and namespace-uri()='${sparkle_namespace}']='${build}' and count(*[local-name()='shortVersionString' and namespace-uri()='${sparkle_namespace}'])=1 and *[local-name()='shortVersionString' and namespace-uri()='${sparkle_namespace}']='${version}'])" \
+    "count(/*[local-name()='rss']/*[local-name()='channel']/*[local-name()='item' and count(*[local-name()='link' and text()='${link}'])=1 and count(*[local-name()='enclosure' and @url='${asset_url}'])=1 and count(*[local-name()='version' and namespace-uri()='${sparkle_namespace}'])=1 and *[local-name()='version' and namespace-uri()='${sparkle_namespace}']='${build}' and count(*[local-name()='shortVersionString' and namespace-uri()='${sparkle_namespace}'])=1 and *[local-name()='shortVersionString' and namespace-uri()='${sparkle_namespace}']='${version}'])" \
     "${appcast}")
 [[ "${matching_item_count}" == 1 ]] || {
     echo 'Appcast item does not match the release artifact.' >&2
