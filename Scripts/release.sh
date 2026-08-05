@@ -88,13 +88,15 @@ require_remote_tag
 "${gh_bin}" auth status --hostname github.com >/dev/null 2>&1
 if [[ "${GITHUB_ACTIONS:-}" == true \
     && "${GITHUB_REPOSITORY:-}" == 'obra/agentic-usage-meter' ]]; then
-    # The workflow token is an installation token with no user identity;
-    # push access to the canonical repository is the equivalent gate.
+    # The workflow token is an installation token with no user identity
+    # and no introspectable permissions; require it to reach the
+    # canonical repository and let the declared workflow permissions
+    # govern write access.
     [[ "$(
         "${gh_bin}" api repos/obra/agentic-usage-meter \
-            --jq .permissions.push
-    )" == true ]] || {
-        echo 'Actions token lacks push access to obra/agentic-usage-meter.' >&2
+            --jq .full_name
+    )" == 'obra/agentic-usage-meter' ]] || {
+        echo 'Actions token cannot access obra/agentic-usage-meter.' >&2
         exit 1
     }
 else

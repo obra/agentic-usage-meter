@@ -545,7 +545,7 @@ struct ReleaseAutomationTests {
 
         #expect(result.terminationStatus == 0)
         let events = try fixture.events()
-        #expect(events.contains("gh:permissions"))
+        #expect(events.contains("gh:repo-access"))
         #expect(events.contains("gh:release-create"))
         #expect(!events.contains("gh:user"))
     }
@@ -719,9 +719,9 @@ struct ReleaseAutomationTests {
                 exit 0
             fi
             if [[ "$1" == api && "$2" == repos/obra/agentic-usage-meter \
-                && "${3:-}" == --jq && "${4:-}" == .permissions.push ]]; then
-                print -r -- 'gh:permissions' >> "$EVENT_LOG"
-                print -r -- true
+                && "${3:-}" == --jq && "${4:-}" == .full_name ]]; then
+                print -r -- 'gh:repo-access' >> "$EVENT_LOG"
+                print -r -- obra/agentic-usage-meter
                 exit 0
             fi
             if [[ "$1" == api && "$2" == repos/* ]]; then
