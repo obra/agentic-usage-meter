@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Experimental Z.ai GLM Coding Plan connections using the account's Coding
+  Plan API key.
+- Experimental Xiaomi MiMo Token Plan connections using an isolated browser
+  session, with the monthly bundle shown as remaining tokens.
+
+### Changed
+
+- Replaced the menu bar glyph with an open gauge so it no longer resembles
+  Time Machine's clock icon.
+
+### Fixed
+
+- Claude usage refreshes no longer fail on accounts whose reset timestamps
+  include fractional seconds.
+
 ## 0.1.1 - 2026-08-02
 
 ### Added
