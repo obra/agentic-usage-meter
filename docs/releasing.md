@@ -21,9 +21,11 @@ temporary keychain from these repository secrets, then destroys the keychain:
   configured secret is the individual key `A27HSE218FA7`.
 - `SPARKLE_ED_PRIVATE_KEY` — the Sparkle EdDSA private key exported with
   `generate_keys --account agentic-usage-meter -x <file>`.
-- `RELEASE_GH_TOKEN` — a token for `obra` with `contents: write` on this
-  repository; the workflow's default token cannot pass the script's
-  authenticated-as-`obra` preflight.
+Publishing uses the workflow's built-in `GITHUB_TOKEN` with
+`contents: write`; no personal token is stored. Because that token has no
+user identity, the release script replaces its authenticated-as-`obra`
+preflight with a push-access check on the canonical repository when it
+detects it is running in this repository's Actions environment.
 
 Signing or notarization credentials have not been copied from Winby.
 

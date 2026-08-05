@@ -5,6 +5,9 @@ on:
     tags:
       - "v*"
 
+permissions:
+  contents: write
+
 jobs:
   release:
     name: Sign, notarize, and publish
@@ -13,7 +16,7 @@ jobs:
     env:
       DEVELOPER_ID_APPLICATION: "Developer ID Application: Jesse Vincent (87WJ58S66M)"
       NOTARYTOOL_PROFILE: ci-notary
-      GH_TOKEN: ${{ secrets.RELEASE_GH_TOKEN }}
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v5
         with:

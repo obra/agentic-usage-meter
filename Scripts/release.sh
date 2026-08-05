@@ -86,10 +86,23 @@ require_local_release_state
 }
 require_remote_tag
 "${gh_bin}" auth status --hostname github.com >/dev/null 2>&1
-[[ "$("${gh_bin}" api user --jq .login)" == obra ]] || {
-    echo 'GitHub CLI is not authenticated as obra.' >&2
-    exit 1
-}
+if [[ "${GITHUB_ACTIONS:-}" == true \
+    && "${GITHUB_REPOSITORY:-}" == 'obra/agentic-usage-meter' ]]; then
+    # The workflow token is an installation token with no user identity;
+    # push access to the canonical repository is the equivalent gate.
+    [[ "$(
+        "${gh_bin}" api repos/obra/agentic-usage-meter \
+            --jq .permissions.push
+    )" == true ]] || {
+        echo 'Actions token lacks push access to obra/agentic-usage-meter.' >&2
+        exit 1
+    }
+else
+    [[ "$("${gh_bin}" api user --jq .login)" == obra ]] || {
+        echo 'GitHub CLI is not authenticated as obra.' >&2
+        exit 1
+    }
+fi
 release_status=
 release_probe_exit=0
 release_status=$(

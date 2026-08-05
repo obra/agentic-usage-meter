@@ -526,6 +526,51 @@ struct ReleaseAutomationTests {
         #expect(events.contains("gh:release-create"))
     }
 
+    @Test
+    func actionsTokenWithPushAccessReleasesWithoutUserIdentity() throws {
+        let temporaryRoot = FileManager.default.temporaryDirectory
+            .appending(path: UUID().uuidString)
+        defer {
+            try? FileManager.default.removeItem(at: temporaryRoot)
+        }
+        let fixture = try makeReleaseFixture(at: temporaryRoot)
+
+        let result = try fixture.run(
+            environment: [
+                "GITHUB_ACTIONS": "true",
+                "GITHUB_REPOSITORY": "obra/agentic-usage-meter",
+                "GH_USER_UNAVAILABLE": "1",
+            ],
+        )
+
+        #expect(result.terminationStatus == 0)
+        let events = try fixture.events()
+        #expect(events.contains("gh:permissions"))
+        #expect(events.contains("gh:release-create"))
+        #expect(!events.contains("gh:user"))
+    }
+
+    @Test
+    func localRunWithoutTheObraIdentityStops() throws {
+        let temporaryRoot = FileManager.default.temporaryDirectory
+            .appending(path: UUID().uuidString)
+        defer {
+            try? FileManager.default.removeItem(at: temporaryRoot)
+        }
+        let fixture = try makeReleaseFixture(at: temporaryRoot)
+
+        let result = try fixture.run(
+            environment: [
+                "GH_USER_UNAVAILABLE": "1",
+            ],
+        )
+
+        #expect(result.terminationStatus != 0)
+        #expect(result.error.contains("not authenticated as obra"))
+        let events = try fixture.events()
+        #expect(!events.contains("gh:release-create"))
+    }
+
     private struct ScriptResult {
         let terminationStatus: Int32
         let output: String
@@ -669,7 +714,14 @@ struct ReleaseAutomationTests {
             fi
             if [[ "$1" == api && "$2" == user ]]; then
                 print -r -- 'gh:user' >> "$EVENT_LOG"
+                [[ "${GH_USER_UNAVAILABLE:-}" != 1 ]] || exit 1
                 print -r -- obra
+                exit 0
+            fi
+            if [[ "$1" == api && "$2" == repos/obra/agentic-usage-meter \
+                && "${3:-}" == --jq && "${4:-}" == .permissions.push ]]; then
+                print -r -- 'gh:permissions' >> "$EVENT_LOG"
+                print -r -- true
                 exit 0
             fi
             if [[ "$1" == api && "$2" == repos/* ]]; then
@@ -883,6 +935,10 @@ struct ReleaseAutomationTests {
                 "GH_ARGUMENTS_LOG": githubArgumentsLog.path,
                 "GH_BIN": tools.appending(path: "gh").path,
                 "GIT_BIN": tools.appending(path: "git").path,
+                // The suite itself may run inside GitHub Actions; pin the
+                // script under test to the local-release branch by default.
+                "GITHUB_ACTIONS": "",
+                "GITHUB_REPOSITORY": "",
                 "NOTARYTOOL_PROFILE": "fixture-profile",
                 "REMOTE_CALLS": remoteCalls.path,
                 "REMOTE_TAG_OBJECT": tagObject,
