@@ -47,6 +47,7 @@ struct ProviderCatalogTests {
                 .openCodeGo,
                 .openCodeZen,
                 .superGrok,
+                .zai,
             ],
         )
         #expect(Set(providers).count == providers.count)
@@ -64,6 +65,7 @@ struct ProviderCatalogTests {
             Provider.openCodeGo,
             Provider.openCodeZen,
             Provider.superGrok,
+            Provider.zai,
         ]
 
         #expect(
@@ -137,6 +139,29 @@ struct ProviderCatalogTests {
                     externalURL: URL(
                         string:
                             "https://app.factory.ai/settings/usage"
+                    )!
+                )
+        )
+    }
+
+    @Test
+    func zaiUsesPerAccountAPIKeysAndNativeUsageDetail()
+        throws
+    {
+        let definition = try #require(
+            ProviderCatalog.live.definition(
+                for: .zai
+            )
+        )
+
+        #expect(definition.releaseState == .experimental)
+        #expect(definition.connectionStrategy == .apiKey)
+        #expect(
+            definition.dashboardStrategy
+                == .nativeDetail(
+                    externalURL: URL(
+                        string:
+                            "https://z.ai/manage-apikey/coding-plan/personal/usage"
                     )!
                 )
         )

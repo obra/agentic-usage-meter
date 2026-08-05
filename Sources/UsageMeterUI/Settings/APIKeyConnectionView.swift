@@ -41,6 +41,13 @@ struct APIKeyConnectionPresentation {
                 "Create a key at app.factory.ai/settings/api-keys. The key is stored only in this account's macOS Keychain record."
             failureMessage =
                 "Factory account could not be connected."
+        case .zai:
+            sectionTitle = "Z.ai Coding Plan"
+            secretLabel = "Z.ai API key"
+            guidance =
+                "Use your Coding Plan API key from z.ai/manage-apikey. The key is stored only in this account's macOS Keychain record."
+            failureMessage =
+                "Z.ai account could not be connected."
         default:
             preconditionFailure(
                 "Provider does not use an API-key connection."
@@ -69,6 +76,7 @@ struct APIKeyConnectionView: View {
         precondition(
             provider == .minimax
                 || provider == .factory
+                || provider == .zai
         )
         self.model = model
         self.provider = provider
@@ -144,6 +152,15 @@ struct APIKeyConnectionView: View {
         case .factory:
             guard
                 let credential = FactoryCredential(
+                    apiKey: form.apiKey
+                )
+            else {
+                return
+            }
+            connect(using: credential)
+        case .zai:
+            guard
+                let credential = ZaiCredential(
                     apiKey: form.apiKey
                 )
             else {

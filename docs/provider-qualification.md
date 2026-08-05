@@ -19,6 +19,7 @@ explicitly obtains a safe display identity.
 | OpenCode Go | Isolated web session and workspace dashboard | Automated adapter complete | Selectable, experimental |
 | OpenCode Zen | Isolated web session and workspace billing | Automated adapter complete | Selectable, experimental |
 | SuperGrok | Account-scoped device OAuth and billing API | One-account live usage qualified | Selectable, experimental |
+| Z.ai GLM Coding Plan | API key and quota-limit monitor endpoint | Automated adapter complete | Selectable, experimental |
 
 `Automated adapter complete` means fixture, request, error, persistence, and
 cleanup contracts pass, but no real two-account qualification has completed.
@@ -319,6 +320,31 @@ stores one API key per local account in the macOS Keychain.
 - The live response therefore remains lossless in persistence while the
   compact timeline suppresses dormant Droid Core rows. Standard stays visible
   and Core becomes visible as a complete pool after Core consumption begins.
+
+## Z.ai GLM Coding Plan
+
+The automated adapter behavior follows the response shape reported in
+issue #3 and the field interpretation used by the MIT-licensed
+glm-usage-monitor and opencode-glm-quota projects.
+
+- Authentication uses the account's Coding Plan API key stored in the
+  macOS Keychain. Z.ai's monitor API expects the raw key in the
+  `Authorization` header without a Bearer prefix.
+- Usage is fetched from
+  `https://api.z.ai/api/monitor/usage/quota/limit`.
+- The `TOKENS_LIMIT` entry with `unit` 3 and `number` 5 is the 5-hour
+  token window; the entry with `unit` 6 and `number` 1 is the weekly
+  token window. `percentage` is used percent and `nextResetTime` is a
+  millisecond epoch.
+- A zero-use window without `nextResetTime` is preserved as an inactive
+  resetless window. A nonzero window without a reset is rejected because
+  the application must not invent a reset.
+- The monthly `TIME_LIMIT` MCP tool-call quota is not presented.
+- Only the international `api.z.ai` instance is supported. The PRC
+  `open.bigmodel.cn` instance and legacy V1/V2 plan responses have not
+  been qualified.
+- The provider is selectable but remains experimental pending real
+  qualification with live accounts across plan tiers.
 
 ## Antigravity
 

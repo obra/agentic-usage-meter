@@ -23,6 +23,8 @@ extension Provider {
       "opencode"
     case .superGrok:
       "grok"
+    case .zai:
+      nil
     }
   }
 

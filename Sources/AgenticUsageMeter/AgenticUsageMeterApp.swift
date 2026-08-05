@@ -129,6 +129,9 @@ enum AppEnvironment {
             SuperGrokUsageAdapter(
                 credentialStore: credentialStore
             ),
+            ZaiUsageAdapter(
+                credentialStore: credentialStore
+            ),
             OpenCodeWebAccountUsageClient(
                 base: OpenCodeGoUsageAdapter(
                     credentialStore:

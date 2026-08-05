@@ -464,6 +464,18 @@ private struct AddAccountView: View {
                                 ?? "OpenCode Zen",
                             onComplete: complete
                         )
+                    case .zai:
+                        APIKeyConnectionView(
+                            model: model,
+                            provider: .zai,
+                            reconnectingAccount:
+                                route.reconnectingAccount,
+                            suggestedName:
+                                route.reconnectingAccount?
+                                    .displayName
+                                    ?? "Z.ai",
+                            onComplete: complete
+                        )
                     case .antigravity:
                         EmptyView()
                     }
