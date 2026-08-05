@@ -94,20 +94,14 @@ jobs:
           restore-keys: |
             swiftpm-release-${{ runner.os }}-
 
-      - name: Fetch Sparkle tools and import the EdDSA key
-        env:
-          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
-        run: |
-          set -euo pipefail
-          swift build -c release
-          printf '%s' "${SPARKLE_ED_PRIVATE_KEY}" \
-            > "${RUNNER_TEMP}/sparkle-ed-key"
-          .build/artifacts/sparkle/Sparkle/bin/generate_keys \
-            --account agentic-usage-meter \
-            -f "${RUNNER_TEMP}/sparkle-ed-key"
-          rm -f "${RUNNER_TEMP}/sparkle-ed-key"
+      - name: Fetch Sparkle tools
+        run: swift build -c release
 
       - name: Run the release
+        env:
+          # Passed through to generate_appcast on stdin; a key imported
+          # into a keychain hangs headless runs on an access prompt.
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
         run: Scripts/release.sh "${GITHUB_REF_NAME}"
 
       - name: Preserve release outputs

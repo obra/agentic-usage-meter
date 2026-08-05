@@ -146,9 +146,14 @@ identity_count=$(
     >/dev/null
 
 sparkle_tools="${repository_root}/.build/artifacts/sparkle/Sparkle/bin"
-"${sparkle_tools}/generate_keys" \
-    --account agentic-usage-meter -p \
-    >/dev/null
+# A key supplied through the environment signs the appcast directly;
+# keychain items created by importing that key hang generate_appcast in
+# headless sessions behind an invisible access-control prompt.
+if [[ -z "${SPARKLE_ED_PRIVATE_KEY:-}" ]]; then
+    "${sparkle_tools}/generate_keys" \
+        --account agentic-usage-meter -p \
+        >/dev/null
+fi
 "${swift_bin}" test
 require_local_release_state
 
@@ -215,15 +220,28 @@ for appcast_input in "${appcast_inputs[@]}"; do
 done
 
 appcast_link='https://github.com/obra/agentic-usage-meter'
-"${sparkle_tools}/generate_appcast" \
-    --account agentic-usage-meter \
-    --download-url-prefix \
-    "https://github.com/obra/agentic-usage-meter/releases/download/${tag}/" \
-    --maximum-deltas 0 \
-    --maximum-versions 3 \
-    --link "${appcast_link}" \
-    -o "${release_directory}/appcast.xml" \
-    "${release_directory}"
+if [[ -n "${SPARKLE_ED_PRIVATE_KEY:-}" ]]; then
+    print -r -- "${SPARKLE_ED_PRIVATE_KEY}" \
+        | "${sparkle_tools}/generate_appcast" \
+            --ed-key-file - \
+            --download-url-prefix \
+            "https://github.com/obra/agentic-usage-meter/releases/download/${tag}/" \
+            --maximum-deltas 0 \
+            --maximum-versions 3 \
+            --link "${appcast_link}" \
+            -o "${release_directory}/appcast.xml" \
+            "${release_directory}"
+else
+    "${sparkle_tools}/generate_appcast" \
+        --account agentic-usage-meter \
+        --download-url-prefix \
+        "https://github.com/obra/agentic-usage-meter/releases/download/${tag}/" \
+        --maximum-deltas 0 \
+        --maximum-versions 3 \
+        --link "${appcast_link}" \
+        -o "${release_directory}/appcast.xml" \
+        "${release_directory}"
+fi
 appcast_path="${release_directory}/appcast.xml"
 asset_url="https://github.com/obra/agentic-usage-meter/releases/download/${tag}/${asset_base}.zip"
 "${script_directory}/validate-appcast.sh" \

@@ -551,6 +551,30 @@ struct ReleaseAutomationTests {
     }
 
     @Test
+    func environmentSparkleKeySignsWithoutTheKeychain() throws {
+        let temporaryRoot = FileManager.default.temporaryDirectory
+            .appending(path: UUID().uuidString)
+        defer {
+            try? FileManager.default.removeItem(at: temporaryRoot)
+        }
+        let fixture = try makeReleaseFixture(at: temporaryRoot)
+
+        let result = try fixture.run(
+            environment: [
+                "SPARKLE_ED_PRIVATE_KEY": "fixture-ed-key",
+            ],
+        )
+
+        #expect(result.terminationStatus == 0)
+        let events = try fixture.events()
+        #expect(!events.contains("sparkle-key"))
+        let appcastArguments = try fixture.appcastArguments()
+        #expect(appcastArguments.contains("--ed-key-file"))
+        #expect(appcastArguments.contains("-"))
+        #expect(!appcastArguments.contains("--account"))
+    }
+
+    @Test
     func localRunWithoutTheObraIdentityStops() throws {
         let temporaryRoot = FileManager.default.temporaryDirectory
             .appending(path: UUID().uuidString)
@@ -939,6 +963,7 @@ struct ReleaseAutomationTests {
                 // script under test to the local-release branch by default.
                 "GITHUB_ACTIONS": "",
                 "GITHUB_REPOSITORY": "",
+                "SPARKLE_ED_PRIVATE_KEY": "",
                 "NOTARYTOOL_PROFILE": "fixture-profile",
                 "REMOTE_CALLS": remoteCalls.path,
                 "REMOTE_TAG_OBJECT": tagObject,
