@@ -677,7 +677,7 @@ struct AppModelTests {
         await model.start()
 
         #expect(model.menuBarSummary.text == "34%")
-        #expect(model.menuBarSummary.systemImage == "gauge.with.needle")
+        #expect(model.menuBarSummary.systemImage == "gauge.open.with.lines.needle.33percent")
     }
 
     @Test
@@ -692,7 +692,7 @@ struct AppModelTests {
         await model.start()
 
         #expect(model.menuBarSummary.text == nil)
-        #expect(model.menuBarSummary.systemImage == "gauge.with.needle")
+        #expect(model.menuBarSummary.systemImage == "gauge.open.with.lines.needle.33percent")
     }
 
     @Test

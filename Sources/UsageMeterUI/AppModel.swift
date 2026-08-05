@@ -123,7 +123,7 @@ public final class AppModel {
         }
         return MenuBarSummary(
             text: text,
-            systemImage: "gauge.with.needle",
+            systemImage: "gauge.open.with.lines.needle.33percent",
         )
     }
 
