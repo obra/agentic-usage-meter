@@ -16,7 +16,9 @@ temporary keychain from these repository secrets, then destroys the keychain:
 - `DEVELOPER_ID_CERT_PASSWORD` — the export password for that `.p12`.
 - `NOTARY_API_KEY_P8`, `NOTARY_API_KEY_ID`, `NOTARY_API_ISSUER_ID` — an App
   Store Connect API key with the Developer role, pasted as the `.p8` file
-  contents plus its key and issuer identifiers.
+  contents plus its key and issuer identifiers. Individual API keys have no
+  issuer; leave `NOTARY_API_ISSUER_ID` unset for those. The currently
+  configured secret is the individual key `A27HSE218FA7`.
 - `SPARKLE_ED_PRIVATE_KEY` — the Sparkle EdDSA private key exported with
   `generate_keys --account agentic-usage-meter -x <file>`.
 - `RELEASE_GH_TOKEN` — a token for `obra` with `contents: write` on this

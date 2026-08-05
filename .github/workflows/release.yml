@@ -65,10 +65,17 @@ jobs:
           set -euo pipefail
           printf '%s' "${NOTARY_API_KEY_P8}" \
             > "${RUNNER_TEMP}/notary-key.p8"
-          xcrun notarytool store-credentials "${NOTARYTOOL_PROFILE}" \
-            --key "${RUNNER_TEMP}/notary-key.p8" \
-            --key-id "${NOTARY_API_KEY_ID}" \
-            --issuer "${NOTARY_API_ISSUER_ID}"
+          # Individual App Store Connect API keys have no issuer ID.
+          if [[ -n "${NOTARY_API_ISSUER_ID}" ]]; then
+            xcrun notarytool store-credentials "${NOTARYTOOL_PROFILE}" \
+              --key "${RUNNER_TEMP}/notary-key.p8" \
+              --key-id "${NOTARY_API_KEY_ID}" \
+              --issuer "${NOTARY_API_ISSUER_ID}"
+          else
+            xcrun notarytool store-credentials "${NOTARYTOOL_PROFILE}" \
+              --key "${RUNNER_TEMP}/notary-key.p8" \
+              --key-id "${NOTARY_API_KEY_ID}"
+          fi
           rm -f "${RUNNER_TEMP}/notary-key.p8"
 
       - name: Cache SwiftPM build
