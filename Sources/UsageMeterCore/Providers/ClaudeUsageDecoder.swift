@@ -11,7 +11,18 @@ public struct ClaudeUsageDecoder: Sendable {
         let payload: UsagePayload
         do {
             let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601
+            decoder.dateDecodingStrategy = .custom { decoder in
+                let container = try decoder.singleValueContainer()
+                let value = try container.decode(String.self)
+                guard let date = Self.parseDate(value) else {
+                    throw DecodingError.dataCorruptedError(
+                        in: container,
+                        debugDescription:
+                        "Expected date string to be ISO8601-formatted."
+                    )
+                }
+                return date
+            }
             payload = try decoder.decode(UsagePayload.self, from: data)
         } catch {
             throw ProviderClientError.unsupportedResponse
@@ -41,6 +52,23 @@ public struct ClaudeUsageDecoder: Sendable {
             windows: [shortWindow, weeklyWindow],
             balances: balances,
         )
+    }
+
+    private static func parseDate(_ value: String) -> Date? {
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [
+            .withInternetDateTime,
+            .withFractionalSeconds,
+        ]
+        if let date = fractional.date(from: value) {
+            return date
+        }
+
+        let internet = ISO8601DateFormatter()
+        internet.formatOptions = [
+            .withInternetDateTime
+        ]
+        return internet.date(from: value)
     }
 
     private func normalizedWindow(
