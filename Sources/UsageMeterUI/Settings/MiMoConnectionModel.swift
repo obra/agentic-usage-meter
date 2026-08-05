@@ -80,6 +80,7 @@ public final class MiMoConnectionModel {
         webView = nil
         pendingCredential = nil
         didSave = false
+        didRemoveProfile = false
         hasRenderedLoginPage = false
         if let authenticate {
             phase = .signingIn
@@ -138,7 +139,7 @@ public final class MiMoConnectionModel {
             phase = .complete
         } catch {
             phase = .failed(
-                "MiMo usage validation failed."
+                "MiMo account could not be saved."
             )
             throw error
         }

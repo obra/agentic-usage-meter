@@ -71,10 +71,27 @@ struct MiMoUsageDecoderTests {
     }
 
     @Test
+    func bodyLevelAuthenticationFailurePromptsReconnect() {
+        #expect(
+            throws: ProviderClientError.reauthenticationRequired
+        ) {
+            _ = try MiMoUsageDecoder().decode(
+                Data(
+                    """
+                    {"code": 401, "message": "unauthorized"}
+                    """.utf8
+                ),
+                accountID: UUID(),
+                fetchedAt: Date()
+            )
+        }
+    }
+
+    @Test
     func errorCodesAndMalformedResponsesAreRejected() {
         let responses = [
             """
-            {"code": 401, "message": "unauthorized"}
+            {"code": 500, "message": "server error"}
             """,
             """
             {"code": 0, "message": "", "data": {}}

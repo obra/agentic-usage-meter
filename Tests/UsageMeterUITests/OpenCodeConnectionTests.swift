@@ -350,6 +350,13 @@ func cancellingNewOpenCodeAccountDeletesItsWebProfile()
 
     #expect(removal.profileIDs == [accountID])
     #expect(appModel.accounts.isEmpty)
+
+    await connection.start()
+    await connection.cancel()
+
+    #expect(
+        removal.profileIDs == [accountID, accountID]
+    )
 }
 
 @Test

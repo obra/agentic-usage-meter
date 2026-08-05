@@ -6,16 +6,24 @@ import WebKit
 
 enum MiMoLoginDetector {
     static func cookieHeader(
-        in cookies: [HTTPCookie]
+        in cookies: [HTTPCookie],
+        now: Date = Date()
     ) -> String? {
+        // The header is canonicalized (unexpired cookies, sorted by
+        // name) so an unchanged session produces a byte-identical
+        // header regardless of WebKit's cookie enumeration order.
         let selected = cookies.filter { cookie in
             !cookie.value.isEmpty
                 && isMiMoDomain(cookie.domain)
+                && cookie.expiresDate.map { $0 > now } ?? true
         }
         guard !selected.isEmpty else {
             return nil
         }
         return selected
+            .sorted {
+                ($0.name, $0.value) < ($1.name, $1.value)
+            }
             .map { "\($0.name)=\($0.value)" }
             .joined(separator: "; ")
     }
@@ -55,6 +63,8 @@ final class MiMoLoginSession: NSObject {
     private var profileStore: AccountWebProfileStore?
     private var cookieStore: WKHTTPCookieStore?
     private var webView: WKWebView?
+    private var popupPanel: NSPanel?
+    private var popupWebView: WKWebView?
     private var isFinished = false
     private var isValidating = false
     private var hasPendingCandidate = false
@@ -91,12 +101,16 @@ final class MiMoLoginSession: NSObject {
             WKWebViewConfiguration()
         configuration.websiteDataStore =
             profileStore.dataStore
+        configuration.preferences
+            .javaScriptCanOpenWindowsAutomatically =
+            true
 
         let webView = WKWebView(
             frame: .zero,
             configuration: configuration
         )
         webView.navigationDelegate = self
+        webView.uiDelegate = self
         self.profileStore = profileStore
         self.webView = webView
 
@@ -115,11 +129,22 @@ final class MiMoLoginSession: NSObject {
         isFinished = true
         cookieStore?.remove(self)
         cookieStore = nil
+        closePopup()
         webView?.stopLoading()
         webView?.navigationDelegate = nil
+        webView?.uiDelegate = nil
         webView?.removeFromSuperview()
         webView = nil
         profileStore = nil
+    }
+
+    private func closePopup() {
+        popupWebView?.stopLoading()
+        popupWebView?.navigationDelegate = nil
+        popupWebView?.uiDelegate = nil
+        popupPanel?.close()
+        popupWebView = nil
+        popupPanel = nil
     }
 
     private func searchForAuthentication(
@@ -191,6 +216,7 @@ final class MiMoLoginSession: NSObject {
         isFinished = true
         cookieStore?.remove(self)
         cookieStore = nil
+        closePopup()
         onAuthenticated(credential)
     }
 
@@ -231,6 +257,7 @@ final class MiMoLoginSession: NSObject {
 
 extension MiMoLoginSession:
     WKNavigationDelegate,
+    WKUIDelegate,
     WKHTTPCookieStoreObserver
 {
     func cookiesDidChange(
@@ -251,6 +278,60 @@ extension MiMoLoginSession:
                 .websiteDataStore
                 .httpCookieStore
         )
+    }
+
+    func webView(
+        _ webView: WKWebView,
+        createWebViewWith configuration:
+            WKWebViewConfiguration,
+        for navigationAction:
+            WKNavigationAction,
+        windowFeatures:
+            WKWindowFeatures
+    ) -> WKWebView? {
+        closePopup()
+
+        let frame = NSRect(
+            x: 0,
+            y: 0,
+            width: 560,
+            height: 680
+        )
+        let popupWebView = WKWebView(
+            frame: frame,
+            configuration: configuration
+        )
+        popupWebView.navigationDelegate =
+            self
+        popupWebView.uiDelegate = self
+
+        let panel = NSPanel(
+            contentRect: frame,
+            styleMask: [
+                .titled,
+                .closable,
+                .resizable,
+            ],
+            backing: .buffered,
+            defer: false
+        )
+        panel.title = "Sign In to MiMo"
+        panel.contentView = popupWebView
+        panel.center()
+        panel.makeKeyAndOrderFront(nil)
+
+        self.popupWebView = popupWebView
+        popupPanel = panel
+        return popupWebView
+    }
+
+    func webViewDidClose(
+        _ webView: WKWebView
+    ) {
+        guard webView === popupWebView else {
+            return
+        }
+        closePopup()
     }
 }
 

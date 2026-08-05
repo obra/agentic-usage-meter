@@ -114,10 +114,44 @@ struct ZaiUsageDecoderTests {
     }
 
     @Test
+    func bodyLevelAuthenticationFailurePromptsReconnect() {
+        #expect(
+            throws: ProviderClientError.reauthenticationRequired
+        ) {
+            _ = try ZaiUsageDecoder().decode(
+                Data(
+                    """
+                    {"code": 401, "msg": "Unauthorized", "success": false}
+                    """.utf8
+                ),
+                accountID: UUID(),
+                fetchedAt: Date()
+            )
+        }
+    }
+
+    @Test
     func errorEnvelopeAndMissingTokenLimitsAreRejected() {
         let responses = [
             """
-            {"code": 401, "msg": "Unauthorized", "success": false}
+            {"code": 500, "msg": "failed", "success": false}
+            """,
+            """
+            {
+              "code": 200,
+              "success": false,
+              "data": {
+                "limits": [
+                  {
+                    "type": "TOKENS_LIMIT",
+                    "unit": 3,
+                    "number": 5,
+                    "percentage": 10,
+                    "nextResetTime": 1785912345678
+                  }
+                ]
+              }
+            }
             """,
             """
             {"code": 200, "data": {"limits": []}, "success": true}

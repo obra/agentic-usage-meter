@@ -40,9 +40,28 @@ func mimoLoginDetectorBuildsACookieHeaderFromDomainCookies()
         )
     )
 
+    let expired = try #require(
+        HTTPCookie(
+            properties: [
+                .name: "stale",
+                .value: "old",
+                .domain: "platform.xiaomimimo.com",
+                .path: "/",
+                .expires: Date(
+                    timeIntervalSince1970: 1_000
+                ),
+            ]
+        )
+    )
+
     #expect(
         MiMoLoginDetector.cookieHeader(
             in: [foreign, session, token]
+        ) == "session=abc; token=def"
+    )
+    #expect(
+        MiMoLoginDetector.cookieHeader(
+            in: [token, expired, session, foreign]
         ) == "session=abc; token=def"
     )
     #expect(
@@ -162,6 +181,13 @@ func mimoCancelRemovesTheUnsavedProfile() async throws {
 
     #expect(removal.profileIDs == [accountID])
     #expect(appModel.accounts.isEmpty)
+
+    await connection.start()
+    await connection.cancel()
+
+    #expect(
+        removal.profileIDs == [accountID, accountID]
+    )
 }
 
 @Test

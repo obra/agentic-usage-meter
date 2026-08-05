@@ -18,7 +18,11 @@ public struct ZaiUsageDecoder: Sendable {
             throw ProviderClientError.unsupportedResponse
         }
 
+        if response.code == 401 || response.code == 403 {
+            throw ProviderClientError.reauthenticationRequired
+        }
         guard
+            response.success != false,
             response.success == true || response.code == 200,
             let limits = response.data?.limits
         else {

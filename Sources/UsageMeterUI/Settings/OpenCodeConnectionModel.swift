@@ -89,6 +89,7 @@ public final class OpenCodeConnectionModel {
         webView = nil
         pendingCredential = nil
         didSave = false
+        didRemoveProfile = false
         hasRenderedLoginPage = false
         if let authenticate {
             phase = .signingIn

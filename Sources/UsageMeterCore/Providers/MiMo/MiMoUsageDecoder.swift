@@ -18,6 +18,9 @@ public struct MiMoUsageDecoder: Sendable {
             throw ProviderClientError.unsupportedResponse
         }
 
+        if response.code == 401 || response.code == 403 {
+            throw ProviderClientError.reauthenticationRequired
+        }
         guard
             response.code == 0,
             let bundle = response.data?.monthUsage?.items?
