@@ -1,14 +1,29 @@
 # Releasing Agentic Usage Meter
 
-Agentic Usage Meter releases are built and published locally from a
-maintainer's Mac. `Scripts/release.sh` is the only supported release path. It
+Agentic Usage Meter releases run `Scripts/release.sh`, either locally from a
+maintainer's Mac or from the GitHub Actions release workflow. The script
 runs every preflight before notarization or GitHub upload, then assembles,
 signs, notarizes, staples, verifies, packages, and publishes one semantic
 version.
 
-There is no GitHub Actions release workflow and no GitHub Actions release
-secrets are configured. Signing or notarization credentials have not been
-copied from Winby.
+`.github/workflows/release.yml` runs that same script on a `macos-26` runner
+whenever a `v*` tag is pushed. It materializes the release credentials into a
+temporary keychain from these repository secrets, then destroys the keychain:
+
+- `DEVELOPER_ID_CERT_P12` — base64 of the Developer ID Application
+  certificate exported with its private key
+  (`base64 < developer-id.p12 | pbcopy`).
+- `DEVELOPER_ID_CERT_PASSWORD` — the export password for that `.p12`.
+- `NOTARY_API_KEY_P8`, `NOTARY_API_KEY_ID`, `NOTARY_API_ISSUER_ID` — an App
+  Store Connect API key with the Developer role, pasted as the `.p8` file
+  contents plus its key and issuer identifiers.
+- `SPARKLE_ED_PRIVATE_KEY` — the Sparkle EdDSA private key exported with
+  `generate_keys --account agentic-usage-meter -x <file>`.
+- `RELEASE_GH_TOKEN` — a token for `obra` with `contents: write` on this
+  repository; the workflow's default token cannot pass the script's
+  authenticated-as-`obra` preflight.
+
+Signing or notarization credentials have not been copied from Winby.
 
 ## Required local credentials
 
