@@ -432,8 +432,11 @@ func openCodeCookieSourceWarmsAColdProfile()
     let profile = TestOpenCodeCookieProfile(
         responses: [[], [cookie]]
     )
-    let source = OpenCodeProfileAuthCookieSource(
+    let source = ProfileAuthCookieSource(
         retryDelays: [.zero],
+        extract: {
+            OpenCodeLoginDetector.authCookie(in: $0)
+        },
         profileFactory: { _ in profile }
     )
 
@@ -452,8 +455,11 @@ func openCodeCookieSourceReleasesAnEvictedProfile() async {
     let accountID = UUID()
     var createdProfiles = 0
     weak var retainedProfile: TestOpenCodeCookieProfile?
-    let source = OpenCodeProfileAuthCookieSource(
+    let source = ProfileAuthCookieSource(
         retryDelays: [],
+        extract: {
+            OpenCodeLoginDetector.authCookie(in: $0)
+        },
         profileFactory: { _ in
             createdProfiles += 1
             let profile = TestOpenCodeCookieProfile(
@@ -482,8 +488,11 @@ func cancelingOpenCodeCookieLoadReleasesItsProfile() async {
     let accountID = UUID()
     let warmupGate = OpenCodeWarmupGate()
     weak var retainedProfile: WarmupOpenCodeCookieProfile?
-    let source = OpenCodeProfileAuthCookieSource(
+    let source = ProfileAuthCookieSource(
         retryDelays: [.seconds(60)],
+        extract: {
+            OpenCodeLoginDetector.authCookie(in: $0)
+        },
         profileFactory: { _ in
             let profile = WarmupOpenCodeCookieProfile(
                 warmupGate: warmupGate
@@ -510,8 +519,11 @@ func overlappingOpenCodeRemovalLeasesKeepTheProfileFenced()
 {
     let accountID = UUID()
     var createdProfiles = 0
-    let source = OpenCodeProfileAuthCookieSource(
+    let source = ProfileAuthCookieSource(
         retryDelays: [],
+        extract: {
+            OpenCodeLoginDetector.authCookie(in: $0)
+        },
         profileFactory: { _ in
             createdProfiles += 1
             return TestOpenCodeCookieProfile(responses: [[]])
@@ -544,8 +556,11 @@ func preparingOpenCodeProfileRemovalCancelsAndDrainsInFlightLoad()
     let readGate = OpenCodeCookieReadGate()
     var createdProfiles = 0
     weak var retainedProfile: SuspendedOpenCodeCookieProfile?
-    let source = OpenCodeProfileAuthCookieSource(
+    let source = ProfileAuthCookieSource(
         retryDelays: [],
+        extract: {
+            OpenCodeLoginDetector.authCookie(in: $0)
+        },
         profileFactory: { _ in
             createdProfiles += 1
             let profile = SuspendedOpenCodeCookieProfile(
@@ -609,8 +624,11 @@ func evictedOpenCodeProfileCanBeRemovedAndRecreatedWithoutCookies()
 {
     let accountID = UUID()
     weak var retainedProfile: RetainedOpenCodeCookieProfile?
-    let source = OpenCodeProfileAuthCookieSource(
+    let source = ProfileAuthCookieSource(
         retryDelays: [],
+        extract: {
+            OpenCodeLoginDetector.authCookie(in: $0)
+        },
         profileFactory: { id in
             let profile = RetainedOpenCodeCookieProfile(
                 accountID: id
@@ -744,8 +762,11 @@ func removingOpenCodeAccountPropagatesProfileRemovalFailureAfterEviction()
     )
     let lifecycle = OpenCodeProfileLifecycleRecorder()
     var createdProfiles = 0
-    let source = OpenCodeProfileAuthCookieSource(
+    let source = ProfileAuthCookieSource(
         retryDelays: [],
+        extract: {
+            OpenCodeLoginDetector.authCookie(in: $0)
+        },
         profileFactory: { _ in
             createdProfiles += 1
             return TestOpenCodeCookieProfile(responses: [[]])
@@ -908,7 +929,7 @@ private final class OpenCodeWarmupGate {
 
 @MainActor
 private final class WarmupOpenCodeCookieProfile:
-    OpenCodeProfileCookieLoading
+    ProfileCookieLoading
 {
     private let warmupGate: OpenCodeWarmupGate
 
@@ -927,7 +948,7 @@ private final class WarmupOpenCodeCookieProfile:
 
 @MainActor
 private final class SuspendedOpenCodeCookieProfile:
-    OpenCodeProfileCookieLoading
+    ProfileCookieLoading
 {
     private let readGate: OpenCodeCookieReadGate
 
@@ -944,7 +965,7 @@ private final class SuspendedOpenCodeCookieProfile:
 
 @MainActor
 private final class TestOpenCodeCookieProfile:
-    OpenCodeProfileCookieLoading
+    ProfileCookieLoading
 {
     private var responses: [[HTTPCookie]]
     private(set) var readCount = 0
@@ -970,7 +991,7 @@ private final class TestOpenCodeCookieProfile:
 
 @MainActor
 private final class RetainedOpenCodeCookieProfile:
-    OpenCodeProfileCookieLoading
+    ProfileCookieLoading
 {
     private let profileStore: AccountWebProfileStore
 

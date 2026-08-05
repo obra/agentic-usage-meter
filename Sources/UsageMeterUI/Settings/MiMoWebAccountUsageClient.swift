@@ -4,10 +4,10 @@ import UsageMeterWeb
 import WebKit
 
 @MainActor
-public final class OpenCodeWebAccountUsageClient:
+public final class MiMoWebAccountUsageClient:
     ProviderAccountAdapter
 {
-    public nonisolated let provider: Provider
+    public nonisolated let provider = Provider.mimo
 
     public nonisolated var canRecoverAuthenticationWithoutReconnect: Bool {
         true
@@ -17,68 +17,63 @@ public final class OpenCodeWebAccountUsageClient:
         @MainActor @Sendable (
             UUID
         ) async throws -> Void
-    public typealias LoadAuthCookie =
+    public typealias LoadCookieHeader =
         @MainActor @Sendable (
             UUID
         ) async -> String?
-    public typealias EvictAuthCookieProfile =
+    public typealias EvictCookieProfile =
         @MainActor @Sendable (UUID) async -> Void
-    public typealias FinishAuthCookieProfile =
+    public typealias FinishCookieProfile =
         @MainActor @Sendable (UUID) -> Void
 
     private let base: any ProviderAccountAdapter
     private let credentialStore:
         any CredentialStore
-    private let loadAuthCookie: LoadAuthCookie
-    private let evictAuthCookieProfile:
-        EvictAuthCookieProfile
-    private let finishAuthCookieProfile:
-        FinishAuthCookieProfile
+    private let loadCookieHeader: LoadCookieHeader
+    private let evictCookieProfile:
+        EvictCookieProfile
+    private let finishCookieProfile:
+        FinishCookieProfile
     private let removeProfile: RemoveProfile
 
     public init(
         base: any ProviderAccountAdapter,
         credentialStore: any CredentialStore,
-        loadAuthCookie: LoadAuthCookie? = nil,
-        evictAuthCookieProfile:
-            EvictAuthCookieProfile? = nil,
-        finishAuthCookieProfile:
-            FinishAuthCookieProfile? = nil,
+        loadCookieHeader: LoadCookieHeader? = nil,
+        evictCookieProfile:
+            EvictCookieProfile? = nil,
+        finishCookieProfile:
+            FinishCookieProfile? = nil,
         removeProfile:
             @escaping RemoveProfile = {
                 try await AccountWebProfileStore
                     .remove(accountID: $0)
             }
     ) {
-        provider = base.provider
-        precondition(
-            provider == .openCodeGo
-                || provider == .openCodeZen
-        )
+        precondition(base.provider == .mimo)
         self.base = base
         self.credentialStore = credentialStore
-        if let loadAuthCookie {
-            self.loadAuthCookie =
-                loadAuthCookie
-            self.evictAuthCookieProfile =
-                evictAuthCookieProfile ?? { _ in }
-            self.finishAuthCookieProfile =
-                finishAuthCookieProfile ?? { _ in }
+        if let loadCookieHeader {
+            self.loadCookieHeader =
+                loadCookieHeader
+            self.evictCookieProfile =
+                evictCookieProfile ?? { _ in }
+            self.finishCookieProfile =
+                finishCookieProfile ?? { _ in }
         } else {
-            let source =
-                ProfileAuthCookieSource.openCode()
-            self.loadAuthCookie = {
+            let source = ProfileAuthCookieSource.mimo()
+            self.loadCookieHeader = {
                 accountID in
                 await source.authCookie(
                     accountID: accountID
                 )
             }
-            self.evictAuthCookieProfile = {
+            self.evictCookieProfile = {
                 await source.prepareForRemoval(
                     accountID: $0
                 )
             }
-            self.finishAuthCookieProfile = {
+            self.finishCookieProfile = {
                 source.finishRemoval(accountID: $0)
             }
         }
@@ -90,22 +85,21 @@ public final class OpenCodeWebAccountUsageClient:
         now: Date
     ) async throws -> UsageSnapshot {
         if
-            let profileAuthCookie =
-                await loadAuthCookie(account.id),
+            let profileCookieHeader =
+                await loadCookieHeader(account.id),
             let storedCredential =
                 try await credentialStore.load(
-                    OpenCodeDashboardCredential.self,
+                    MiMoWebCredential.self,
                     for: account.id
                 ),
-            storedCredential.authCookie
-                != profileAuthCookie
+            storedCredential.cookieHeader
+                != profileCookieHeader,
+            let refreshed = MiMoWebCredential(
+                cookieHeader: profileCookieHeader
+            )
         {
             try await credentialStore.save(
-                OpenCodeDashboardCredential(
-                    workspaceID:
-                        storedCredential.workspaceID,
-                    authCookie: profileAuthCookie
-                ),
+                refreshed,
                 for: account.id
             )
         }
@@ -121,16 +115,16 @@ public final class OpenCodeWebAccountUsageClient:
         try await base.removeAuthentication(
             for: account
         )
-        await evictAuthCookieProfile(account.id)
+        await evictCookieProfile(account.id)
         defer {
-            finishAuthCookieProfile(account.id)
+            finishCookieProfile(account.id)
         }
         try await removeProfile(account.id)
     }
 }
 
 extension ProfileAuthCookieSource {
-    static func openCode() -> ProfileAuthCookieSource {
+    static func mimo() -> ProfileAuthCookieSource {
         ProfileAuthCookieSource(
             retryDelays: [
                 .milliseconds(250),
@@ -138,17 +132,17 @@ extension ProfileAuthCookieSource {
                 .seconds(1),
             ],
             extract: {
-                OpenCodeLoginDetector.authCookie(in: $0)
+                MiMoLoginDetector.cookieHeader(in: $0)
             },
             profileFactory: {
                 WebKitProfileCookieLoader(
                     accountID: $0,
                     warmupURL: URL(
                         string:
-                            "https://opencode.ai/robots.txt"
+                            "https://platform.xiaomimimo.com/robots.txt"
                     )!,
                     hasAuthentication: {
-                        OpenCodeLoginDetector.authCookie(
+                        MiMoLoginDetector.cookieHeader(
                             in: $0
                         ) != nil
                     }

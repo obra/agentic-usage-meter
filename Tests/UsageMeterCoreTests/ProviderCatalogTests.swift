@@ -48,6 +48,7 @@ struct ProviderCatalogTests {
                 .openCodeZen,
                 .superGrok,
                 .zai,
+                .mimo,
             ],
         )
         #expect(Set(providers).count == providers.count)
@@ -66,6 +67,7 @@ struct ProviderCatalogTests {
             Provider.openCodeZen,
             Provider.superGrok,
             Provider.zai,
+            Provider.mimo,
         ]
 
         #expect(
@@ -162,6 +164,30 @@ struct ProviderCatalogTests {
                     externalURL: URL(
                         string:
                             "https://z.ai/manage-apikey/coding-plan/personal/usage"
+                    )!
+                )
+        )
+    }
+
+    @Test
+    func mimoUsesAnIsolatedDashboardSession() throws {
+        let definition = try #require(
+            ProviderCatalog.live.definition(
+                for: .mimo
+            )
+        )
+
+        #expect(definition.releaseState == .experimental)
+        #expect(
+            definition.connectionStrategy
+                == .isolatedWebSession
+        )
+        #expect(
+            definition.dashboardStrategy
+                == .embedded(
+                    URL(
+                        string:
+                            "https://platform.xiaomimimo.com/console/balance"
                     )!
                 )
         )

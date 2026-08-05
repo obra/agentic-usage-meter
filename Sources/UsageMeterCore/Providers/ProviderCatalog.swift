@@ -277,6 +277,25 @@ public struct ProviderCatalog: Sendable {
                     )!,
                 ),
             ),
+            ProviderDefinition(
+                provider: .mimo,
+                displayName: "MiMo",
+                connectionDetail: "Isolated browser session",
+                systemImage: "m.circle",
+                color: ProviderColor(
+                    red: 1.00,
+                    green: 0.44,
+                    blue: 0.20,
+                ),
+                releaseState: .experimental,
+                connectionStrategy: .isolatedWebSession,
+                dashboardStrategy: .embedded(
+                    URL(
+                        string:
+                            "https://platform.xiaomimimo.com/console/balance",
+                    )!,
+                ),
+            ),
         ],
     )
 

@@ -266,6 +266,7 @@ private struct AddAccountView: View {
         OpenCodeConnectionModel
     @State private var openCodeZen:
         OpenCodeConnectionModel
+    @State private var mimo: MiMoConnectionModel
 
     init(
         model: AppModel,
@@ -349,6 +350,16 @@ private struct AddAccountView: View {
                     appModel: model,
                     reconnectingAccount:
                         provider == .openCodeZen
+                            ? reconnectingAccount
+                            : nil
+                )
+        )
+        _mimo = State(
+            initialValue:
+                MiMoConnectionModel(
+                    appModel: model,
+                    reconnectingAccount:
+                        provider == .mimo
                             ? reconnectingAccount
                             : nil
                 )
@@ -474,6 +485,16 @@ private struct AddAccountView: View {
                                 route.reconnectingAccount?
                                     .displayName
                                     ?? "Z.ai",
+                            onComplete: complete
+                        )
+                    case .mimo:
+                        MiMoConnectionView(
+                            model: mimo,
+                            suggestedName:
+                                route
+                                    .reconnectingAccount?
+                                    .displayName
+                                ?? "MiMo",
                             onComplete: complete
                         )
                     case .antigravity:

@@ -12,6 +12,7 @@ public enum Provider: String, Codable, CaseIterable, Sendable {
   case openCodeZen = "opencode-zen"
   case superGrok = "supergrok"
   case zai
+  case mimo
 }
 
 public struct SubscriptionAccount: Codable, Equatable, Identifiable, Sendable {

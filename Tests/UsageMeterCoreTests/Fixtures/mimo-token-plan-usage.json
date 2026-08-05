@@ -1,0 +1,40 @@
+{
+  "code": 0,
+  "message": "",
+  "data": {
+    "monthUsage": {
+      "percent": 0.1,
+      "items": [
+        {
+          "name": "month_total_token",
+          "used": 8582309279,
+          "limit": 82000000000,
+          "percent": 0.1047
+        }
+      ]
+    },
+    "usage": {
+      "percent": {
+        "source": "0.10",
+        "parsedValue": 0.1
+      },
+      "items": [
+        {
+          "name": "plan_total_token",
+          "used": 8582309279,
+          "limit": 82000000000,
+          "percent": {
+            "source": "0.10",
+            "parsedValue": 0.1
+          }
+        },
+        {
+          "name": "compensation_total_token",
+          "used": 0,
+          "limit": 0,
+          "percent": 0
+        }
+      ]
+    }
+  }
+}

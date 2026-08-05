@@ -146,6 +146,13 @@ enum AppEnvironment {
                 ),
                 credentialStore: credentialStore
             ),
+            MiMoWebAccountUsageClient(
+                base: MiMoUsageAdapter(
+                    credentialStore:
+                        credentialStore
+                ),
+                credentialStore: credentialStore
+            ),
         ]
 
         return AppModel(

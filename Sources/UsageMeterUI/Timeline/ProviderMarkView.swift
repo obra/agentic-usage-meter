@@ -25,6 +25,8 @@ extension Provider {
       "grok"
     case .zai:
       nil
+    case .mimo:
+      nil
     }
   }
 

@@ -20,6 +20,7 @@ explicitly obtains a safe display identity.
 | OpenCode Zen | Isolated web session and workspace billing | Automated adapter complete | Selectable, experimental |
 | SuperGrok | Account-scoped device OAuth and billing API | One-account live usage qualified | Selectable, experimental |
 | Z.ai GLM Coding Plan | API key and quota-limit monitor endpoint | Automated adapter complete | Selectable, experimental |
+| Xiaomi MiMo Token Plan | Isolated web session and token-plan usage API | Automated adapter complete | Selectable, experimental |
 
 `Automated adapter complete` means fixture, request, error, persistence, and
 cleanup contracts pass, but no real two-account qualification has completed.
@@ -345,6 +346,28 @@ glm-usage-monitor and opencode-glm-quota projects.
   been qualified.
 - The provider is selectable but remains experimental pending real
   qualification with live accounts across plan tiers.
+
+## Xiaomi MiMo Token Plan
+
+The automated adapter behavior follows the response shape reported in
+issue #4.
+
+- Authentication uses an isolated WebKit session signed in to
+  `platform.xiaomimimo.com`. All cookies for that domain are replayed
+  as one header; the platform's cookie names are not documented, so the
+  login is confirmed by probing the token-plan usage API rather than by
+  cookie name. The captured header is stored in the account's macOS
+  Keychain record and refreshed from the isolated profile before each
+  fetch.
+- Usage is fetched from
+  `https://platform.xiaomimimo.com/api/v1/tokenPlan/usage`.
+- The `month_total_token` bundle renews monthly, but the response
+  carries no reset timestamp, so remaining tokens are presented as a
+  balance rather than a timed window with an invented reset.
+- Only the international `platform.xiaomimimo.com` instance is
+  supported; a separate PRC instance has not been qualified.
+- The provider is selectable but remains experimental pending real
+  qualification with a live account, including session-expiry behavior.
 
 ## Antigravity
 
