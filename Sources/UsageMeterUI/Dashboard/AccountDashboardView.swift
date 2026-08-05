@@ -125,7 +125,7 @@ struct AccountDashboardView: View {
                 ContentUnavailableView {
                     Label(
                         "No usage data",
-                        systemImage: "gauge.with.needle"
+                        systemImage: "gauge.open.with.lines.needle.33percent"
                     )
                 } description: {
                     Text(nativeStatusText)

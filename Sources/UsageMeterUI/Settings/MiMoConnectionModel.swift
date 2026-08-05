@@ -4,14 +4,13 @@ import UsageMeterCore
 import UsageMeterWeb
 import WebKit
 
-public enum OpenCodeConnectionPhase:
+public enum MiMoConnectionPhase:
     Equatable,
     Sendable
 {
     case idle
     case signingIn
-    case readyToSave(workspaceID: String)
-    case duplicateIdentity(workspaceID: String)
+    case readyToSave
     case saving
     case complete
     case failed(String)
@@ -19,23 +18,21 @@ public enum OpenCodeConnectionPhase:
 
 @MainActor
 @Observable
-public final class OpenCodeConnectionModel {
+public final class MiMoConnectionModel {
     public typealias Authenticate =
         @MainActor @Sendable () async throws
-        -> OpenCodeDashboardCredential
+        -> MiMoWebCredential
     public typealias RemoveProfile =
         @MainActor @Sendable (
             UUID
         ) async throws -> Void
 
     public private(set) var phase =
-        OpenCodeConnectionPhase.idle
+        MiMoConnectionPhase.idle
     public private(set) var webView: WKWebView?
     public private(set) var hasRenderedLoginPage =
         false
 
-    @ObservationIgnored
-    private let provider: Provider
     @ObservationIgnored
     private let appModel: AppModel
     @ObservationIgnored
@@ -47,16 +44,15 @@ public final class OpenCodeConnectionModel {
     @ObservationIgnored
     private let removeProfile: RemoveProfile
     @ObservationIgnored
-    private var loginSession: OpenCodeLoginSession?
+    private var loginSession: MiMoLoginSession?
     @ObservationIgnored
-    private var pendingCredential: OpenCodeDashboardCredential?
+    private var pendingCredential: MiMoWebCredential?
     @ObservationIgnored
     private var didSave = false
     @ObservationIgnored
     private var didRemoveProfile = false
 
     public init(
-        provider: Provider,
         appModel: AppModel,
         accountID: UUID = UUID(),
         reconnectingAccount:
@@ -68,11 +64,6 @@ public final class OpenCodeConnectionModel {
                     .remove(accountID: $0)
             }
     ) {
-        precondition(
-            provider == .openCodeGo
-                || provider == .openCodeZen
-        )
-        self.provider = provider
         self.appModel = appModel
         self.accountID =
             reconnectingAccount?.id
@@ -94,14 +85,12 @@ public final class OpenCodeConnectionModel {
         if let authenticate {
             phase = .signingIn
             do {
-                await accept(
-                    try await authenticate()
-                )
+                accept(try await authenticate())
             } catch is CancellationError {
                 phase = .idle
             } catch {
                 phase = .failed(
-                    "OpenCode sign-in failed."
+                    "MiMo sign-in failed."
                 )
             }
             return
@@ -113,17 +102,10 @@ public final class OpenCodeConnectionModel {
         displayName: String
     ) async throws {
         let displayName =
-            try validatedOpenCodeDisplayName(
+            try validatedMiMoDisplayName(
                 displayName
             )
         guard let pendingCredential else {
-            throw ProviderConnectionInputError
-                .authorizationNotComplete
-        }
-        guard
-            let workspaceID =
-                pendingCredential.identityKey
-        else {
             throw ProviderConnectionInputError
                 .authorizationNotComplete
         }
@@ -134,22 +116,18 @@ public final class OpenCodeConnectionModel {
                 try await appModel.reconnectAccount(
                     id: reconnectingAccount.id,
                     credential:
-                        pendingCredential,
-                    authenticatedIdentity:
-                        workspaceID
+                        pendingCredential
                 )
             } else {
                 try await appModel.connectAccount(
                     SubscriptionAccount(
                         id: accountID,
-                        provider: provider,
+                        provider: .mimo,
                         displayName: displayName,
-                        authenticatedIdentity:
-                            workspaceID,
                         displayOrder:
                             appModel.accounts.count {
                                 $0.account.provider
-                                    == provider
+                                    == .mimo
                             }
                     ),
                     credential:
@@ -161,7 +139,7 @@ public final class OpenCodeConnectionModel {
             phase = .complete
         } catch {
             phase = .failed(
-                "OpenCode usage validation failed."
+                "MiMo account could not be saved."
             )
             throw error
         }
@@ -192,7 +170,7 @@ public final class OpenCodeConnectionModel {
             return
         }
         phase = .signingIn
-        let session = OpenCodeLoginSession(
+        let session = MiMoLoginSession(
             accountID: accountID,
             onPageReady: {
                 [weak self] in
@@ -201,14 +179,7 @@ public final class OpenCodeConnectionModel {
             },
             onAuthenticated: {
                 [weak self] credential in
-                guard let self else {
-                    return
-                }
-                Task { @MainActor in
-                    await self.accept(
-                        credential
-                    )
-                }
+                self?.accept(credential)
             }
         )
         loginSession = session
@@ -216,36 +187,11 @@ public final class OpenCodeConnectionModel {
     }
 
     private func accept(
-        _ credential:
-            OpenCodeDashboardCredential
-    ) async {
-        guard
-            let workspaceID =
-                credential.identityKey,
-            !credential.authCookie.isEmpty
-        else {
-            closeLoginSession()
-            phase = .failed(
-                "OpenCode sign-in did not return a workspace."
-            )
-            return
-        }
+        _ credential: MiMoWebCredential
+    ) {
         closeLoginSession()
-        if await appModel.hasOpenCodeAccount(
-            provider: provider,
-            workspaceID: workspaceID,
-            excluding:
-                reconnectingAccount?.id
-        ) {
-            phase = .duplicateIdentity(
-                workspaceID: workspaceID
-            )
-            return
-        }
         pendingCredential = credential
-        phase = .readyToSave(
-            workspaceID: workspaceID
-        )
+        phase = .readyToSave
     }
 
     private func closeLoginSession() {
@@ -255,7 +201,7 @@ public final class OpenCodeConnectionModel {
     }
 }
 
-private func validatedOpenCodeDisplayName(
+private func validatedMiMoDisplayName(
     _ value: String
 ) throws -> String {
     let displayName =

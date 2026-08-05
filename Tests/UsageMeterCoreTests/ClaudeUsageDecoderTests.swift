@@ -115,6 +115,39 @@ struct ClaudeUsageDecoderTests {
     }
 
     @Test
+    func fractionalSecondResetTimestampsDecode() throws {
+        let data = Data(
+            """
+            {
+              "five_hour": {
+                "utilization": 10,
+                "resets_at": "2026-08-03T12:10:00.646247+00:00"
+              },
+              "seven_day": {
+                "utilization": 20,
+                "resets_at": "2026-08-05T00:00:00.711237+00:00"
+              }
+            }
+            """.utf8,
+        )
+
+        let snapshot = try ClaudeUsageDecoder().decode(
+            data,
+            accountID: UUID(),
+            fetchedAt: Date(timeIntervalSince1970: 2_000_000_000),
+        )
+
+        let shortReset = try #require(snapshot.windows[0].resetAt)
+        let weeklyReset = try #require(snapshot.windows[1].resetAt)
+        #expect(
+            abs(shortReset.timeIntervalSince1970 - 1_785_759_000.646247) < 1,
+        )
+        #expect(
+            abs(weeklyReset.timeIntervalSince1970 - 1_785_888_000.711237) < 1,
+        )
+    }
+
+    @Test
     func nonzeroResetlessWindowAndMalformedBalanceAreRejected() {
         let responses = [
             """

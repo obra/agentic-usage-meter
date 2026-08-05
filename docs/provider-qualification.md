@@ -19,6 +19,8 @@ explicitly obtains a safe display identity.
 | OpenCode Go | Isolated web session and workspace dashboard | Automated adapter complete | Selectable, experimental |
 | OpenCode Zen | Isolated web session and workspace billing | Automated adapter complete | Selectable, experimental |
 | SuperGrok | Account-scoped device OAuth and billing API | One-account live usage qualified | Selectable, experimental |
+| Z.ai GLM Coding Plan | API key and quota-limit monitor endpoint | Automated adapter complete | Selectable, experimental |
+| Xiaomi MiMo Token Plan | Isolated web session and token-plan usage API | Automated adapter complete | Selectable, experimental |
 
 `Automated adapter complete` means fixture, request, error, persistence, and
 cleanup contracts pass, but no real two-account qualification has completed.
@@ -319,6 +321,53 @@ stores one API key per local account in the macOS Keychain.
 - The live response therefore remains lossless in persistence while the
   compact timeline suppresses dormant Droid Core rows. Standard stays visible
   and Core becomes visible as a complete pool after Core consumption begins.
+
+## Z.ai GLM Coding Plan
+
+The automated adapter behavior follows the response shape reported in
+issue #3 and the field interpretation used by the MIT-licensed
+glm-usage-monitor and opencode-glm-quota projects.
+
+- Authentication uses the account's Coding Plan API key stored in the
+  macOS Keychain. Z.ai's monitor API expects the raw key in the
+  `Authorization` header without a Bearer prefix.
+- Usage is fetched from
+  `https://api.z.ai/api/monitor/usage/quota/limit`.
+- The `TOKENS_LIMIT` entry with `unit` 3 and `number` 5 is the 5-hour
+  token window; the entry with `unit` 6 and `number` 1 is the weekly
+  token window. `percentage` is used percent and `nextResetTime` is a
+  millisecond epoch.
+- A zero-use window without `nextResetTime` is preserved as an inactive
+  resetless window. A nonzero window without a reset is rejected because
+  the application must not invent a reset.
+- The monthly `TIME_LIMIT` MCP tool-call quota is not presented.
+- Only the international `api.z.ai` instance is supported. The PRC
+  `open.bigmodel.cn` instance and legacy V1/V2 plan responses have not
+  been qualified.
+- The provider is selectable but remains experimental pending real
+  qualification with live accounts across plan tiers.
+
+## Xiaomi MiMo Token Plan
+
+The automated adapter behavior follows the response shape reported in
+issue #4.
+
+- Authentication uses an isolated WebKit session signed in to
+  `platform.xiaomimimo.com`. All cookies for that domain are replayed
+  as one header; the platform's cookie names are not documented, so the
+  login is confirmed by probing the token-plan usage API rather than by
+  cookie name. The captured header is stored in the account's macOS
+  Keychain record and refreshed from the isolated profile before each
+  fetch.
+- Usage is fetched from
+  `https://platform.xiaomimimo.com/api/v1/tokenPlan/usage`.
+- The `month_total_token` bundle renews monthly, but the response
+  carries no reset timestamp, so remaining tokens are presented as a
+  balance rather than a timed window with an invented reset.
+- Only the international `platform.xiaomimimo.com` instance is
+  supported; a separate PRC instance has not been qualified.
+- The provider is selectable but remains experimental pending real
+  qualification with a live account, including session-expiry behavior.
 
 ## Antigravity
 
