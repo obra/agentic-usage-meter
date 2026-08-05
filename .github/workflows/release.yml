@@ -75,7 +75,10 @@ jobs:
               --key-id "${NOTARY_API_KEY_ID}" \
               --issuer "${NOTARY_API_ISSUER_ID}"
           else
-            xcrun notarytool store-credentials "${NOTARYTOOL_PROFILE}" \
+            # Individual keys make store-credentials prompt for the
+            # issuer; an empty stdin line answers "no issuer".
+            printf '\n' | xcrun notarytool store-credentials \
+              "${NOTARYTOOL_PROFILE}" \
               --key "${RUNNER_TEMP}/notary-key.p8" \
               --key-id "${NOTARY_API_KEY_ID}"
           fi
