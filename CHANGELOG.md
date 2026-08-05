@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.1 - 2026-08-04
+
+### Changed
+
+- Releases are now built, signed, notarized, and published from GitHub
+  Actions when a version tag is pushed, with the local release path kept as
+  a fallback. This release is otherwise identical to 0.2.0.
+
 ## 0.2.0 - 2026-08-04
 
 ### Added
