@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Removing a Claude account works again. The app kept the account's
+  isolated browser profile open, so removal silently failed; the profile
+  is now released before deletion, and removal failures show an error
+  instead of doing nothing.
+- Connecting a Claude account whose usage response the app cannot read
+  now fails with an explanation instead of saving an account that never
+  shows data.
+
+### Changed
+
+- Claude connection and refresh failures are now logged to the system
+  log (subsystem `com.fsck.agentic-usage-meter`) with structural
+  details only, so bug reports can include diagnostics without exposing
+  account data.
+
 ## 0.2.1 - 2026-08-04
 
 ### Changed
