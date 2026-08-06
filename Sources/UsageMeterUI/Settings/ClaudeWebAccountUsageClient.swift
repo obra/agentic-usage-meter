@@ -8,12 +8,22 @@ public final class ClaudeWebAccountUsageClient:
 {
     public nonisolated let provider = Provider.claude
 
+    public typealias RemoveProfile =
+        @MainActor @Sendable (UUID) async throws -> Void
+
     private let client: ClaudeWebUsageClient
+    private let removeProfile: RemoveProfile
 
     public init(
         client: ClaudeWebUsageClient = ClaudeWebUsageClient(),
+        removeProfile: @escaping RemoveProfile = {
+            try await ClaudeWebProfileStore.remove(
+                profileID: $0,
+            )
+        },
     ) {
         self.client = client
+        self.removeProfile = removeProfile
     }
 
     public func fetchUsage(
@@ -48,14 +58,10 @@ public final class ClaudeWebAccountUsageClient:
         else {
             throw ProviderClientError.credentialMismatch
         }
-        try await Self.removeProfile(profileID)
-    }
-
-    public static func removeProfile(
-        _ profileID: UUID,
-    ) async throws {
-        try await ClaudeWebProfileStore.remove(
-            profileID: profileID,
-        )
+        client.prepareProfileRemoval(profileID: profileID)
+        defer {
+            client.finishProfileRemoval(profileID: profileID)
+        }
+        try await removeProfile(profileID)
     }
 }

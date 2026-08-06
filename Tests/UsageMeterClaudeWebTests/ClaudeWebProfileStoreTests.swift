@@ -27,6 +27,62 @@ struct ClaudeWebProfileStoreTests {
     }
 
     @Test
+    func preparingForRemovalEvictsTheProfileAndBlocksNewLoads() async throws {
+        let profileID = UUID()
+        let sessionCookie = try #require(
+            HTTPCookie(
+                properties: [
+                    .domain: ".claude.ai",
+                    .path: "/",
+                    .name: "sessionKey",
+                    .value: "persisted-session",
+                    .secure: "TRUE"
+                ]
+            )
+        )
+        var createdLoaders = 0
+        let source = WebKitClaudeCookieSource { _ in
+            createdLoaders += 1
+            return TestClaudeWebProfileCookieLoader(
+                results: [[sessionCookie]]
+            )
+        }
+        let url = try #require(URL(string: "https://claude.ai/api/organizations"))
+
+        #expect(
+            await source.cookies(for: url, profileID: profileID)
+                == [sessionCookie]
+        )
+        #expect(createdLoaders == 1)
+
+        source.prepareForRemoval(profileID: profileID)
+        #expect(await source.cookies(for: url, profileID: profileID).isEmpty)
+        #expect(createdLoaders == 1)
+
+        source.finishRemoval(profileID: profileID)
+        #expect(
+            await source.cookies(for: url, profileID: profileID)
+                == [sessionCookie]
+        )
+        #expect(createdLoaders == 2)
+    }
+
+    @Test
+    func profileCanBeRemovedWhileTheCookieSourceHadItCached() async throws {
+        let profileID = UUID()
+        let source = WebKitClaudeCookieSource()
+        let url = try #require(URL(string: "https://claude.ai/api/organizations"))
+
+        _ = await source.cookies(for: url, profileID: profileID)
+
+        source.prepareForRemoval(profileID: profileID)
+        defer {
+            source.finishRemoval(profileID: profileID)
+        }
+        try await ClaudeWebProfileStore.remove(profileID: profileID)
+    }
+
+    @Test
     func coldProfileStartsOneBrowserLoadAndReusesItsStore() async throws {
         let profileID = UUID()
         let sessionCookie = try #require(

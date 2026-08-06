@@ -4,6 +4,13 @@ import WebKit
 @MainActor
 public protocol ClaudeWebCookieSource: AnyObject {
     func cookies(for url: URL, profileID: UUID) async -> [HTTPCookie]
+    func prepareForRemoval(profileID: UUID)
+    func finishRemoval(profileID: UUID)
+}
+
+extension ClaudeWebCookieSource {
+    public func prepareForRemoval(profileID _: UUID) {}
+    public func finishRemoval(profileID _: UUID) {}
 }
 
 @MainActor
@@ -12,6 +19,7 @@ public final class WebKitClaudeCookieSource: ClaudeWebCookieSource {
         @MainActor (UUID) -> any ClaudeWebProfileCookieLoading
     private var profiles:
         [UUID: any ClaudeWebProfileCookieLoading] = [:]
+    private var removalLeaseCounts: [UUID: Int] = [:]
 
     public convenience init() {
         self.init { profileID in
@@ -33,6 +41,10 @@ public final class WebKitClaudeCookieSource: ClaudeWebCookieSource {
         for _: URL,
         profileID: UUID
     ) async -> [HTTPCookie] {
+        guard removalLeaseCounts[profileID] == nil else {
+            return []
+        }
+
         let profile: any ClaudeWebProfileCookieLoading
         if let existing = profiles[profileID] {
             profile = existing
@@ -47,6 +59,26 @@ public final class WebKitClaudeCookieSource: ClaudeWebCookieSource {
             profile.warmIfNeeded()
         }
         return cookies
+    }
+
+    // Removing a profile's website data store fails while any live
+    // reference to it exists, so removal must first evict the cached
+    // loader and keep new loads from re-creating it.
+    public func prepareForRemoval(profileID: UUID) {
+        removalLeaseCounts[profileID, default: 0] += 1
+        profiles[profileID] = nil
+    }
+
+    public func finishRemoval(profileID: UUID) {
+        guard let leaseCount = removalLeaseCounts[profileID] else {
+            assertionFailure("Claude profile removal lease underflow")
+            return
+        }
+        if leaseCount == 1 {
+            removalLeaseCounts[profileID] = nil
+        } else {
+            removalLeaseCounts[profileID] = leaseCount - 1
+        }
     }
 }
 

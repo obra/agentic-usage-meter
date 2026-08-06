@@ -55,6 +55,14 @@ public final class ClaudeWebUsageClient {
         )
     }
 
+    public func prepareProfileRemoval(profileID: UUID) {
+        cookieSource.prepareForRemoval(profileID: profileID)
+    }
+
+    public func finishProfileRemoval(profileID: UUID) {
+        cookieSource.finishRemoval(profileID: profileID)
+    }
+
     public func organizations(profileID: UUID) async throws
         -> [ClaudeOrganization]
     {
