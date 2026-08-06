@@ -68,13 +68,77 @@ struct ClaudeConnectionUsagePolicyTests {
         #expect(connection.organizationCount == 1)
     }
 
+    @Test
+    func consoleOrganizationsAreNeverSelected() async throws {
+        let usage = HTTPResponse(
+            data: Data(
+                #"{"five_hour":{"utilization":0,"resets_at":null},"seven_day":{"utilization":0,"resets_at":null}}"#
+                    .utf8,
+            ),
+            statusCode: 200,
+            headers: [:],
+        )
+        let client = makeClient(
+            usageResponse: usage,
+            organizationsJSON: """
+            [
+              {"uuid":"\(UUID().uuidString.lowercased())","name":"Console","capabilities":["api"]},
+              {"uuid":"\(organizationID.uuidString.lowercased())","name":"Personal","capabilities":["chat","claude_max"]}
+            ]
+            """,
+        )
+
+        let connection = try await ClaudeConnectionModel.qualifyConnection(
+            usageClient: client,
+            accountID: UUID(),
+            profileID: UUID(),
+            retrier: ClaudeFreshSessionRetrier(
+                maximumAttempts: 1,
+                sleep: { _ in },
+            ),
+        )
+
+        #expect(connection.organizationID == organizationID)
+        #expect(connection.organizationName == "Personal")
+        #expect(connection.organizationCount == 1)
+    }
+
+    @Test
+    func accountsWithOnlyConsoleOrganizationsCannotQualify() async {
+        let client = makeClient(
+            usageResponse: HTTPResponse(
+                data: Data(),
+                statusCode: 200,
+                headers: [:],
+            ),
+            organizationsJSON: """
+            [{"uuid":"\(UUID().uuidString.lowercased())","name":"Console","capabilities":["api"]}]
+            """,
+        )
+
+        await #expect(throws: ProviderClientError.unsupportedResponse) {
+            _ = try await ClaudeConnectionModel.qualifyConnection(
+                usageClient: client,
+                accountID: UUID(),
+                profileID: UUID(),
+                retrier: ClaudeFreshSessionRetrier(
+                    maximumAttempts: 1,
+                    sleep: { _ in },
+                ),
+            )
+        }
+    }
+
     private func makeClient(
         usageResponse: HTTPResponse,
+        organizationsJSON: String? = nil,
     ) -> ClaudeWebUsageClient {
         let organizations = HTTPResponse(
             data: Data(
-                #"[{"uuid":"\#(organizationID.uuidString.lowercased())","name":"Personal","capabilities":["chat","claude_max"]}]"#
-                    .utf8,
+                (
+                    organizationsJSON
+                        ?? #"[{"uuid":"\#(organizationID.uuidString.lowercased())","name":"Personal","capabilities":["chat","claude_max"]}]"#
+                ).utf8,
             ),
             statusCode: 200,
             headers: [:],

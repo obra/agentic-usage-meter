@@ -375,11 +375,13 @@ public final class ClaudeConnectionModel {
         onUsageStage: @MainActor () -> Void = {},
     ) async throws -> ClaudeQualifiedConnection {
         let organizations =
-            try await retrier.run {
-                try await usageClient.organizations(
-                    profileID: profileID,
-                )
-            }
+            ClaudeOrganizationSelection.qualified(
+                from: try await retrier.run {
+                    try await usageClient.organizations(
+                        profileID: profileID,
+                    )
+                },
+            )
         guard let organization = organizations.first else {
             throw ProviderClientError
                 .unsupportedResponse

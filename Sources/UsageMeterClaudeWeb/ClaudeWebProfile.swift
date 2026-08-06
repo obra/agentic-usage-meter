@@ -25,3 +25,16 @@ public struct ClaudeOrganization: Codable, Equatable, Sendable {
         case capabilities
     }
 }
+
+public enum ClaudeOrganizationSelection {
+    // The organizations endpoint also lists Anthropic Console ("api")
+    // organizations, whose usage endpoint does not serve subscription
+    // quota. Only chat-capable organizations can qualify an account.
+    public static func qualified(
+        from organizations: [ClaudeOrganization]
+    ) -> [ClaudeOrganization] {
+        organizations.filter {
+            $0.capabilities.contains("chat")
+        }
+    }
+}
