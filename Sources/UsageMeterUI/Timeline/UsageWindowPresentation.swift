@@ -8,6 +8,10 @@ public struct UsageWindowPresentation: Equatable, Sendable {
   public let outerXFraction: Double
   public let outerWidthFraction: Double
   public let fillFraction: Double
+  // The fill anchors to the reset edge so remaining quota reads
+  // directly against remaining time: a fill reaching the now-line is
+  // on budget, and a gap to its left is the overdraft.
+  public let fillXFraction: Double
   public let nowXFraction: Double
   public let remainingPercentageText: String
   public let relativeResetText: String
@@ -42,6 +46,9 @@ public struct UsageWindowPresentation: Equatable, Sendable {
     outerXFraction = layout.xFraction(for: window)
     outerWidthFraction = layout.widthFraction(for: window)
     fillFraction = window.remainingFraction
+    fillXFraction =
+      outerXFraction
+      + outerWidthFraction * (1 - window.remainingFraction)
     nowXFraction = 0.5
 
     let remainingPercent = Int(

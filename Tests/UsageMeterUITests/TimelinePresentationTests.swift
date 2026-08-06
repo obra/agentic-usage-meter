@@ -46,6 +46,60 @@ struct TimelinePresentationTests {
   }
 
   @Test
+  func fillAnchorsToTheResetEdgeSoPaceReadsAgainstTheNowLine() throws {
+    let account = SubscriptionAccount(
+      provider: .kimi,
+      displayName: "Kimi",
+      displayOrder: 0,
+    )
+    let onPaceWindow = try #require(
+      UsageWindow(
+        id: "kimi-short",
+        kind: .short,
+        duration: 18_000,
+        resetAt: Date(timeIntervalSince1970: 2_000_009_000),
+        consumedFraction: 0.5,
+      ),
+    )
+
+    let onPace = UsageWindowPresentation(
+      account: account,
+      window: onPaceWindow,
+      now: Date(timeIntervalSince1970: 2_000_000_000),
+      timeZone: TimeZone(secondsFromGMT: 0)!,
+    )
+
+    // Half the quota and half the window remain, so the fill's left
+    // edge sits exactly on the now-line.
+    #expect(abs(onPace.fillXFraction - onPace.nowXFraction) < 0.0001)
+    #expect(
+      abs(
+        onPace.fillXFraction
+          + onPace.outerWidthFraction * onPace.fillFraction
+          - (onPace.outerXFraction + onPace.outerWidthFraction),
+      ) < 0.0001,
+    )
+
+    let inactiveWindow = try #require(
+      UsageWindow(
+        id: "factory-standard-five-hour",
+        kind: .short,
+        duration: 18_000,
+        resetAt: nil,
+        consumedFraction: 0,
+      ),
+    )
+    let inactive = UsageWindowPresentation(
+      account: account,
+      window: inactiveWindow,
+      now: Date(timeIntervalSince1970: 2_000_000_000),
+      timeZone: TimeZone(secondsFromGMT: 0)!,
+    )
+
+    #expect(inactive.fillXFraction == inactive.outerXFraction)
+  }
+
+  @Test
   func weeklyRowPresentsAlignedIdentityAndResetValues() throws {
     let account = SubscriptionAccount(
       provider: .codex,

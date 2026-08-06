@@ -58,7 +58,7 @@ public struct UsageWindowRow: View {
           width * presentation.outerWidthFraction
 
         ZStack(alignment: .leading) {
-          ZStack(alignment: .leading) {
+          ZStack(alignment: .trailing) {
             RoundedRectangle(cornerRadius: 4)
               .fill(.secondary.opacity(0.12))
 

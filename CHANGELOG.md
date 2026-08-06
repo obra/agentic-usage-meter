@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.3 - 2026-08-06
+
+### Changed
+
+- Timeline bars now anchor remaining quota to the reset edge, so a
+  fill that reaches the now-line means consumption is on pace, a gap
+  before it shows the overdraft, and a fill crossing it shows surplus.
+
 ## 0.2.2 - 2026-08-06
 
 ### Fixed
