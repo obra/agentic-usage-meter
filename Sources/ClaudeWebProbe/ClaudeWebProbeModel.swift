@@ -65,7 +65,9 @@ enum ClaudeWebProbeOrganizationSelection {
   static func candidate(
     from organizations: [ClaudeOrganization]
   ) -> ClaudeOrganization? {
-    organizations.first
+    ClaudeOrganizationSelection.qualified(
+      from: organizations
+    ).first
   }
 }
 

@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.2.2 - 2026-08-06
+
+### Fixed
+
+- Removing a Claude account works again. Removal previously gave up
+  whenever the account's isolated browser profile was still open
+  anywhere in the app and silently did nothing; deletion now releases
+  the profile, retries around WebKit's asynchronous teardown, verifies
+  the profile is gone, and shows an error if it still fails.
+- Claude accounts now connect to the account's chat organization.
+  Accounts whose Anthropic Console organization was listed first were
+  bound to it and could never load usage data.
+- Connecting a Claude account whose usage response the app cannot read
+  now fails with an explanation instead of saving an account that never
+  shows data.
+
+### Changed
+
+- Adding an account is now a two-step wizard: pick a provider, then
+  sign in with the full sheet available to the login page.
+- Claude connection and refresh failures are now logged to the system
+  log (subsystem `com.fsck.agentic-usage-meter`) with structural
+  details only, so bug reports can include diagnostics without exposing
+  account data.
+
 ## 0.2.1 - 2026-08-04
 
 ### Changed

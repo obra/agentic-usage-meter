@@ -126,30 +126,46 @@ func reconnectPresentationCarriesTheSelectedAccount() {
 }
 
 @Test
-func addAccountProviderSelectionCanChangeProviders() {
-    var selection = AccountProviderSelection(
-        route: .add,
-    )
+func addAccountStartsOnTheProviderChoiceStep() {
+    var wizard = AccountConnectionWizard(route: .add)
 
-    selection.select(.kimi)
+    #expect(wizard.step == .chooseProvider)
+    #expect(!wizard.canGoBack)
 
-    #expect(selection.provider == .kimi)
+    wizard.choose(.kimi)
+
+    #expect(wizard.step == .connect(.kimi))
+    #expect(wizard.canGoBack)
 }
 
 @Test
-func reconnectProviderSelectionRemainsLocked() {
+func goingBackReturnsToTheProviderChoiceStep() {
+    var wizard = AccountConnectionWizard(route: .add)
+
+    wizard.choose(.claude)
+    wizard.goBack()
+
+    #expect(wizard.step == .chooseProvider)
+}
+
+@Test
+func reconnectSkipsProviderChoiceAndStaysLocked() {
     let account = SubscriptionAccount(
         provider: .codex,
         displayName: "Work",
         displayOrder: 0,
     )
-    var selection = AccountProviderSelection(
+    var wizard = AccountConnectionWizard(
         route: .reconnect(account),
     )
 
-    selection.select(.claude)
+    #expect(wizard.step == .connect(.codex))
+    #expect(!wizard.canGoBack)
 
-    #expect(selection.provider == .codex)
+    wizard.choose(.claude)
+    wizard.goBack()
+
+    #expect(wizard.step == .connect(.codex))
 }
 
 @Test

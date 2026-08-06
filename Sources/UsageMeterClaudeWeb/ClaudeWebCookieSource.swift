@@ -4,6 +4,13 @@ import WebKit
 @MainActor
 public protocol ClaudeWebCookieSource: AnyObject {
     func cookies(for url: URL, profileID: UUID) async -> [HTTPCookie]
+    func prepareForRemoval(profileID: UUID) async
+    func finishRemoval(profileID: UUID)
+}
+
+extension ClaudeWebCookieSource {
+    public func prepareForRemoval(profileID _: UUID) async {}
+    public func finishRemoval(profileID _: UUID) {}
 }
 
 @MainActor
@@ -12,6 +19,9 @@ public final class WebKitClaudeCookieSource: ClaudeWebCookieSource {
         @MainActor (UUID) -> any ClaudeWebProfileCookieLoading
     private var profiles:
         [UUID: any ClaudeWebProfileCookieLoading] = [:]
+    private var activeLoads:
+        [UUID: [UUID: Task<[HTTPCookie], Never>]] = [:]
+    private var removalLeaseCounts: [UUID: Int] = [:]
 
     public convenience init() {
         self.init { profileID in
@@ -33,6 +43,10 @@ public final class WebKitClaudeCookieSource: ClaudeWebCookieSource {
         for _: URL,
         profileID: UUID
     ) async -> [HTTPCookie] {
+        guard removalLeaseCounts[profileID] == nil else {
+            return []
+        }
+
         let profile: any ClaudeWebProfileCookieLoading
         if let existing = profiles[profileID] {
             profile = existing
@@ -42,11 +56,50 @@ public final class WebKitClaudeCookieSource: ClaudeWebCookieSource {
             profile = created
         }
 
-        let cookies = await profile.cookies()
-        if !ClaudeLoginCookieDetector.hasSession(in: cookies) {
-            profile.warmIfNeeded()
+        let loadID = UUID()
+        let load = Task { @MainActor in
+            let cookies = await profile.cookies()
+            if !ClaudeLoginCookieDetector.hasSession(in: cookies) {
+                profile.warmIfNeeded()
+            }
+            return cookies
+        }
+        activeLoads[profileID, default: [:]][loadID] = load
+        let cookies = await load.value
+        activeLoads[profileID]?[loadID] = nil
+        if activeLoads[profileID]?.isEmpty == true {
+            activeLoads[profileID] = nil
         }
         return cookies
+    }
+
+    // Removing a profile's website data store fails while any live
+    // reference to it exists, so removal must first evict the cached
+    // loader, keep new loads from re-creating it, and wait for loads
+    // already holding the loader to drain.
+    public func prepareForRemoval(profileID: UUID) async {
+        removalLeaseCounts[profileID, default: 0] += 1
+        profiles[profileID] = nil
+
+        let loads = activeLoads[profileID].map {
+            Array($0.values)
+        } ?? []
+        for load in loads {
+            _ = await load.value
+        }
+        activeLoads[profileID] = nil
+    }
+
+    public func finishRemoval(profileID: UUID) {
+        guard let leaseCount = removalLeaseCounts[profileID] else {
+            assertionFailure("Claude profile removal lease underflow")
+            return
+        }
+        if leaseCount == 1 {
+            removalLeaseCounts[profileID] = nil
+        } else {
+            removalLeaseCounts[profileID] = leaseCount - 1
+        }
     }
 }
 

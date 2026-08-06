@@ -140,3 +140,27 @@ func accountRowBackgroundOpensDashboardWithoutStealingControls() {
         ) == .reconnect
     )
 }
+
+@MainActor
+@Test
+func removingAnAccountClosesItsDashboardWindow() throws {
+    let account = SubscriptionAccount(
+        provider: .codex,
+        displayName: "Codex",
+        displayOrder: 0
+    )
+    let state = AccountViewState(
+        account: account,
+        snapshot: nil,
+        error: nil
+    )
+    let presenter = AccountDashboardPresenter(
+        openExternalURL: { _ in }
+    )
+
+    presenter.open(state)
+    #expect(presenter.hasOpenDashboard(accountID: account.id))
+
+    presenter.close(accountID: account.id)
+    #expect(!presenter.hasOpenDashboard(accountID: account.id))
+}

@@ -88,6 +88,7 @@ public struct AccountListView: View {
     private let onReconnect: (SubscriptionAccount) -> Void
     private let onOpenDashboard: (AccountViewState) -> Void
     @State private var pendingRemoval: SubscriptionAccount?
+    @State private var removalFailure: String?
     @State private var editingAccountID: UUID?
 
     public init(
@@ -192,9 +193,17 @@ public struct AccountListView: View {
         ) { account in
             Button("Remove", role: .destructive) {
                 Task {
-                    try? await model.removeAccount(
-                        id: account.id,
+                    AccountDashboardPresenter.shared.close(
+                        accountID: account.id,
                     )
+                    do {
+                        try await model.removeAccount(
+                            id: account.id,
+                        )
+                    } catch {
+                        removalFailure =
+                            "\(account.displayName) could not be removed. Quit and reopen the app, then try again."
+                    }
                     pendingRemoval = nil
                 }
             }
@@ -205,6 +214,24 @@ public struct AccountListView: View {
             Text(
                 "\(account.displayName) and its local authentication data will be deleted.",
             )
+        }
+        .alert(
+            "Couldn't remove account",
+            isPresented: Binding(
+                get: { removalFailure != nil },
+                set: {
+                    if !$0 {
+                        removalFailure = nil
+                    }
+                },
+            ),
+            presenting: removalFailure,
+        ) { _ in
+            Button("OK", role: .cancel) {
+                removalFailure = nil
+            }
+        } message: { failure in
+            Text(failure)
         }
     }
 

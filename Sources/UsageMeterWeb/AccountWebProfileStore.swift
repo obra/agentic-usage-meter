@@ -1,5 +1,12 @@
 import Foundation
+import OSLog
 import WebKit
+
+private let webProfileLogger = Logger(
+    subsystem:
+        "com.fsck.agentic-usage-meter",
+    category: "WebProfile"
+)
 
 @MainActor
 public final class AccountWebProfileStore {
@@ -20,21 +27,57 @@ public final class AccountWebProfileStore {
             initializedStore = store
         }
 
-        // Static removal can race WebKit's asynchronous release of the
-        // bootstrap store and fail to delete its files.
+        // Removal works with lingering store references, so waiting for
+        // WebKit's asynchronous release of the bootstrap store is only a
+        // grace period, never a reason to fail.
         let clock = ContinuousClock()
         let deadline = clock.now.advanced(by: .seconds(1))
-        while initializedStore != nil {
-            guard clock.now < deadline else {
-                throw AccountWebProfileStoreError.releaseTimedOut
-            }
+        while initializedStore != nil, clock.now < deadline {
             try await Task.sleep(for: .milliseconds(10))
         }
+        if initializedStore != nil {
+            webProfileLogger.error(
+                "Data store is still referenced after the release grace period"
+            )
+        }
 
-        try await WKWebsiteDataStore.remove(forIdentifier: accountID)
+        var lastError: (any Error)?
+        for delay in [
+            Duration.zero,
+            .milliseconds(200),
+            .milliseconds(500),
+            .seconds(1),
+        ] {
+            if delay != .zero {
+                try await Task.sleep(for: delay)
+            }
+            do {
+                try await WKWebsiteDataStore.remove(
+                    forIdentifier: accountID
+                )
+            } catch {
+                lastError = error
+                webProfileLogger.error(
+                    "Profile removal attempt failed: \((error as NSError).domain, privacy: .public) code \((error as NSError).code, privacy: .public) \(error.localizedDescription, privacy: .public)"
+                )
+                continue
+            }
+
+            let identifiers =
+                try await WKWebsiteDataStore.allDataStoreIdentifiers
+            guard identifiers.contains(accountID) else {
+                return
+            }
+            lastError = AccountWebProfileStoreError.profileNotDeleted
+            webProfileLogger.error(
+                "Profile removal reported success but the profile still exists"
+            )
+        }
+        throw lastError
+            ?? AccountWebProfileStoreError.profileNotDeleted
     }
 }
 
 private enum AccountWebProfileStoreError: Error {
-    case releaseTimedOut
+    case profileNotDeleted
 }
