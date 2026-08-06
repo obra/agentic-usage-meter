@@ -1,5 +1,12 @@
 import Foundation
+import OSLog
 import UsageMeterCore
+
+private let claudeWebLogger = Logger(
+    subsystem:
+        "com.fsck.agentic-usage-meter",
+    category: "ClaudeWeb"
+)
 
 @MainActor
 public final class ClaudeWebUsageClient {
@@ -79,12 +86,21 @@ public final class ClaudeWebUsageClient {
                 from: response.data
             )
             guard !organizations.isEmpty else {
+                claudeWebLogger.error(
+                    "Organizations response contained no organizations"
+                )
                 throw ProviderClientError.unsupportedResponse
             }
+            claudeWebLogger.info(
+                "Loaded \(organizations.count, privacy: .public) organizations, capabilities: \(organizations.map { $0.capabilities.sorted().joined(separator: "+") }.joined(separator: ", "), privacy: .public)"
+            )
             return organizations
         } catch let error as ProviderClientError {
             throw error
         } catch {
+            claudeWebLogger.error(
+                "Organizations response was undecodable"
+            )
             throw ProviderClientError.unsupportedResponse
         }
     }
@@ -180,12 +196,18 @@ public final class ClaudeWebUsageClient {
         case 200 ... 299:
             return
         case 401, 403:
+            claudeWebLogger.error(
+                "Request rejected with status \(response.statusCode, privacy: .public)"
+            )
             throw ProviderClientError.reauthenticationRequired
         case 429:
             throw ProviderClientError.retryAfter(
                 retryDate(from: response, relativeTo: now)
             )
         default:
+            claudeWebLogger.error(
+                "Request failed with status \(response.statusCode, privacy: .public)"
+            )
             throw ProviderClientError.temporaryFailure
         }
     }

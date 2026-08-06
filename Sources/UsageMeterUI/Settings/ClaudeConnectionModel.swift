@@ -337,43 +337,20 @@ public final class ClaudeConnectionModel {
             }
             var stage = ClaudeConnectionStage.organizations
             do {
-                let organizations =
-                    try await retrier.run {
-                        try await usageClient.organizations(
-                            profileID: profileID,
-                        )
-                    }
-                guard let organization = organizations.first else {
-                    throw ProviderClientError
-                        .unsupportedResponse
-                }
-
-                stage = .usage
-                phase = .loadingUsage
-                let snapshot: UsageSnapshot?
-                do {
-                    snapshot = try await retrier.run {
-                        try await usageClient.fetchUsage(
-                            accountID: accountID,
-                            profileID: profileID,
-                            organizationID: organization.id,
-                            now: Date(),
-                        )
-                    }
-                } catch {
-                    snapshot = nil
-                }
+                let connection = try await Self.qualifyConnection(
+                    usageClient: usageClient,
+                    accountID: accountID,
+                    profileID: profileID,
+                    retrier: retrier,
+                    onUsageStage: {
+                        stage = .usage
+                        self.phase = .loadingUsage
+                    },
+                )
                 loginSession?.close()
                 loginSession = nil
                 webView = nil
-                try accept(
-                    ClaudeQualifiedConnection(
-                        organizationID: organization.id,
-                        organizationName: organization.name,
-                        organizationCount: organizations.count,
-                        snapshot: snapshot,
-                    ),
-                )
+                try accept(connection)
             } catch {
                 phase = .failed(
                     ClaudeConnectionFailureDescription
@@ -384,6 +361,52 @@ public final class ClaudeConnectionModel {
                 )
             }
         }
+    }
+
+    // A usage payload the decoder rejects will not improve on refresh,
+    // so it fails qualification instead of saving an account that can
+    // never show data. Transient failures still qualify without a
+    // snapshot.
+    static func qualifyConnection(
+        usageClient: ClaudeWebUsageClient,
+        accountID: UUID,
+        profileID: UUID,
+        retrier: ClaudeFreshSessionRetrier,
+        onUsageStage: @MainActor () -> Void = {},
+    ) async throws -> ClaudeQualifiedConnection {
+        let organizations =
+            try await retrier.run {
+                try await usageClient.organizations(
+                    profileID: profileID,
+                )
+            }
+        guard let organization = organizations.first else {
+            throw ProviderClientError
+                .unsupportedResponse
+        }
+
+        onUsageStage()
+        let snapshot: UsageSnapshot?
+        do {
+            snapshot = try await retrier.run {
+                try await usageClient.fetchUsage(
+                    accountID: accountID,
+                    profileID: profileID,
+                    organizationID: organization.id,
+                    now: Date(),
+                )
+            }
+        } catch ProviderClientError.unsupportedResponse {
+            throw ProviderClientError.unsupportedResponse
+        } catch {
+            snapshot = nil
+        }
+        return ClaudeQualifiedConnection(
+            organizationID: organization.id,
+            organizationName: organization.name,
+            organizationCount: organizations.count,
+            snapshot: snapshot,
+        )
     }
 
     private func accept(
