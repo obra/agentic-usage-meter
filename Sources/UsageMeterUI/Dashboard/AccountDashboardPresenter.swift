@@ -60,6 +60,20 @@ public final class AccountDashboardPresenter {
         controller.window?.makeKeyAndOrderFront(nil)
         NSApplication.shared.activate()
     }
+
+    public func hasOpenDashboard(accountID: UUID) -> Bool {
+        windowControllers[accountID] != nil
+    }
+
+    // A dashboard window keeps the account's web profile open, which
+    // blocks deleting the profile's website data store on removal.
+    public func close(accountID: UUID) {
+        guard let controller = windowControllers[accountID] else {
+            return
+        }
+        windowControllers[accountID] = nil
+        controller.close()
+    }
 }
 
 @MainActor

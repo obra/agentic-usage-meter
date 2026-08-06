@@ -62,8 +62,8 @@ public final class ClaudeWebUsageClient {
         )
     }
 
-    public func prepareProfileRemoval(profileID: UUID) {
-        cookieSource.prepareForRemoval(profileID: profileID)
+    public func prepareProfileRemoval(profileID: UUID) async {
+        await cookieSource.prepareForRemoval(profileID: profileID)
     }
 
     public func finishProfileRemoval(profileID: UUID) {

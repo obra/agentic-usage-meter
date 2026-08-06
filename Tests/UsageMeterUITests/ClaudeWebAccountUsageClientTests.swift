@@ -102,7 +102,7 @@ private final class RemovalRecordingCookieSource:
         []
     }
 
-    func prepareForRemoval(profileID: UUID) {
+    func prepareForRemoval(profileID: UUID) async {
         recorder.events.append("prepare:\(profileID)")
     }
 

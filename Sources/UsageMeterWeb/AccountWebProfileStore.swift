@@ -1,5 +1,12 @@
 import Foundation
+import OSLog
 import WebKit
+
+private let webProfileLogger = Logger(
+    subsystem:
+        "com.fsck.agentic-usage-meter",
+    category: "WebProfile"
+)
 
 @MainActor
 public final class AccountWebProfileStore {
@@ -26,12 +33,22 @@ public final class AccountWebProfileStore {
         let deadline = clock.now.advanced(by: .seconds(1))
         while initializedStore != nil {
             guard clock.now < deadline else {
+                webProfileLogger.error(
+                    "Profile removal timed out waiting for the data store to be released"
+                )
                 throw AccountWebProfileStoreError.releaseTimedOut
             }
             try await Task.sleep(for: .milliseconds(10))
         }
 
-        try await WKWebsiteDataStore.remove(forIdentifier: accountID)
+        do {
+            try await WKWebsiteDataStore.remove(forIdentifier: accountID)
+        } catch {
+            webProfileLogger.error(
+                "Profile removal failed: \((error as NSError).domain, privacy: .public) code \((error as NSError).code, privacy: .public) \(error.localizedDescription, privacy: .public)"
+            )
+            throw error
+        }
     }
 }
 

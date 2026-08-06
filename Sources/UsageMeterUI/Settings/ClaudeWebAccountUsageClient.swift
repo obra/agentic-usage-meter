@@ -58,7 +58,7 @@ public final class ClaudeWebAccountUsageClient:
         else {
             throw ProviderClientError.credentialMismatch
         }
-        client.prepareProfileRemoval(profileID: profileID)
+        await client.prepareProfileRemoval(profileID: profileID)
         defer {
             client.finishProfileRemoval(profileID: profileID)
         }

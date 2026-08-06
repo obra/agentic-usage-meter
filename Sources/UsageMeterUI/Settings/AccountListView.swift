@@ -193,6 +193,9 @@ public struct AccountListView: View {
         ) { account in
             Button("Remove", role: .destructive) {
                 Task {
+                    AccountDashboardPresenter.shared.close(
+                        accountID: account.id,
+                    )
                     do {
                         try await model.removeAccount(
                             id: account.id,
