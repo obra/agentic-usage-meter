@@ -46,20 +46,38 @@ enum AccountSheetRoute: Identifiable {
     }
 }
 
-struct AccountProviderSelection {
-    private(set) var provider: Provider
+struct AccountConnectionWizard {
+    enum Step: Equatable {
+        case chooseProvider
+        case connect(Provider)
+    }
+
+    private(set) var step: Step
     private let isLocked: Bool
 
     init(route: AccountSheetRoute) {
-        provider = route.provider
         isLocked = route.isProviderLocked
+        step = route.isProviderLocked
+            ? .connect(route.provider)
+            : .chooseProvider
     }
 
-    mutating func select(_ provider: Provider) {
+    var canGoBack: Bool {
+        !isLocked && step != .chooseProvider
+    }
+
+    mutating func choose(_ provider: Provider) {
         guard !isLocked else {
             return
         }
-        self.provider = provider
+        step = .connect(provider)
+    }
+
+    mutating func goBack() {
+        guard canGoBack else {
+            return
+        }
+        step = .chooseProvider
     }
 }
 
@@ -253,8 +271,7 @@ private struct AddAccountView: View {
     let route: AccountSheetRoute
     let onComplete: () -> Void
 
-    @State private var providerSelection:
-        AccountProviderSelection
+    @State private var wizard: AccountConnectionWizard
     @State private var claude: ClaudeConnectionModel
     @State private var codex: CodexConnectionModel
     @State private var kimi: KimiConnectionModel
@@ -280,8 +297,8 @@ private struct AddAccountView: View {
         let provider = route.provider
         let reconnectingAccount =
             route.reconnectingAccount
-        _providerSelection = State(
-            initialValue: AccountProviderSelection(
+        _wizard = State(
+            initialValue: AccountConnectionWizard(
                 route: route,
             ),
         )
@@ -376,138 +393,27 @@ private struct AddAccountView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                providerSelector
-
-                Divider()
-
-                Group {
-                    switch providerSelection.provider {
-                    case .claude:
-                        ClaudeConnectionView(
-                            model: claude,
-                            suggestedName:
-                            route.reconnectingAccount?
-                                .displayName
-                                ?? "Claude",
-                            onComplete: complete,
+                switch wizard.step {
+                case .chooseProvider:
+                    providerSelector
+                    Spacer(minLength: 0)
+                case let .connect(provider):
+                    connectionView(for: provider)
+                        .frame(
+                            maxWidth: .infinity,
+                            maxHeight: .infinity,
                         )
-                    case .codex:
-                        CodexConnectionView(
-                            model: codex,
-                            suggestedName:
-                            route.reconnectingAccount?
-                                .displayName
-                                ?? "Codex",
-                            onComplete: complete,
-                        )
-                    case .kimi:
-                        KimiConnectionView(
-                            model: kimi,
-                            suggestedName:
-                            route.reconnectingAccount?
-                                .displayName
-                                ?? "Kimi",
-                            onComplete: complete,
-                        )
-                    case .minimax:
-                        APIKeyConnectionView(
-                            model: model,
-                            provider: .minimax,
-                            reconnectingAccount:
-                                route.reconnectingAccount,
-                            suggestedName:
-                                route.reconnectingAccount?
-                                    .displayName
-                                    ?? "MiniMax",
-                            onComplete: complete
-                        )
-                    case .factory:
-                        APIKeyConnectionView(
-                            model: model,
-                            provider: .factory,
-                            reconnectingAccount:
-                                route.reconnectingAccount,
-                            suggestedName:
-                                route.reconnectingAccount?
-                                    .displayName
-                                    ?? "Factory",
-                            onComplete: complete
-                        )
-                    case .githubCopilot:
-                        GitHubCopilotConnectionView(
-                            model: githubCopilot,
-                            suggestedName:
-                                route
-                                    .reconnectingAccount?
-                                    .displayName
-                                ?? "GitHub Copilot",
-                            onComplete: complete
-                        )
-                    case .superGrok:
-                        SuperGrokConnectionView(
-                            model: superGrok,
-                            suggestedName:
-                                route
-                                    .reconnectingAccount?
-                                    .displayName
-                                ?? "SuperGrok",
-                            onComplete: complete
-                        )
-                    case .openCodeGo:
-                        OpenCodeConnectionView(
-                            provider: .openCodeGo,
-                            model: openCodeGo,
-                            suggestedName:
-                                route
-                                    .reconnectingAccount?
-                                    .displayName
-                                ?? "OpenCode Go",
-                            onComplete: complete
-                        )
-                    case .openCodeZen:
-                        OpenCodeConnectionView(
-                            provider: .openCodeZen,
-                            model: openCodeZen,
-                            suggestedName:
-                                route
-                                    .reconnectingAccount?
-                                    .displayName
-                                ?? "OpenCode Zen",
-                            onComplete: complete
-                        )
-                    case .zai:
-                        APIKeyConnectionView(
-                            model: model,
-                            provider: .zai,
-                            reconnectingAccount:
-                                route.reconnectingAccount,
-                            suggestedName:
-                                route.reconnectingAccount?
-                                    .displayName
-                                    ?? "Z.ai",
-                            onComplete: complete
-                        )
-                    case .mimo:
-                        MiMoConnectionView(
-                            model: mimo,
-                            suggestedName:
-                                route
-                                    .reconnectingAccount?
-                                    .displayName
-                                ?? "MiMo",
-                            onComplete: complete
-                        )
-                    case .antigravity:
-                        EmptyView()
-                    }
                 }
-                .frame(
-                    maxWidth: .infinity,
-                    maxHeight: .infinity,
-                )
             }
             .padding(24)
             .toolbar {
+                if wizard.canGoBack {
+                    ToolbarItem(placement: .navigation) {
+                        Button("Back") {
+                            wizard.goBack()
+                        }
+                    }
+                }
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
                         dismiss()
@@ -516,6 +422,131 @@ private struct AddAccountView: View {
             }
         }
         .frame(minWidth: 720, minHeight: 620)
+    }
+
+    @ViewBuilder
+    private func connectionView(
+        for provider: Provider,
+    ) -> some View {
+        switch provider {
+        case .claude:
+            ClaudeConnectionView(
+                model: claude,
+                suggestedName:
+                route.reconnectingAccount?
+                    .displayName
+                    ?? "Claude",
+                onComplete: complete,
+            )
+        case .codex:
+            CodexConnectionView(
+                model: codex,
+                suggestedName:
+                route.reconnectingAccount?
+                    .displayName
+                    ?? "Codex",
+                onComplete: complete,
+            )
+        case .kimi:
+            KimiConnectionView(
+                model: kimi,
+                suggestedName:
+                route.reconnectingAccount?
+                    .displayName
+                    ?? "Kimi",
+                onComplete: complete,
+            )
+        case .minimax:
+            APIKeyConnectionView(
+                model: model,
+                provider: .minimax,
+                reconnectingAccount:
+                    route.reconnectingAccount,
+                suggestedName:
+                    route.reconnectingAccount?
+                        .displayName
+                        ?? "MiniMax",
+                onComplete: complete
+            )
+        case .factory:
+            APIKeyConnectionView(
+                model: model,
+                provider: .factory,
+                reconnectingAccount:
+                    route.reconnectingAccount,
+                suggestedName:
+                    route.reconnectingAccount?
+                        .displayName
+                        ?? "Factory",
+                onComplete: complete
+            )
+        case .githubCopilot:
+            GitHubCopilotConnectionView(
+                model: githubCopilot,
+                suggestedName:
+                    route
+                        .reconnectingAccount?
+                        .displayName
+                    ?? "GitHub Copilot",
+                onComplete: complete
+            )
+        case .superGrok:
+            SuperGrokConnectionView(
+                model: superGrok,
+                suggestedName:
+                    route
+                        .reconnectingAccount?
+                        .displayName
+                    ?? "SuperGrok",
+                onComplete: complete
+            )
+        case .openCodeGo:
+            OpenCodeConnectionView(
+                provider: .openCodeGo,
+                model: openCodeGo,
+                suggestedName:
+                    route
+                        .reconnectingAccount?
+                        .displayName
+                    ?? "OpenCode Go",
+                onComplete: complete
+            )
+        case .openCodeZen:
+            OpenCodeConnectionView(
+                provider: .openCodeZen,
+                model: openCodeZen,
+                suggestedName:
+                    route
+                        .reconnectingAccount?
+                        .displayName
+                    ?? "OpenCode Zen",
+                onComplete: complete
+            )
+        case .zai:
+            APIKeyConnectionView(
+                model: model,
+                provider: .zai,
+                reconnectingAccount:
+                    route.reconnectingAccount,
+                suggestedName:
+                    route.reconnectingAccount?
+                        .displayName
+                        ?? "Z.ai",
+                onComplete: complete
+            )
+        case .mimo:
+            MiMoConnectionView(
+                model: mimo,
+                suggestedName:
+                    route
+                        .reconnectingAccount?
+                        .displayName
+                    ?? "MiMo",
+                onComplete: complete
+            )
+        case .antigravity:
+            EmptyView()
+        }
     }
 
     private func complete() {
@@ -527,6 +558,9 @@ private struct AddAccountView: View {
         if let account = route.reconnectingAccount {
             return "Reconnect \(account.displayName)"
         }
+        if case let .connect(provider) = wizard.step {
+            return "Connect \(ProviderPresentation(provider).title)"
+        }
         return "Add an account"
     }
 
@@ -535,20 +569,16 @@ private struct AddAccountView: View {
             return
                 "Sign in again to restore usage updates for this account."
         }
+        if case let .connect(provider) = wizard.step {
+            return ProviderPresentation(provider).detail
+        }
         return
             "Choose the subscription provider you want to track."
     }
 
     @ViewBuilder
     private var providerSelector: some View {
-        if route.isProviderLocked {
-            providerCard(
-                providerSelection.provider,
-                isSelected: true,
-                action: {},
-            )
-            .disabled(true)
-        } else {
+        ScrollView {
             LazyVGrid(
                 columns: [
                     GridItem(
@@ -567,11 +597,8 @@ private struct AddAccountView: View {
                 ) { definition in
                     providerCard(
                         definition.provider,
-                        isSelected:
-                            providerSelection.provider
-                                == definition.provider,
                         action: {
-                            providerSelection.select(
+                            wizard.choose(
                                 definition.provider,
                             )
                         },
@@ -592,7 +619,6 @@ private struct AddAccountView: View {
 
     private func providerCard(
         _ provider: Provider,
-        isSelected: Bool,
         action: @escaping () -> Void,
     ) -> some View {
         let presentation = ProviderPresentation(provider)
@@ -600,11 +626,7 @@ private struct AddAccountView: View {
             HStack(spacing: 12) {
                 Image(systemName: presentation.systemImage)
                     .font(.title2)
-                    .foregroundStyle(
-                        isSelected
-                            ? Color.accentColor
-                            : Color.secondary,
-                    )
+                    .foregroundStyle(Color.accentColor)
                     .frame(width: 28)
 
                 VStack(alignment: .leading, spacing: 3) {
@@ -627,28 +649,19 @@ private struct AddAccountView: View {
             .contentShape(Rectangle())
             .background {
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(
-                        isSelected
-                            ? Color.accentColor.opacity(0.12)
-                            : Color.secondary.opacity(0.06),
-                    )
+                    .fill(Color.secondary.opacity(0.06))
             }
             .overlay {
                 RoundedRectangle(cornerRadius: 12)
                     .stroke(
-                        isSelected
-                            ? Color.accentColor
-                            : Color.secondary.opacity(0.22),
-                        lineWidth: isSelected ? 2 : 1,
+                        Color.secondary.opacity(0.22),
+                        lineWidth: 1,
                     )
             }
         }
         .buttonStyle(.plain)
         .accessibilityLabel(
             "\(presentation.title), \(presentation.detail)",
-        )
-        .accessibilityAddTraits(
-            isSelected ? .isSelected : [],
         )
     }
 }
