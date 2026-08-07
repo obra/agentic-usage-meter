@@ -1315,7 +1315,7 @@ func reconnectClearsMigratedSiblingsAuthenticationState() async throws {
     )
 
     let siblingState = model.accounts.first { $0.id == sibling.id }
-    #expect(siblingState?.error == nil)
+    #expect(siblingState?.error != .authenticationRequired)
     #expect(siblingState?.account.claudeProfileID == newProfileID)
     let persistedSiblingState = await stateStore.state
         .refreshStates[sibling.id]
@@ -1452,7 +1452,7 @@ func staleRefreshCannotUndoAReconnectMigration() async throws {
     await staleRefresh.value
 
     let siblingState = model.accounts.first { $0.id == sibling.id }
-    #expect(siblingState?.error == nil)
+    #expect(siblingState?.error != .authenticationRequired)
     #expect(siblingState?.isRefreshing == false)
     let persisted = await stateStore.state.refreshStates[sibling.id]
     #expect(persisted?.requiresReauthentication != true)
@@ -1604,7 +1604,7 @@ func staleRefreshOfAnExcludedSiblingIsDiscardedAfterReconnect() async throws {
     let siblingState = model.accounts.first {
         $0.id == excludedSibling.id
     }
-    #expect(siblingState?.error == nil)
+    #expect(siblingState?.error != .authenticationRequired)
     #expect(siblingState?.account.claudeProfileID == oldProfileID)
     let persisted = await stateStore.state
         .refreshStates[excludedSibling.id]
@@ -1679,7 +1679,7 @@ func refreshesAreBlockedWhileTheirAccountsReconnect() async throws {
     try await reconnect.value
 
     let siblingState = model.accounts.first { $0.id == sibling.id }
-    #expect(siblingState?.error == nil)
+    #expect(siblingState?.error != .authenticationRequired)
     let persisted = await stateStore.state.refreshStates[sibling.id]
     #expect(persisted?.requiresReauthentication != true)
 }

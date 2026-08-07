@@ -651,7 +651,11 @@ public final class AppModel {
             updateAccount(id: siblingID) {
                 $0.account.claudeProfileID =
                     replacementProfileID
-                $0.error = nil
+                // The repaired session only cures authentication;
+                // other error states remain true of the account.
+                if $0.error == .authenticationRequired {
+                    $0.error = nil
+                }
                 $0.nextEligibleAt = nil
                 $0.isRefreshing = false
             }
