@@ -1328,10 +1328,15 @@ private final class GatedClaudeAdapter: ProviderAccountAdapter {
     private var gate: CheckedContinuation<Void, Never>?
     private var waitingForGate: CheckedContinuation<Void, Never>?
 
+    var gateFetches = true
+
     func fetchUsage(
         for _: SubscriptionAccount,
         now _: Date,
     ) async throws -> UsageSnapshot {
+        guard gateFetches else {
+            throw ProviderClientError.reauthenticationRequired
+        }
         waitingForGate?.resume()
         waitingForGate = nil
         await withCheckedContinuation { continuation in
@@ -1522,4 +1527,72 @@ func staleRefreshCannotRevertAReconnectMidSave() async throws {
     let persistedSibling = await stateStore.state
         .refreshStates[sibling.id]
     #expect(persistedSibling?.requiresReauthentication != true)
+}
+
+@Test
+@MainActor
+func refreshesAreBlockedWhileTheirAccountsReconnect() async throws {
+    let oldProfileID = UUID()
+    let newProfileID = UUID()
+    let organizationID = UUID()
+    let siblingOrganizationID = UUID()
+    let reconnecting = SubscriptionAccount(
+        provider: .claude,
+        displayName: "Personal",
+        displayOrder: 0,
+        claudeProfileID: oldProfileID,
+        claudeOrganizationID: organizationID,
+    )
+    let sibling = SubscriptionAccount(
+        provider: .claude,
+        displayName: "Team",
+        displayOrder: 1,
+        claudeProfileID: oldProfileID,
+        claudeOrganizationID: siblingOrganizationID,
+    )
+    let adapter = GatedClaudeAdapter()
+    adapter.gateFetches = false
+    let stateStore = TestAppStateStore(state: .empty)
+    let model = AppModel(
+        stateStore: stateStore,
+        credentialStore: TestCredentialStore(),
+        adapters: [adapter],
+        now: { Date(timeIntervalSince1970: 2_000_000_000) },
+    )
+    await model.start()
+    try await model.connectClaudeAccounts([
+        (account: reconnecting, snapshot: nil),
+        (account: sibling, snapshot: nil),
+    ])
+
+    let replacement = SubscriptionAccount(
+        id: reconnecting.id,
+        provider: .claude,
+        displayName: "Personal",
+        displayOrder: 0,
+        claudeProfileID: newProfileID,
+        claudeOrganizationID: organizationID,
+    )
+    adapter.gateNextRemoval = true
+    let reconnect = Task { @MainActor in
+        try await model.reconnectClaudeAccount(
+            id: reconnecting.id,
+            replacement: replacement,
+            qualifiedOrganizationIDs: [
+                organizationID,
+                siblingOrganizationID,
+            ],
+        )
+    }
+    await adapter.waitUntilRemovalGated()
+
+    await model.refreshAccount(id: sibling.id)
+
+    adapter.releaseRemovalGate()
+    try await reconnect.value
+
+    let siblingState = model.accounts.first { $0.id == sibling.id }
+    #expect(siblingState?.error == nil)
+    let persisted = await stateStore.state.refreshStates[sibling.id]
+    #expect(persisted?.requiresReauthentication != true)
 }

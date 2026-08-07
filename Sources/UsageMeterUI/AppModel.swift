@@ -91,6 +91,10 @@ public final class AppModel {
     private var persistedState = PersistedAppState.empty
     @ObservationIgnored
     private var refreshers: [UUID: AccountRefresher] = [:]
+    // Accounts mid-reconnect must not refresh: their in-memory
+    // profile pointers and refreshers cross the transaction's awaits
+    // in mixed states.
+    private var reconnectingAccountIDs: Set<UUID> = []
 
     public init(
         stateStore: any AppStatePersisting,
@@ -265,6 +269,7 @@ public final class AppModel {
 
     public func refreshAccount(id: UUID) async {
         guard
+            !reconnectingAccountIDs.contains(id),
             let account = accounts.first(where: { $0.id == id })?.account,
             let refresher = refreshers[id]
         else {
@@ -487,6 +492,20 @@ public final class AppModel {
             let adapter = adaptersByProvider[.claude]
         else {
             throw AppModelError.invalidSnapshot
+        }
+
+        let affectedAccountIDs = Set(
+            accounts
+                .filter {
+                    $0.id == id
+                        || $0.account.claudeProfileID
+                        == existingProfileID
+                }
+                .map(\.id),
+        )
+        reconnectingAccountIDs.formUnion(affectedAccountIDs)
+        defer {
+            reconnectingAccountIDs.subtract(affectedAccountIDs)
         }
 
         let refreshState =
