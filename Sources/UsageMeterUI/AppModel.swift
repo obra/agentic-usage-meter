@@ -301,29 +301,44 @@ public final class AppModel {
                     throw refreshFailure(for: error)
                 }
             }
-            apply(outcome, to: id)
+            if refreshers[id] === refresher {
+                apply(outcome, to: id)
+            }
         } catch let error as ProviderClientError {
-            updateAccount(id: id) {
-                switch error {
-                case .subscriptionRequired:
-                    $0.error = .subscriptionRequired
-                case .unsupportedResponse:
-                    $0.error = .unsupportedResponse
-                default:
-                    $0.error = .temporarilyUnavailable
+            if refreshers[id] === refresher {
+                updateAccount(id: id) {
+                    switch error {
+                    case .subscriptionRequired:
+                        $0.error = .subscriptionRequired
+                    case .unsupportedResponse:
+                        $0.error = .unsupportedResponse
+                    default:
+                        $0.error = .temporarilyUnavailable
+                    }
                 }
             }
         } catch {
-            updateAccount(id: id) {
-                $0.error = .temporarilyUnavailable
+            if refreshers[id] === refresher {
+                updateAccount(id: id) {
+                    $0.error = .temporarilyUnavailable
+                }
             }
         }
 
         updateAccount(id: id) {
             $0.isRefreshing = false
         }
-        persistedState.refreshStates[id] =
-            await refresher.refreshState()
+        // Reconnect migration replaces an account's refresher; a
+        // refresh that started against the old one must not write its
+        // stale authentication and backoff state back over the reset.
+        guard refreshers[id] === refresher else {
+            return
+        }
+        let refreshedState = await refresher.refreshState()
+        guard refreshers[id] === refresher else {
+            return
+        }
+        persistedState.refreshStates[id] = refreshedState
         if let snapshot = accounts.first(where: { $0.id == id })?.snapshot {
             persistedState.snapshots[id] = snapshot
         }

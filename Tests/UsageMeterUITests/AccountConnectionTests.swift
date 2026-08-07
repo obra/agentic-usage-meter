@@ -1321,3 +1321,104 @@ func reconnectClearsMigratedSiblingsAuthenticationState() async throws {
         .refreshStates[sibling.id]
     #expect(persistedSiblingState?.requiresReauthentication == false)
 }
+
+@MainActor
+private final class GatedClaudeAdapter: ProviderAccountAdapter {
+    nonisolated let provider = Provider.claude
+    private var gate: CheckedContinuation<Void, Never>?
+    private var waitingForGate: CheckedContinuation<Void, Never>?
+
+    func fetchUsage(
+        for _: SubscriptionAccount,
+        now _: Date,
+    ) async throws -> UsageSnapshot {
+        waitingForGate?.resume()
+        waitingForGate = nil
+        await withCheckedContinuation { continuation in
+            gate = continuation
+        }
+        throw ProviderClientError.reauthenticationRequired
+    }
+
+    func removeAuthentication(
+        for _: SubscriptionAccount,
+    ) async throws {}
+
+    func waitUntilFetching() async {
+        await withCheckedContinuation { continuation in
+            waitingForGate = continuation
+        }
+    }
+
+    func releaseGate() {
+        gate?.resume()
+        gate = nil
+    }
+}
+
+@Test
+@MainActor
+func staleRefreshCannotUndoAReconnectMigration() async throws {
+    let oldProfileID = UUID()
+    let newProfileID = UUID()
+    let organizationID = UUID()
+    let siblingOrganizationID = UUID()
+    let reconnecting = SubscriptionAccount(
+        provider: .claude,
+        displayName: "Personal",
+        displayOrder: 0,
+        claudeProfileID: oldProfileID,
+        claudeOrganizationID: organizationID,
+    )
+    let sibling = SubscriptionAccount(
+        provider: .claude,
+        displayName: "Team",
+        displayOrder: 1,
+        claudeProfileID: oldProfileID,
+        claudeOrganizationID: siblingOrganizationID,
+    )
+    let adapter = GatedClaudeAdapter()
+    let stateStore = TestAppStateStore(state: .empty)
+    let model = AppModel(
+        stateStore: stateStore,
+        credentialStore: TestCredentialStore(),
+        adapters: [adapter],
+        now: { Date(timeIntervalSince1970: 2_000_000_000) },
+    )
+    await model.start()
+    try await model.connectClaudeAccounts([
+        (account: reconnecting, snapshot: nil),
+        (account: sibling, snapshot: nil),
+    ])
+
+    let staleRefresh = Task { @MainActor in
+        await model.refreshAccount(id: sibling.id)
+    }
+    await adapter.waitUntilFetching()
+
+    let replacement = SubscriptionAccount(
+        id: reconnecting.id,
+        provider: .claude,
+        displayName: "Personal",
+        displayOrder: 0,
+        claudeProfileID: newProfileID,
+        claudeOrganizationID: organizationID,
+    )
+    try await model.reconnectClaudeAccount(
+        id: reconnecting.id,
+        replacement: replacement,
+        qualifiedOrganizationIDs: [
+            organizationID,
+            siblingOrganizationID,
+        ],
+    )
+
+    adapter.releaseGate()
+    await staleRefresh.value
+
+    let siblingState = model.accounts.first { $0.id == sibling.id }
+    #expect(siblingState?.error == nil)
+    #expect(siblingState?.isRefreshing == false)
+    let persisted = await stateStore.state.refreshStates[sibling.id]
+    #expect(persisted?.requiresReauthentication != true)
+}
