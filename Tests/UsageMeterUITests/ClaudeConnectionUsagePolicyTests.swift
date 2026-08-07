@@ -393,6 +393,64 @@ struct ClaudeConnectionUsagePolicyTests {
         #expect(appModel.accounts.isEmpty)
     }
 
+
+    @Test
+    func cancellingWhileUsageLoadsDiscardsTheQualification() async throws {
+        var removedProfileIDs: [UUID] = []
+        let transport = GatedSecondRequestTransport(
+            responses: [
+                HTTPResponse(
+                    data: Data(multiOrganizationJSON.utf8),
+                    statusCode: 200,
+                    headers: [:],
+                ),
+                HTTPResponse(
+                    data: Data(Self.zeroUsage.utf8),
+                    statusCode: 200,
+                    headers: [:],
+                ),
+                HTTPResponse(
+                    data: Data(Self.zeroUsage.utf8),
+                    statusCode: 200,
+                    headers: [:],
+                ),
+            ],
+        )
+        let appModel = AppModel(
+            stateStore: TestAppStateStore(state: .empty),
+            credentialStore: TestCredentialStore(),
+            adapters: [TestClaudeProfileRemover()],
+            now: { Date(timeIntervalSince1970: 2_000_000_000) },
+        )
+        await appModel.start()
+        let model = ClaudeConnectionModel(
+            appModel: appModel,
+            removeProfile: { removedProfileIDs.append($0) },
+            usageClient: ClaudeWebUsageClient(
+                transport: transport,
+                cookieSource: NoCookiesSource(),
+            ),
+        )
+
+        await model.qualifyLogin(
+            authenticatedCookies: [Self.sessionCookie],
+        )
+        let confirm = Task { @MainActor in
+            await model.confirmOrganizationSelection()
+        }
+        await transport.waitUntilGated()
+
+        await model.cancel()
+        #expect(removedProfileIDs.count == 1)
+        #expect(model.phase == .idle)
+
+        await transport.releaseGate()
+        await confirm.value
+
+        #expect(model.phase == .idle)
+        #expect(appModel.accounts.isEmpty)
+    }
+
     private var singleOrganizationJSON: String {
         #"[{"uuid":"\#(organizationID.uuidString.lowercased())","name":"Personal","capabilities":["chat","claude_max"]}]"#
     }
@@ -513,5 +571,43 @@ private actor SequencedHTTPTransport: HTTPTransport {
             throw HTTPTransportError.nonHTTPResponse
         }
         return responses.removeFirst()
+    }
+}
+
+
+private actor GatedSecondRequestTransport: HTTPTransport {
+    private var responses: [HTTPResponse]
+    private var requestCount = 0
+    private var gate: CheckedContinuation<Void, Never>?
+    private var waiting: CheckedContinuation<Void, Never>?
+
+    init(responses: [HTTPResponse]) {
+        self.responses = responses
+    }
+
+    func send(_: URLRequest) async throws -> HTTPResponse {
+        requestCount += 1
+        if requestCount == 2 {
+            waiting?.resume()
+            waiting = nil
+            await withCheckedContinuation { continuation in
+                gate = continuation
+            }
+        }
+        guard !responses.isEmpty else {
+            throw HTTPTransportError.nonHTTPResponse
+        }
+        return responses.removeFirst()
+    }
+
+    func waitUntilGated() async {
+        await withCheckedContinuation { continuation in
+            waiting = continuation
+        }
+    }
+
+    func releaseGate() {
+        gate?.resume()
+        gate = nil
     }
 }

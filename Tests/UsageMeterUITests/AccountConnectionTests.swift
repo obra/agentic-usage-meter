@@ -1349,9 +1349,14 @@ private final class GatedClaudeAdapter: ProviderAccountAdapter {
     private var waitingForRemoval: CheckedContinuation<Void, Never>?
     var gateNextRemoval = false
 
+    private(set) var removedProfileIDs: [UUID] = []
+
     func removeAuthentication(
-        for _: SubscriptionAccount,
+        for account: SubscriptionAccount,
     ) async throws {
+        if let profileID = account.claudeProfileID {
+            removedProfileIDs.append(profileID)
+        }
         guard gateNextRemoval else {
             return
         }
@@ -1727,4 +1732,64 @@ func concurrentSiblingRemovalsCleanUpTheSharedProfileExactlyOnce() async throws 
     #expect(model.accounts.isEmpty)
     #expect(await stateStore.state.accounts.isEmpty)
     #expect(profileRemover.removedProfileIDs == [profileID])
+}
+
+@Test
+@MainActor
+func removalDuringAReconnectWaitsForTheReconnectToFinish() async throws {
+    let oldProfileID = UUID()
+    let newProfileID = UUID()
+    let organizationID = UUID()
+    let account = SubscriptionAccount(
+        provider: .claude,
+        displayName: "Personal",
+        displayOrder: 0,
+        claudeProfileID: oldProfileID,
+        claudeOrganizationID: organizationID,
+    )
+    let adapter = GatedClaudeAdapter()
+    adapter.gateFetches = false
+    let stateStore = TestAppStateStore(state: .empty)
+    let model = AppModel(
+        stateStore: stateStore,
+        credentialStore: TestCredentialStore(),
+        adapters: [adapter],
+        now: { Date(timeIntervalSince1970: 2_000_000_000) },
+    )
+    await model.start()
+    try await model.connectClaudeAccounts([
+        (account: account, snapshot: nil),
+    ])
+
+    let replacement = SubscriptionAccount(
+        id: account.id,
+        provider: .claude,
+        displayName: "Personal",
+        displayOrder: 0,
+        claudeProfileID: newProfileID,
+        claudeOrganizationID: organizationID,
+    )
+    adapter.gateNextRemoval = true
+    let reconnect = Task { @MainActor in
+        try await model.reconnectClaudeAccount(
+            id: account.id,
+            replacement: replacement,
+            qualifiedOrganizationIDs: [organizationID],
+        )
+    }
+    await adapter.waitUntilRemovalGated()
+
+    let removal = Task { @MainActor in
+        try await model.removeAccount(id: account.id)
+    }
+    for _ in 0 ..< 20 {
+        await Task.yield()
+    }
+    adapter.releaseRemovalGate()
+    try await reconnect.value
+    try await removal.value
+
+    #expect(model.accounts.isEmpty)
+    #expect(await stateStore.state.accounts.isEmpty)
+    #expect(adapter.removedProfileIDs == [oldProfileID, newProfileID])
 }

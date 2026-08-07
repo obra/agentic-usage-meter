@@ -203,6 +203,11 @@ public final class ClaudeConnectionModel {
     private var authenticatedCookies: [HTTPCookie]?
     @ObservationIgnored
     private var qualifiedOrganizationIDs: Set<UUID> = []
+    // Bumped by cancel() and start(); async qualification work checks
+    // it after each suspension so a cancelled or restarted flow never
+    // publishes results against a discarded profile.
+    @ObservationIgnored
+    private var qualificationGeneration = 0
     @ObservationIgnored
     private var didSave = false
     @ObservationIgnored
@@ -236,6 +241,7 @@ public final class ClaudeConnectionModel {
     }
 
     public func start() async {
+        qualificationGeneration += 1
         pendingConnection = nil
         pendingChoices = []
         pendingSelection = []
@@ -340,6 +346,7 @@ public final class ClaudeConnectionModel {
             return
         }
 
+        qualificationGeneration += 1
         await performCancellation()
     }
 
@@ -397,6 +404,7 @@ public final class ClaudeConnectionModel {
     func qualifyLogin(
         authenticatedCookies: [HTTPCookie],
     ) async {
+        let generation = qualificationGeneration
         self.authenticatedCookies = authenticatedCookies
         phase = .loadingOrganizations
         let usageClient = usageClient.authenticated(
@@ -415,6 +423,9 @@ public final class ClaudeConnectionModel {
                     },
                 )
         } catch {
+            guard generation == qualificationGeneration else {
+                return
+            }
             phase = .failed(
                 ClaudeConnectionFailureDescription
                     .message(
@@ -422,6 +433,9 @@ public final class ClaudeConnectionModel {
                         stage: .organizations,
                     ),
             )
+            return
+        }
+        guard generation == qualificationGeneration else {
             return
         }
         qualifiedOrganizationIDs = Set(organizations.map(\.id))
@@ -446,6 +460,9 @@ public final class ClaudeConnectionModel {
                 qualifiedOrganizationIDs = []
                 try? await removeProfile(profileID)
                 profileID = UUID()
+                guard generation == qualificationGeneration else {
+                    return
+                }
                 phase = .failed(
                     "This Claude login does not belong to the organization \(reconnectingAccount.displayName) was connected to.",
                 )
@@ -456,6 +473,7 @@ public final class ClaudeConnectionModel {
                 organizationCount: organizations.count,
                 usageClient: usageClient,
                 retrier: retrier,
+                generation: generation,
             )
             return
         }
@@ -477,6 +495,7 @@ public final class ClaudeConnectionModel {
                 organizationCount: 1,
                 usageClient: usageClient,
                 retrier: retrier,
+                generation: generation,
             )
             return
         }
@@ -514,6 +533,7 @@ public final class ClaudeConnectionModel {
             return
         }
 
+        let generation = qualificationGeneration
         phase = .loadingUsage
         let usageClient = usageClient.authenticated(
             with: authenticatedCookies,
@@ -532,6 +552,9 @@ public final class ClaudeConnectionModel {
                     retrier: retrier,
                 )
             } catch {
+                guard generation == qualificationGeneration else {
+                    return
+                }
                 phase = .failed(
                     ClaudeConnectionFailureDescription
                         .message(
@@ -539,6 +562,9 @@ public final class ClaudeConnectionModel {
                             stage: .usage,
                         ),
                 )
+                return
+            }
+            guard generation == qualificationGeneration else {
                 return
             }
             connections.append(
@@ -605,6 +631,7 @@ public final class ClaudeConnectionModel {
         organizationCount: Int,
         usageClient: ClaudeWebUsageClient,
         retrier: ClaudeFreshSessionRetrier,
+        generation: Int,
     ) async {
         phase = .loadingUsage
         let snapshot: UsageSnapshot?
@@ -617,6 +644,9 @@ public final class ClaudeConnectionModel {
                 retrier: retrier,
             )
         } catch {
+            guard generation == qualificationGeneration else {
+                return
+            }
             phase = .failed(
                 ClaudeConnectionFailureDescription
                     .message(
@@ -624,6 +654,9 @@ public final class ClaudeConnectionModel {
                         stage: .usage,
                     ),
             )
+            return
+        }
+        guard generation == qualificationGeneration else {
             return
         }
         closeLogin()

@@ -95,7 +95,7 @@ public final class AppModel {
     // profile pointers and refreshers cross the transaction's awaits
     // in mixed states.
     private var reconnectingAccountIDs: Set<UUID> = []
-    private var activeRemoval: Task<Void, any Error>?
+    private var accountMutation: Task<Void, any Error>?
 
     public init(
         stateStore: any AppStatePersisting,
@@ -352,17 +352,26 @@ public final class AppModel {
         try? await stateStore.save(persistedState)
     }
 
-    // Removals run one at a time: two interleaved sibling removals
-    // could each observe the other still present, both skip the
-    // shared-profile cleanup, and save conflicting states.
+    // Removals and reconnects mutate shared profile ownership across
+    // several suspension points, so they run one at a time: an
+    // interleaved pair could each observe the other's stale state,
+    // clean up the wrong profile, or save conflicting states.
+    private func serializeAccountMutation(
+        _ operation: @escaping @MainActor () async throws -> Void
+    ) async throws {
+        let previous = accountMutation
+        let mutation = Task { @MainActor in
+            _ = try? await previous?.value
+            try await operation()
+        }
+        accountMutation = mutation
+        try await mutation.value
+    }
+
     public func removeAccount(id: UUID) async throws {
-        let previousRemoval = activeRemoval
-        let removal = Task { @MainActor in
-            _ = try? await previousRemoval?.value
+        try await serializeAccountMutation {
             try await self.performAccountRemoval(id: id)
         }
-        activeRemoval = removal
-        try await removal.value
     }
 
     private func performAccountRemoval(id: UUID) async throws {
@@ -485,6 +494,23 @@ public final class AppModel {
         replacement: SubscriptionAccount,
         snapshot: UsageSnapshot? = nil,
         qualifiedOrganizationIDs: Set<UUID> = []
+    ) async throws {
+        try await serializeAccountMutation {
+            try await self.performClaudeReconnect(
+                id: id,
+                replacement: replacement,
+                snapshot: snapshot,
+                qualifiedOrganizationIDs:
+                    qualifiedOrganizationIDs
+            )
+        }
+    }
+
+    private func performClaudeReconnect(
+        id: UUID,
+        replacement: SubscriptionAccount,
+        snapshot: UsageSnapshot?,
+        qualifiedOrganizationIDs: Set<UUID>
     ) async throws {
         guard
             let existing = accounts.first(
