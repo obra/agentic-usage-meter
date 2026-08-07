@@ -1330,6 +1330,7 @@ private final class GatedClaudeAdapter: ProviderAccountAdapter {
 
     var gateFetches = true
     var ungatedFetchesSucceed = false
+    private(set) var totalFetchCount = 0
     // One-shot: a refresher that retries after the gated failure must
     // not re-arm the gate with nobody left to release it.
     private var hasGatedFetch = false
@@ -1342,6 +1343,7 @@ private final class GatedClaudeAdapter: ProviderAccountAdapter {
         for account: SubscriptionAccount,
         now: Date,
     ) async throws -> UsageSnapshot {
+        totalFetchCount += 1
         guard gateFetches else {
             guard ungatedFetchesSucceed else {
                 throw ProviderClientError.reauthenticationRequired
@@ -2168,4 +2170,75 @@ func credentialReconnectOutlivesInFlightRefreshCredentialWrites() async throws {
         await credentials.loadCredential(for: account.id)
             == newCredential,
     )
+}
+
+@Test
+@MainActor
+func overlappingReconnectsKeepBlockingRefreshesUntilBothFinish() async throws {
+    let organizationID = UUID()
+    let account = SubscriptionAccount(
+        provider: .claude,
+        displayName: "Personal",
+        displayOrder: 0,
+        claudeProfileID: UUID(),
+        claudeOrganizationID: organizationID,
+    )
+    let adapter = GatedClaudeAdapter()
+    adapter.gateFetches = false
+    let model = AppModel(
+        stateStore: TestAppStateStore(state: .empty),
+        credentialStore: TestCredentialStore(),
+        adapters: [adapter],
+        now: { Date(timeIntervalSince1970: 2_000_000_000) },
+    )
+    await model.start()
+    try await model.connectClaudeAccounts([
+        (account: account, snapshot: nil),
+    ])
+
+    adapter.gateNextRemoval = true
+    let firstReconnect = Task { @MainActor in
+        try await model.reconnectClaudeAccount(
+            id: account.id,
+            replacement: SubscriptionAccount(
+                id: account.id,
+                provider: .claude,
+                displayName: "Personal",
+                displayOrder: 0,
+                claudeProfileID: UUID(),
+                claudeOrganizationID: organizationID,
+            ),
+            qualifiedOrganizationIDs: [organizationID],
+        )
+    }
+    await adapter.waitUntilRemovalGated()
+
+    let secondReconnect = Task { @MainActor in
+        try await model.reconnectClaudeAccount(
+            id: account.id,
+            replacement: SubscriptionAccount(
+                id: account.id,
+                provider: .claude,
+                displayName: "Personal",
+                displayOrder: 0,
+                claudeProfileID: UUID(),
+                claudeOrganizationID: organizationID,
+            ),
+            qualifiedOrganizationIDs: [organizationID],
+        )
+    }
+    for _ in 0 ..< 20 {
+        await Task.yield()
+    }
+
+    adapter.releaseRemovalGate()
+    try await firstReconnect.value
+
+    // The second reconnect is still mid-flight; a refresh for the
+    // account must stay blocked rather than racing it.
+    let fetchesBeforeRefresh = adapter.totalFetchCount
+    await model.refreshAccount(id: account.id)
+    #expect(adapter.totalFetchCount == fetchesBeforeRefresh)
+
+    try await secondReconnect.value
 }

@@ -93,8 +93,9 @@ public final class AppModel {
     private var refreshers: [UUID: AccountRefresher] = [:]
     // Accounts mid-reconnect must not refresh: their in-memory
     // profile pointers and refreshers cross the transaction's awaits
-    // in mixed states.
-    private var reconnectingAccountIDs: Set<UUID> = []
+    // in mixed states. Reference-counted so overlapping reconnects
+    // stay protected until the last one finishes.
+    private var reconnectLeaseCounts: [UUID: Int] = [:]
     private var activeRefreshes:
         [UUID: (token: UUID, task: Task<Void, Never>)] = [:]
     private var accountMutation: Task<Void, any Error>?
@@ -308,7 +309,7 @@ public final class AppModel {
 
     public func refreshAccount(id: UUID) async {
         guard
-            !reconnectingAccountIDs.contains(id),
+            reconnectLeaseCounts[id] == nil,
             let account = accounts.first(where: { $0.id == id })?.account,
             let refresher = refreshers[id]
         else {
@@ -330,6 +331,27 @@ public final class AppModel {
         await refresh.value
         if activeRefreshes[id]?.token == refreshToken {
             activeRefreshes[id] = nil
+        }
+    }
+
+    private func acquireReconnectLeases<IDs: Sequence<UUID>>(
+        for accountIDs: IDs
+    ) {
+        for accountID in accountIDs {
+            reconnectLeaseCounts[accountID, default: 0] += 1
+        }
+    }
+
+    private func releaseReconnectLeases<IDs: Sequence<UUID>>(
+        for accountIDs: IDs
+    ) {
+        for accountID in accountIDs {
+            guard let count = reconnectLeaseCounts[accountID] else {
+                assertionFailure("Reconnect lease underflow")
+                continue
+            }
+            reconnectLeaseCounts[accountID] =
+                count == 1 ? nil : count - 1
         }
     }
 
@@ -619,9 +641,9 @@ public final class AppModel {
                 }
                 .map(\.id),
         )
-        reconnectingAccountIDs.formUnion(affectedAccountIDs)
+        acquireReconnectLeases(for: affectedAccountIDs)
         defer {
-            reconnectingAccountIDs.subtract(affectedAccountIDs)
+            releaseReconnectLeases(for: affectedAccountIDs)
         }
         await waitForRefreshesToSettle(of: affectedAccountIDs)
         try await serializeStateMutation {
@@ -1068,7 +1090,7 @@ public final class AppModel {
         // Blocking and draining happen before entering the mutation
         // queue: a drained refresh persists through that queue, so
         // waiting for it from inside would deadlock.
-        reconnectingAccountIDs.insert(id)
+        acquireReconnectLeases(for: [id])
         await waitForRefreshesToSettle(of: [id])
         do {
             try await serializeStateMutation {
@@ -1079,10 +1101,10 @@ public final class AppModel {
                 )
             }
         } catch {
-            reconnectingAccountIDs.remove(id)
+            releaseReconnectLeases(for: [id])
             throw error
         }
-        reconnectingAccountIDs.remove(id)
+        releaseReconnectLeases(for: [id])
         await refreshAccount(id: id)
     }
 
