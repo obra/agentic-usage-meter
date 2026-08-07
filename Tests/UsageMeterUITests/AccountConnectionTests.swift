@@ -1793,3 +1793,75 @@ func removalDuringAReconnectWaitsForTheReconnectToFinish() async throws {
     #expect(await stateStore.state.accounts.isEmpty)
     #expect(adapter.removedProfileIDs == [oldProfileID, newProfileID])
 }
+
+@Test
+@MainActor
+func failedReconnectSaveClearsIndicatorsAbandonedByStaleRefreshes() async throws {
+    let oldProfileID = UUID()
+    let organizationID = UUID()
+    let siblingOrganizationID = UUID()
+    let reconnecting = SubscriptionAccount(
+        provider: .claude,
+        displayName: "Personal",
+        displayOrder: 0,
+        claudeProfileID: oldProfileID,
+        claudeOrganizationID: organizationID,
+    )
+    let sibling = SubscriptionAccount(
+        provider: .claude,
+        displayName: "Team",
+        displayOrder: 1,
+        claudeProfileID: oldProfileID,
+        claudeOrganizationID: siblingOrganizationID,
+    )
+    let adapter = GatedClaudeAdapter()
+    let stateStore = GatedAppStateStore(state: .empty)
+    let model = AppModel(
+        stateStore: stateStore,
+        credentialStore: TestCredentialStore(),
+        adapters: [adapter],
+        now: { Date(timeIntervalSince1970: 2_000_000_000) },
+    )
+    await model.start()
+    try await model.connectClaudeAccounts([
+        (account: reconnecting, snapshot: nil),
+        (account: sibling, snapshot: nil),
+    ])
+
+    let staleRefresh = Task { @MainActor in
+        await model.refreshAccount(id: sibling.id)
+    }
+    await adapter.waitUntilFetching()
+
+    let replacement = SubscriptionAccount(
+        id: reconnecting.id,
+        provider: .claude,
+        displayName: "Personal",
+        displayOrder: 0,
+        claudeProfileID: UUID(),
+        claudeOrganizationID: organizationID,
+    )
+    stateStore.gateNextSave = true
+    stateStore.failNextSave = true
+    let reconnect = Task { @MainActor in
+        try await model.reconnectClaudeAccount(
+            id: reconnecting.id,
+            replacement: replacement,
+            qualifiedOrganizationIDs: [
+                organizationID,
+                siblingOrganizationID,
+            ],
+        )
+    }
+    await stateStore.waitUntilSaveGated()
+
+    adapter.releaseGate()
+    await staleRefresh.value
+    stateStore.releaseSaveGate()
+    await #expect(throws: (any Error).self) {
+        try await reconnect.value
+    }
+
+    let siblingState = model.accounts.first { $0.id == sibling.id }
+    #expect(siblingState?.isRefreshing == false)
+}

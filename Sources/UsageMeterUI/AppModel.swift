@@ -625,6 +625,14 @@ public final class AppModel {
             try await stateStore.save(nextState)
         } catch {
             refreshers = previousRefreshers
+            // A refresh that bailed against the swapped refreshers
+            // during the failed save left its indicator set with
+            // nobody to clear it.
+            for affectedID in affectedAccountIDs {
+                updateAccount(id: affectedID) {
+                    $0.isRefreshing = false
+                }
+            }
             throw error
         }
         persistedState = nextState
