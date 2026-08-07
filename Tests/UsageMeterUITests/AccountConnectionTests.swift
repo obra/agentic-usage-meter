@@ -2096,8 +2096,10 @@ private final class StaleCredentialWritingAdapter: ProviderAccountAdapter {
     }
 
     func removeAuthentication(
-        for _: SubscriptionAccount,
-    ) async throws {}
+        for account: SubscriptionAccount,
+    ) async throws {
+        try await credentialStore.delete(for: account.id)
+    }
 
     func waitUntilFetching() async {
         await withCheckedContinuation { continuation in
@@ -2241,4 +2243,123 @@ func overlappingReconnectsKeepBlockingRefreshesUntilBothFinish() async throws {
     #expect(adapter.totalFetchCount == fetchesBeforeRefresh)
 
     try await secondReconnect.value
+}
+
+@Test
+@MainActor
+func coalescedRefreshesDrainFullyBeforeACredentialReconnect() async throws {
+    let account = SubscriptionAccount(
+        provider: .codex,
+        displayName: "Codex",
+        displayOrder: 0,
+    )
+    let credentials = TestCredentialStore()
+    let adapter = GatedClaudeAdapter(provider: .codex)
+    let clock = MutableClock(Date(timeIntervalSince1970: 2_000_000_000))
+    let stateStore = TestAppStateStore(state: .empty)
+    let model = AppModel(
+        stateStore: stateStore,
+        credentialStore: credentials,
+        adapters: [adapter],
+        now: { clock.date },
+    )
+    await model.start()
+    adapter.gateFetches = false
+    adapter.ungatedFetchesSucceed = true
+    try await model.connectAccount(
+        account,
+        credential: ProviderCredential.codex(
+            OAuthCredential(
+                accessToken: "original-token",
+                accountID: "codex-account",
+            ),
+        ),
+    )
+
+    clock.date = clock.date.addingTimeInterval(700)
+    adapter.gateFetches = true
+    let firstRefresh = Task { @MainActor in
+        await model.refreshAccount(id: account.id)
+    }
+    await adapter.waitUntilFetching()
+    let secondRefresh = Task { @MainActor in
+        await model.refreshAccount(id: account.id)
+    }
+    for _ in 0 ..< 10 {
+        await Task.yield()
+    }
+
+    let reconnect = Task { @MainActor in
+        try await model.reconnectAccount(
+            id: account.id,
+            credential: ProviderCredential.codex(
+                OAuthCredential(
+                    accessToken: "reconnected-token",
+                    accountID: "codex-account",
+                ),
+            ),
+        )
+    }
+    for _ in 0 ..< 10 {
+        await Task.yield()
+    }
+    adapter.releaseGate()
+    adapter.gateFetches = false
+    await firstRefresh.value
+    await secondRefresh.value
+    try await reconnect.value
+
+    let persisted = await stateStore.state
+        .refreshStates[account.id]
+    #expect(persisted?.requiresReauthentication != true)
+}
+
+@Test
+@MainActor
+func removalDrainsInFlightRefreshesBeforeDeletingCredentials() async throws {
+    let account = SubscriptionAccount(
+        provider: .codex,
+        displayName: "Codex",
+        displayOrder: 0,
+    )
+    let credentials = TestCredentialStore()
+    let adapter = StaleCredentialWritingAdapter(
+        credentialStore: credentials,
+    )
+    let clock = MutableClock(Date(timeIntervalSince1970: 2_000_000_000))
+    let model = AppModel(
+        stateStore: TestAppStateStore(state: .empty),
+        credentialStore: credentials,
+        adapters: [adapter],
+        now: { clock.date },
+    )
+    await model.start()
+    try await model.connectAccount(
+        account,
+        credential: ProviderCredential.codex(
+            OAuthCredential(
+                accessToken: "original-token",
+                accountID: "codex-account",
+            ),
+        ),
+    )
+
+    clock.date = clock.date.addingTimeInterval(700)
+    let staleRefresh = Task { @MainActor in
+        await model.refreshAccount(id: account.id)
+    }
+    await adapter.waitUntilFetching()
+
+    let removal = Task { @MainActor in
+        try await model.removeAccount(id: account.id)
+    }
+    for _ in 0 ..< 20 {
+        await Task.yield()
+    }
+    adapter.releaseGate()
+    await staleRefresh.value
+    try await removal.value
+
+    #expect(model.accounts.isEmpty)
+    #expect(await credentials.loadCredential(for: account.id) == nil)
 }

@@ -315,10 +315,17 @@ public final class AppModel {
         else {
             return
         }
+        // One in-flight refresh per account: a second caller joins it
+        // instead of replacing the tracked task, so draining waits for
+        // every caller's work.
+        if let active = activeRefreshes[id] {
+            await active.task.value
+            return
+        }
 
-        // Reconnects wait for refreshes already in flight so a stale
-        // fetch cannot write rotated credentials or refresh state over
-        // the replacement.
+        // Reconnects and removals wait for refreshes already in
+        // flight so a stale fetch cannot write rotated credentials or
+        // refresh state over the replacement.
         let refreshToken = UUID()
         let refresh = Task { @MainActor in
             await self.performRefresh(
@@ -473,6 +480,11 @@ public final class AppModel {
     }
 
     public func removeAccount(id: UUID) async throws {
+        acquireReconnectLeases(for: [id])
+        defer {
+            releaseReconnectLeases(for: [id])
+        }
+        await waitForRefreshesToSettle(of: [id])
         try await serializeStateMutation {
             try await self.performAccountRemoval(id: id)
         }
