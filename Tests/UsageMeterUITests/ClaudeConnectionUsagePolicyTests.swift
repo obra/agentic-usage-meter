@@ -524,6 +524,25 @@ struct ClaudeConnectionUsagePolicyTests {
         await model.cancel()
     }
 
+
+    @Test
+    func qualificationScheduledBeforeACancellationNeverRuns() async throws {
+        let model = try await makeModel(
+            organizationsJSON: singleOrganizationJSON,
+            usageBodies: [Self.zeroUsage],
+        )
+
+        // The login callback captures the generation when it schedules
+        // qualification; work scheduled before a cancellation carries
+        // the stale generation and must do nothing.
+        await model.qualifyLogin(
+            authenticatedCookies: [Self.sessionCookie],
+            generation: -1,
+        )
+
+        #expect(model.phase == .idle)
+    }
+
     private var singleOrganizationJSON: String {
         #"[{"uuid":"\#(organizationID.uuidString.lowercased())","name":"Personal","capabilities":["chat","claude_max"]}]"#
     }

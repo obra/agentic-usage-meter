@@ -395,10 +395,15 @@ public final class ClaudeConnectionModel {
             onAuthenticated: {
                 [weak self] _,
                     cookies in
-                self?.authenticatedCookies = cookies
+                guard let self else {
+                    return
+                }
+                self.authenticatedCookies = cookies
+                let generation = self.qualificationGeneration
                 Task { @MainActor [weak self] in
                     await self?.qualifyLogin(
                         authenticatedCookies: cookies,
+                        generation: generation,
                     )
                 }
             },
@@ -409,8 +414,16 @@ public final class ClaudeConnectionModel {
 
     func qualifyLogin(
         authenticatedCookies: [HTTPCookie],
+        generation scheduledGeneration: Int? = nil,
     ) async {
-        let generation = qualificationGeneration
+        // Work scheduled before a cancellation or restart carries the
+        // generation from scheduling time and must not touch the new
+        // flow's state.
+        let generation =
+            scheduledGeneration ?? qualificationGeneration
+        guard generation == qualificationGeneration else {
+            return
+        }
         self.authenticatedCookies = authenticatedCookies
         phase = .loadingOrganizations
         let usageClient = usageClient.authenticated(
