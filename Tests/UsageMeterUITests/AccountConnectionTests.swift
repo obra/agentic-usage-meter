@@ -1596,3 +1596,53 @@ func refreshesAreBlockedWhileTheirAccountsReconnect() async throws {
     let persisted = await stateStore.state.refreshStates[sibling.id]
     #expect(persisted?.requiresReauthentication != true)
 }
+
+@Test
+@MainActor
+func concurrentSiblingRemovalsCleanUpTheSharedProfileExactlyOnce() async throws {
+    let profileID = UUID()
+    let first = SubscriptionAccount(
+        provider: .claude,
+        displayName: "Personal",
+        displayOrder: 0,
+        claudeProfileID: profileID,
+        claudeOrganizationID: UUID(),
+    )
+    let second = SubscriptionAccount(
+        provider: .claude,
+        displayName: "Team",
+        displayOrder: 1,
+        claudeProfileID: profileID,
+        claudeOrganizationID: UUID(),
+    )
+    let profileRemover = TestClaudeProfileRemover()
+    let stateStore = GatedAppStateStore(
+        state: PersistedAppState(
+            accounts: [first, second],
+            snapshots: [:],
+        ),
+    )
+    let model = AppModel(
+        stateStore: stateStore,
+        credentialStore: TestCredentialStore(),
+        adapters: [profileRemover],
+        now: { Date(timeIntervalSince1970: 2_000_000_000) },
+    )
+    await model.start()
+
+    stateStore.gateNextSave = true
+    let firstRemoval = Task { @MainActor in
+        try await model.removeAccount(id: first.id)
+    }
+    await stateStore.waitUntilSaveGated()
+    let secondRemoval = Task { @MainActor in
+        try await model.removeAccount(id: second.id)
+    }
+    stateStore.releaseSaveGate()
+    try await firstRemoval.value
+    try await secondRemoval.value
+
+    #expect(model.accounts.isEmpty)
+    #expect(await stateStore.state.accounts.isEmpty)
+    #expect(profileRemover.removedProfileIDs == [profileID])
+}

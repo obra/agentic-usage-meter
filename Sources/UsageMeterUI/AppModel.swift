@@ -95,6 +95,7 @@ public final class AppModel {
     // profile pointers and refreshers cross the transaction's awaits
     // in mixed states.
     private var reconnectingAccountIDs: Set<UUID> = []
+    private var activeRemoval: Task<Void, any Error>?
 
     public init(
         stateStore: any AppStatePersisting,
@@ -351,7 +352,20 @@ public final class AppModel {
         try? await stateStore.save(persistedState)
     }
 
+    // Removals run one at a time: two interleaved sibling removals
+    // could each observe the other still present, both skip the
+    // shared-profile cleanup, and save conflicting states.
     public func removeAccount(id: UUID) async throws {
+        let previousRemoval = activeRemoval
+        let removal = Task { @MainActor in
+            _ = try? await previousRemoval?.value
+            try await self.performAccountRemoval(id: id)
+        }
+        activeRemoval = removal
+        try await removal.value
+    }
+
+    private func performAccountRemoval(id: UUID) async throws {
         guard
             let account = accounts.first(
                 where: { $0.id == id },

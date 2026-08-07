@@ -325,6 +325,40 @@ struct ClaudeConnectionUsagePolicyTests {
         #expect(model.profileID != provisionalProfileID)
     }
 
+
+    @Test
+    func cancellingDuringTheBatchSaveKeepsTheProfile() async throws {
+        var removedProfileIDs: [UUID] = []
+        let stateStore = GatedAppStateStore(state: .empty)
+        let (model, appModel) = try await makeModelReturningAppModel(
+            organizationsJSON: multiOrganizationJSON,
+            usageBodies: [Self.zeroUsage, Self.zeroUsage],
+            removeProfile: { removedProfileIDs.append($0) },
+            stateStore: stateStore,
+        )
+
+        await model.qualifyLogin(
+            authenticatedCookies: [Self.sessionCookie],
+        )
+        await model.confirmOrganizationSelection()
+
+        stateStore.gateNextSave = true
+        let save = Task { @MainActor in
+            await model.saveSelectedOrganizations()
+        }
+        await stateStore.waitUntilSaveGated()
+
+        await model.cancel()
+        #expect(removedProfileIDs.isEmpty)
+
+        stateStore.releaseSaveGate()
+        await save.value
+
+        #expect(model.phase == .complete)
+        #expect(appModel.accounts.count == 2)
+        #expect(removedProfileIDs.isEmpty)
+    }
+
     private var singleOrganizationJSON: String {
         #"[{"uuid":"\#(organizationID.uuidString.lowercased())","name":"Personal","capabilities":["chat","claude_max"]}]"#
     }
@@ -362,12 +396,13 @@ struct ClaudeConnectionUsagePolicyTests {
         reconnectingAccount: SubscriptionAccount? = nil,
         removeProfile: @escaping @MainActor @Sendable (UUID) async throws
             -> Void = { _ in },
+        stateStore: (any AppStatePersisting)? = nil,
     ) async throws -> (
         model: ClaudeConnectionModel,
         appModel: AppModel
     ) {
         let appModel = AppModel(
-            stateStore: TestAppStateStore(
+            stateStore: stateStore ?? TestAppStateStore(
                 state: PersistedAppState(
                     accounts: existingAccounts,
                     snapshots: [:],

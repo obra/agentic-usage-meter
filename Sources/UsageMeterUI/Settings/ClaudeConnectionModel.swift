@@ -206,6 +206,8 @@ public final class ClaudeConnectionModel {
     @ObservationIgnored
     private var didSave = false
     @ObservationIgnored
+    private var isSaving = false
+    @ObservationIgnored
     private var didRemoveProfile = false
 
     public init(
@@ -280,6 +282,10 @@ public final class ClaudeConnectionModel {
         }
 
         phase = .saving
+        isSaving = true
+        defer {
+            isSaving = false
+        }
         do {
             let replacement = SubscriptionAccount(
                 id: accountID,
@@ -322,7 +328,9 @@ public final class ClaudeConnectionModel {
     }
 
     public func cancel() async {
-        guard !didSave, !didRemoveProfile else {
+        // A save that is still writing may yet succeed; deleting the
+        // profile out from under it would break the saved accounts.
+        guard !didSave, !didRemoveProfile, !isSaving else {
             return
         }
 
@@ -535,6 +543,10 @@ public final class ClaudeConnectionModel {
         }
 
         phase = .saving
+        isSaving = true
+        defer {
+            isSaving = false
+        }
         let firstDisplayOrder = appModel.accounts.count {
             $0.account.provider == .claude
         }

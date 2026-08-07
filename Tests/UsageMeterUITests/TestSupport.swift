@@ -259,3 +259,48 @@ final class TestClaudeProfileRemover: ProviderAccountAdapter {
         remove(profileID)
     }
 }
+
+@MainActor
+final class GatedAppStateStore: AppStatePersisting {
+    private let inner: TestAppStateStore
+    private var saveGate: CheckedContinuation<Void, Never>?
+    private var waitingForSave: CheckedContinuation<Void, Never>?
+    var gateNextSave = false
+
+    init(state: PersistedAppState) {
+        inner = TestAppStateStore(state: state)
+    }
+
+    var state: PersistedAppState {
+        get async {
+            await inner.state
+        }
+    }
+
+    func load() async throws -> PersistedAppState {
+        try await inner.load()
+    }
+
+    func save(_ state: PersistedAppState) async throws {
+        if gateNextSave {
+            gateNextSave = false
+            waitingForSave?.resume()
+            waitingForSave = nil
+            await withCheckedContinuation { continuation in
+                saveGate = continuation
+            }
+        }
+        try await inner.save(state)
+    }
+
+    func waitUntilSaveGated() async {
+        await withCheckedContinuation { continuation in
+            waitingForSave = continuation
+        }
+    }
+
+    func releaseSaveGate() {
+        saveGate?.resume()
+        saveGate = nil
+    }
+}
