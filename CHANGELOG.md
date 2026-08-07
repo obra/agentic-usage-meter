@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- A Claude login that belongs to several chat-capable organizations now
+  offers a checkbox list at connection time and creates one account per
+  selected organization, all sharing the login's browser session.
+
+### Fixed
+
+- Reconnecting a Claude account now validates against the account's
+  own organization instead of silently rebinding to the login's first
+  organization, and repairs sibling accounts from the same login when
+  their organizations are present.
+- Refreshes, reconnects, and removals no longer race each other:
+  in-flight refreshes finish before reconnects or removals touch
+  shared state, and all persisted-state writes go through one
+  serialized queue so concurrent operations cannot revert each other
+  on disk.
+
 ## 0.2.3 - 2026-08-06
 
 ### Changed
