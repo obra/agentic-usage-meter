@@ -529,20 +529,14 @@ public final class AppModel {
         }
         nextState.snapshots[id] = snapshot
         nextState.refreshStates[id] = refreshState
-        try await stateStore.save(nextState)
 
-        let oldProfileStillReferenced =
-            nextState.accounts.contains {
-                $0.claudeProfileID == existingProfileID
-            }
-        if existingProfileID != replacementProfileID,
-           !oldProfileStillReferenced
-        {
-            try? await adapter.removeAuthentication(for: existing)
-        }
-
+        // Refreshers swap before the first suspension so a refresh
+        // finishing while this method awaits fails its currency check
+        // instead of persisting pre-reconnect state over the
+        // migration; the persisted state commits before the profile
+        // cleanup await for the same reason.
         let now = now
-        persistedState = nextState
+        let previousRefreshers = refreshers
         refreshers[id] = AccountRefresher(
             minimumInterval: refreshPolicy.minimumProviderInterval,
             state: refreshState,
@@ -558,6 +552,26 @@ public final class AppModel {
                 persistedState.snapshots[siblingID],
                 now: { now() },
             )
+        }
+        do {
+            try await stateStore.save(nextState)
+        } catch {
+            refreshers = previousRefreshers
+            throw error
+        }
+        persistedState = nextState
+
+        let oldProfileStillReferenced =
+            nextState.accounts.contains {
+                $0.claudeProfileID == existingProfileID
+            }
+        if existingProfileID != replacementProfileID,
+           !oldProfileStillReferenced
+        {
+            try? await adapter.removeAuthentication(for: existing)
+        }
+
+        for siblingID in migratedSiblingIDs {
             updateAccount(id: siblingID) {
                 $0.account.claudeProfileID =
                     replacementProfileID

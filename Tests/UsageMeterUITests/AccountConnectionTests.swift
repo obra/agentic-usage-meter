@@ -1340,9 +1340,34 @@ private final class GatedClaudeAdapter: ProviderAccountAdapter {
         throw ProviderClientError.reauthenticationRequired
     }
 
+    private var removalGate: CheckedContinuation<Void, Never>?
+    private var waitingForRemoval: CheckedContinuation<Void, Never>?
+    var gateNextRemoval = false
+
     func removeAuthentication(
         for _: SubscriptionAccount,
-    ) async throws {}
+    ) async throws {
+        guard gateNextRemoval else {
+            return
+        }
+        gateNextRemoval = false
+        waitingForRemoval?.resume()
+        waitingForRemoval = nil
+        await withCheckedContinuation { continuation in
+            removalGate = continuation
+        }
+    }
+
+    func waitUntilRemovalGated() async {
+        await withCheckedContinuation { continuation in
+            waitingForRemoval = continuation
+        }
+    }
+
+    func releaseRemovalGate() {
+        removalGate?.resume()
+        removalGate = nil
+    }
 
     func waitUntilFetching() async {
         await withCheckedContinuation { continuation in
@@ -1421,4 +1446,80 @@ func staleRefreshCannotUndoAReconnectMigration() async throws {
     #expect(siblingState?.isRefreshing == false)
     let persisted = await stateStore.state.refreshStates[sibling.id]
     #expect(persisted?.requiresReauthentication != true)
+}
+
+@Test
+@MainActor
+func staleRefreshCannotRevertAReconnectMidSave() async throws {
+    let oldProfileID = UUID()
+    let newProfileID = UUID()
+    let organizationID = UUID()
+    let siblingOrganizationID = UUID()
+    let reconnecting = SubscriptionAccount(
+        provider: .claude,
+        displayName: "Personal",
+        displayOrder: 0,
+        claudeProfileID: oldProfileID,
+        claudeOrganizationID: organizationID,
+    )
+    let sibling = SubscriptionAccount(
+        provider: .claude,
+        displayName: "Team",
+        displayOrder: 1,
+        claudeProfileID: oldProfileID,
+        claudeOrganizationID: siblingOrganizationID,
+    )
+    let adapter = GatedClaudeAdapter()
+    let stateStore = TestAppStateStore(state: .empty)
+    let model = AppModel(
+        stateStore: stateStore,
+        credentialStore: TestCredentialStore(),
+        adapters: [adapter],
+        now: { Date(timeIntervalSince1970: 2_000_000_000) },
+    )
+    await model.start()
+    try await model.connectClaudeAccounts([
+        (account: reconnecting, snapshot: nil),
+        (account: sibling, snapshot: nil),
+    ])
+
+    let staleRefresh = Task { @MainActor in
+        await model.refreshAccount(id: sibling.id)
+    }
+    await adapter.waitUntilFetching()
+
+    let replacement = SubscriptionAccount(
+        id: reconnecting.id,
+        provider: .claude,
+        displayName: "Personal",
+        displayOrder: 0,
+        claudeProfileID: newProfileID,
+        claudeOrganizationID: organizationID,
+    )
+    adapter.gateNextRemoval = true
+    let reconnect = Task { @MainActor in
+        try await model.reconnectClaudeAccount(
+            id: reconnecting.id,
+            replacement: replacement,
+            qualifiedOrganizationIDs: [
+                organizationID,
+                siblingOrganizationID,
+            ],
+        )
+    }
+    await adapter.waitUntilRemovalGated()
+
+    adapter.releaseGate()
+    await staleRefresh.value
+    adapter.releaseRemovalGate()
+    try await reconnect.value
+
+    let persistedAccounts = await stateStore.state.accounts
+    #expect(
+        persistedAccounts.map(\.claudeProfileID)
+            == [newProfileID, newProfileID],
+    )
+    let persistedSibling = await stateStore.state
+        .refreshStates[sibling.id]
+    #expect(persistedSibling?.requiresReauthentication != true)
 }
