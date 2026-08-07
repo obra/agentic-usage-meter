@@ -1531,6 +1531,88 @@ func staleRefreshCannotRevertAReconnectMidSave() async throws {
 
 @Test
 @MainActor
+func staleRefreshOfAnExcludedSiblingIsDiscardedAfterReconnect() async throws {
+    let oldProfileID = UUID()
+    let newProfileID = UUID()
+    let organizationID = UUID()
+    let reconnecting = SubscriptionAccount(
+        provider: .claude,
+        displayName: "Personal",
+        displayOrder: 0,
+        claudeProfileID: oldProfileID,
+        claudeOrganizationID: organizationID,
+    )
+    let excludedSibling = SubscriptionAccount(
+        provider: .claude,
+        displayName: "Team",
+        displayOrder: 1,
+        claudeProfileID: oldProfileID,
+        claudeOrganizationID: UUID(),
+    )
+    let adapter = GatedClaudeAdapter()
+    let stateStore = TestAppStateStore(state: .empty)
+    let model = AppModel(
+        stateStore: stateStore,
+        credentialStore: TestCredentialStore(),
+        adapters: [adapter],
+        now: { Date(timeIntervalSince1970: 2_000_000_000) },
+    )
+    await model.start()
+    let siblingSnapshot = UsageSnapshot(
+        accountID: excludedSibling.id,
+        fetchedAt: Date(timeIntervalSince1970: 1_999_999_000),
+        windows: [
+            makeTestWindow(
+                id: "weekly",
+                resetAt: Date(timeIntervalSince1970: 2_000_100_000),
+                consumedFraction: 0.2,
+            ),
+        ],
+    )
+    try await model.connectClaudeAccounts([
+        (account: reconnecting, snapshot: nil),
+        (account: excludedSibling, snapshot: siblingSnapshot),
+    ])
+
+    let staleRefresh = Task { @MainActor in
+        await model.refreshAccount(id: excludedSibling.id)
+    }
+    await adapter.waitUntilFetching()
+
+    let replacement = SubscriptionAccount(
+        id: reconnecting.id,
+        provider: .claude,
+        displayName: "Personal",
+        displayOrder: 0,
+        claudeProfileID: newProfileID,
+        claudeOrganizationID: organizationID,
+    )
+    try await model.reconnectClaudeAccount(
+        id: reconnecting.id,
+        replacement: replacement,
+        qualifiedOrganizationIDs: [organizationID],
+    )
+
+    adapter.releaseGate()
+    await staleRefresh.value
+
+    let siblingState = model.accounts.first {
+        $0.id == excludedSibling.id
+    }
+    #expect(siblingState?.error == nil)
+    #expect(siblingState?.account.claudeProfileID == oldProfileID)
+    let persisted = await stateStore.state
+        .refreshStates[excludedSibling.id]
+    #expect(persisted?.requiresReauthentication != true)
+    let persistedAccounts = await stateStore.state.accounts
+    #expect(
+        persistedAccounts.map(\.claudeProfileID)
+            == [newProfileID, oldProfileID],
+    )
+}
+
+@Test
+@MainActor
 func refreshesAreBlockedWhileTheirAccountsReconnect() async throws {
     let oldProfileID = UUID()
     let newProfileID = UUID()

@@ -208,6 +208,8 @@ public final class ClaudeConnectionModel {
     @ObservationIgnored
     private var isSaving = false
     @ObservationIgnored
+    private var pendingCancellation = false
+    @ObservationIgnored
     private var didRemoveProfile = false
 
     public init(
@@ -283,9 +285,6 @@ public final class ClaudeConnectionModel {
 
         phase = .saving
         isSaving = true
-        defer {
-            isSaving = false
-        }
         do {
             let replacement = SubscriptionAccount(
                 id: accountID,
@@ -323,17 +322,28 @@ public final class ClaudeConnectionModel {
             phase = .failed(
                 "Claude account could not be saved.",
             )
+            await finishSaveAttempt()
             throw error
         }
+        await finishSaveAttempt()
     }
 
     public func cancel() async {
+        guard !didSave, !didRemoveProfile else {
+            return
+        }
         // A save that is still writing may yet succeed; deleting the
         // profile out from under it would break the saved accounts.
-        guard !didSave, !didRemoveProfile, !isSaving else {
+        // The cancellation runs after the save, if the save fails.
+        if isSaving {
+            pendingCancellation = true
             return
         }
 
+        await performCancellation()
+    }
+
+    private func performCancellation() async {
         pendingConnection = nil
         authenticatedCookies = nil
         if let loginSession {
@@ -345,6 +355,16 @@ public final class ClaudeConnectionModel {
         didRemoveProfile = true
         webView = nil
         phase = .idle
+    }
+
+    private func finishSaveAttempt() async {
+        isSaving = false
+        if pendingCancellation {
+            pendingCancellation = false
+            if !didSave {
+                await performCancellation()
+            }
+        }
     }
 
     private func startInteractiveLogin() {
@@ -544,9 +564,6 @@ public final class ClaudeConnectionModel {
 
         phase = .saving
         isSaving = true
-        defer {
-            isSaving = false
-        }
         let firstDisplayOrder = appModel.accounts.count {
             $0.account.provider == .claude
         }
@@ -574,11 +591,13 @@ public final class ClaudeConnectionModel {
             phase = .failed(
                 "Claude accounts could not be saved.",
             )
+            await finishSaveAttempt()
             return
         }
         didSave = true
         pendingSelection = []
         phase = .complete
+        await finishSaveAttempt()
     }
 
     private func qualifySingle(

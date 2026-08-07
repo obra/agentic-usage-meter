@@ -281,6 +281,8 @@ final class GatedAppStateStore: AppStatePersisting {
         try await inner.load()
     }
 
+    var failNextSave = false
+
     func save(_ state: PersistedAppState) async throws {
         if gateNextSave {
             gateNextSave = false
@@ -289,6 +291,10 @@ final class GatedAppStateStore: AppStatePersisting {
             await withCheckedContinuation { continuation in
                 saveGate = continuation
             }
+        }
+        if failNextSave {
+            failNextSave = false
+            throw CocoaError(.fileWriteUnknown)
         }
         try await inner.save(state)
     }

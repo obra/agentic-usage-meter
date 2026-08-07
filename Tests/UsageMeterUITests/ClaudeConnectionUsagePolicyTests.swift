@@ -359,6 +359,40 @@ struct ClaudeConnectionUsagePolicyTests {
         #expect(removedProfileIDs.isEmpty)
     }
 
+
+    @Test
+    func cancellingDuringAFailingSaveStillCleansUpTheProfile() async throws {
+        var removedProfileIDs: [UUID] = []
+        let stateStore = GatedAppStateStore(state: .empty)
+        let (model, appModel) = try await makeModelReturningAppModel(
+            organizationsJSON: multiOrganizationJSON,
+            usageBodies: [Self.zeroUsage, Self.zeroUsage],
+            removeProfile: { removedProfileIDs.append($0) },
+            stateStore: stateStore,
+        )
+
+        await model.qualifyLogin(
+            authenticatedCookies: [Self.sessionCookie],
+        )
+        await model.confirmOrganizationSelection()
+
+        stateStore.gateNextSave = true
+        stateStore.failNextSave = true
+        let save = Task { @MainActor in
+            await model.saveSelectedOrganizations()
+        }
+        await stateStore.waitUntilSaveGated()
+
+        await model.cancel()
+        #expect(removedProfileIDs.isEmpty)
+
+        stateStore.releaseSaveGate()
+        await save.value
+
+        #expect(removedProfileIDs.count == 1)
+        #expect(appModel.accounts.isEmpty)
+    }
+
     private var singleOrganizationJSON: String {
         #"[{"uuid":"\#(organizationID.uuidString.lowercased())","name":"Personal","capabilities":["chat","claude_max"]}]"#
     }

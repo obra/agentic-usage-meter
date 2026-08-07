@@ -576,13 +576,22 @@ public final class AppModel {
             lastGoodSnapshot: snapshot,
             now: { now() },
         )
-        for siblingID in migratedSiblingIDs {
-            refreshers[siblingID] = AccountRefresher(
+        // Every account sharing the old profile gets a replacement
+        // refresher so refreshes already in flight fail their currency
+        // check instead of persisting pre-reconnect state; siblings
+        // the new login does not include keep their persisted refresh
+        // state.
+        for affectedID in affectedAccountIDs where affectedID != id {
+            let migrated = migratedSiblingIDs.contains(affectedID)
+            refreshers[affectedID] = AccountRefresher(
                 minimumInterval:
                 refreshPolicy.minimumProviderInterval,
-                state: .initial,
+                state: migrated
+                    ? .initial
+                    : persistedState.refreshStates[affectedID]
+                    ?? .initial,
                 lastGoodSnapshot:
-                persistedState.snapshots[siblingID],
+                persistedState.snapshots[affectedID],
                 now: { now() },
             )
         }
