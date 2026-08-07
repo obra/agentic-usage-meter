@@ -325,14 +325,15 @@ public final class AppModel {
             }
         }
 
-        updateAccount(id: id) {
-            $0.isRefreshing = false
-        }
         // Reconnect migration replaces an account's refresher; a
         // refresh that started against the old one must not write its
-        // stale authentication and backoff state back over the reset.
+        // stale authentication and backoff state back over the reset,
+        // nor clear a refresh indicator it no longer owns.
         guard refreshers[id] === refresher else {
             return
+        }
+        updateAccount(id: id) {
+            $0.isRefreshing = false
         }
         let refreshedState = await refresher.refreshState()
         guard refreshers[id] === refresher else {
@@ -562,6 +563,7 @@ public final class AppModel {
                     replacementProfileID
                 $0.error = nil
                 $0.nextEligibleAt = nil
+                $0.isRefreshing = false
             }
         }
         updateAccount(id: id) {
@@ -570,6 +572,7 @@ public final class AppModel {
             $0.error =
                 snapshot == nil ? .temporarilyUnavailable : nil
             $0.nextEligibleAt = nil
+            $0.isRefreshing = false
         }
         accounts.sort(by: viewStateComesBefore)
     }
