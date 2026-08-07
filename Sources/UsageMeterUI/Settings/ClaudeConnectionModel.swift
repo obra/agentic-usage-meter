@@ -300,9 +300,7 @@ public final class ClaudeConnectionModel {
                 pendingConnection.organizationName,
                 displayOrder:
                 reconnectingAccount?.displayOrder
-                    ?? appModel.accounts.count {
-                        $0.account.provider == .claude
-                    },
+                    ?? appModel.nextDisplayOrder(for: .claude),
                 claudeProfileID: profileID,
                 claudeOrganizationID:
                 pendingConnection.organizationID,
@@ -590,9 +588,9 @@ public final class ClaudeConnectionModel {
 
         phase = .saving
         isSaving = true
-        let firstDisplayOrder = appModel.accounts.count {
-            $0.account.provider == .claude
-        }
+        let firstDisplayOrder = appModel.nextDisplayOrder(
+            for: .claude,
+        )
         let connections = pendingSelection.enumerated().map {
             offset,
                 connection in

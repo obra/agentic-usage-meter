@@ -24,6 +24,7 @@ public struct ClaudeConnectionView: View {
     private let model: ClaudeConnectionModel
     private let onComplete: () -> Void
     @State private var displayName: String
+    @State private var isPresented = true
 
     public init(
         model: ClaudeConnectionModel,
@@ -86,6 +87,7 @@ public struct ClaudeConnectionView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onDisappear {
+            isPresented = false
             Task {
                 await model.cancel()
             }
@@ -221,7 +223,9 @@ public struct ClaudeConnectionView: View {
             ) {
                 Task {
                     await model.saveSelectedOrganizations()
-                    if model.phase == .complete {
+                    // A save finishing after the view went away must
+                    // not dismiss whatever replaced it.
+                    if model.phase == .complete, isPresented {
                         onComplete()
                     }
                 }
@@ -264,7 +268,9 @@ public struct ClaudeConnectionView: View {
                 try await model.save(
                     displayName: displayName,
                 )
-                onComplete()
+                if isPresented {
+                    onComplete()
+                }
             } catch {
                 return
             }

@@ -119,6 +119,18 @@ public final class AppModel {
         self.now = now
     }
 
+    // Orders can have gaps after removals, so counting accounts can
+    // duplicate an existing order; new accounts go after the maximum.
+    public func nextDisplayOrder(for provider: Provider) -> Int {
+        (
+            accounts
+                .filter { $0.account.provider == provider }
+                .map(\.account.displayOrder)
+                .max()
+                .map { $0 + 1 }
+        ) ?? 0
+    }
+
     public var menuBarSummary: MenuBarSummary {
         let tightest = UsageSummary.tightestWindow(
             in: accounts.compactMap(\.snapshot),
