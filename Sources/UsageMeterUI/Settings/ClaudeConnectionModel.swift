@@ -596,9 +596,6 @@ public final class ClaudeConnectionModel {
 
         phase = .saving
         isSaving = true
-        let firstDisplayOrder = appModel.nextDisplayOrder(
-            for: .claude,
-        )
         let connections = pendingSelection.enumerated().map {
             offset,
                 connection in
@@ -609,7 +606,7 @@ public final class ClaudeConnectionModel {
                     displayName: connection.organizationName,
                     authenticatedIdentity:
                     connection.organizationName,
-                    displayOrder: firstDisplayOrder + offset,
+                    displayOrder: offset,
                     claudeProfileID: profileID,
                     claudeOrganizationID:
                     connection.organizationID,

@@ -282,6 +282,11 @@ final class GatedAppStateStore: AppStatePersisting {
     }
 
     var failNextSave = false
+    // Gates the first save whose state matches, immune to unrelated
+    // saves consuming the gate or races with waitUntilSaveGated.
+    var gateWhen: (@MainActor (PersistedAppState) -> Bool)?
+    private var didGate = false
+    private var failGatedSave = false
 
     func save(_ state: PersistedAppState) async throws {
         if gateNextSave {
@@ -290,6 +295,18 @@ final class GatedAppStateStore: AppStatePersisting {
             waitingForSave = nil
             await withCheckedContinuation { continuation in
                 saveGate = continuation
+            }
+        } else if let gateWhen, gateWhen(state) {
+            self.gateWhen = nil
+            didGate = true
+            waitingForSave?.resume()
+            waitingForSave = nil
+            await withCheckedContinuation { continuation in
+                saveGate = continuation
+            }
+            if failGatedSave {
+                failGatedSave = false
+                throw CocoaError(.fileWriteUnknown)
             }
         }
         if failNextSave {
@@ -300,12 +317,16 @@ final class GatedAppStateStore: AppStatePersisting {
     }
 
     func waitUntilSaveGated() async {
+        guard !didGate else {
+            return
+        }
         await withCheckedContinuation { continuation in
             waitingForSave = continuation
         }
     }
 
-    func releaseSaveGate() {
+    func releaseSaveGate(failing: Bool = false) {
+        failGatedSave = failing
         saveGate?.resume()
         saveGate = nil
     }

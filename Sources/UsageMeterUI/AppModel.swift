@@ -95,6 +95,8 @@ public final class AppModel {
     // profile pointers and refreshers cross the transaction's awaits
     // in mixed states.
     private var reconnectingAccountIDs: Set<UUID> = []
+    private var activeRefreshes:
+        [UUID: (token: UUID, task: Task<Void, Never>)] = [:]
     private var accountMutation: Task<Void, any Error>?
 
     public init(
@@ -313,6 +315,42 @@ public final class AppModel {
             return
         }
 
+        // Reconnects wait for refreshes already in flight so a stale
+        // fetch cannot write rotated credentials or refresh state over
+        // the replacement.
+        let refreshToken = UUID()
+        let refresh = Task { @MainActor in
+            await self.performRefresh(
+                id: id,
+                account: account,
+                refresher: refresher
+            )
+        }
+        activeRefreshes[id] = (token: refreshToken, task: refresh)
+        await refresh.value
+        if activeRefreshes[id]?.token == refreshToken {
+            activeRefreshes[id] = nil
+        }
+    }
+
+    private func waitForRefreshesToSettle<IDs: Sequence<UUID>>(
+        of accountIDs: IDs
+    ) async {
+        for accountID in accountIDs {
+            while let active = activeRefreshes[accountID] {
+                await active.task.value
+                if activeRefreshes[accountID]?.token == active.token {
+                    activeRefreshes[accountID] = nil
+                }
+            }
+        }
+    }
+
+    private func performRefresh(
+        id: UUID,
+        account: SubscriptionAccount,
+        refresher: AccountRefresher
+    ) async {
         updateAccount(id: id) {
             $0.isRefreshing = true
         }
@@ -482,6 +520,19 @@ public final class AppModel {
             snapshot: UsageSnapshot?
         )]
     ) async throws {
+        // Orders allocate inside the serialized mutation so
+        // concurrent saves cannot compute the same maximum.
+        let firstDisplayOrder = nextDisplayOrder(for: .claude)
+        let connections = connections.enumerated().map {
+            offset,
+                connection in
+            var account = connection.account
+            account.displayOrder = firstDisplayOrder + offset
+            return (
+                account: account,
+                snapshot: connection.snapshot
+            )
+        }
         var connectedIDs = Set(accounts.map(\.id))
         for connection in connections {
             guard
@@ -550,6 +601,29 @@ public final class AppModel {
         snapshot: UsageSnapshot? = nil,
         qualifiedOrganizationIDs: Set<UUID> = []
     ) async throws {
+        // Blocking and draining happen before entering the mutation
+        // queue: a drained refresh persists through that queue, so
+        // waiting for it from inside would deadlock.
+        let sharedProfileID = accounts.first {
+            $0.id == id
+        }?.account.claudeProfileID
+        let affectedAccountIDs = Set(
+            accounts
+                .filter {
+                    $0.id == id
+                        || (
+                            sharedProfileID != nil
+                                && $0.account.claudeProfileID
+                                == sharedProfileID
+                        )
+                }
+                .map(\.id),
+        )
+        reconnectingAccountIDs.formUnion(affectedAccountIDs)
+        defer {
+            reconnectingAccountIDs.subtract(affectedAccountIDs)
+        }
+        await waitForRefreshesToSettle(of: affectedAccountIDs)
         try await serializeStateMutation {
             try await self.performClaudeReconnect(
                 id: id,
@@ -598,11 +672,6 @@ public final class AppModel {
                 }
                 .map(\.id),
         )
-        reconnectingAccountIDs.formUnion(affectedAccountIDs)
-        defer {
-            reconnectingAccountIDs.subtract(affectedAccountIDs)
-        }
-
         let refreshState =
             snapshot.map {
                 AccountRefreshState(
@@ -996,13 +1065,24 @@ public final class AppModel {
         credential: Credential,
         authenticatedIdentity: String? = nil
     ) async throws {
-        try await serializeStateMutation {
-            try await self.performCredentialReconnect(
-                id: id,
-                credential: credential,
-                authenticatedIdentity: authenticatedIdentity
-            )
+        // Blocking and draining happen before entering the mutation
+        // queue: a drained refresh persists through that queue, so
+        // waiting for it from inside would deadlock.
+        reconnectingAccountIDs.insert(id)
+        await waitForRefreshesToSettle(of: [id])
+        do {
+            try await serializeStateMutation {
+                try await self.performCredentialReconnect(
+                    id: id,
+                    credential: credential,
+                    authenticatedIdentity: authenticatedIdentity
+                )
+            }
+        } catch {
+            reconnectingAccountIDs.remove(id)
+            throw error
         }
+        reconnectingAccountIDs.remove(id)
         await refreshAccount(id: id)
     }
 

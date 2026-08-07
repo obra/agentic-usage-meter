@@ -1330,6 +1330,9 @@ private final class GatedClaudeAdapter: ProviderAccountAdapter {
 
     var gateFetches = true
     var ungatedFetchesSucceed = false
+    // One-shot: a refresher that retries after the gated failure must
+    // not re-arm the gate with nobody left to release it.
+    private var hasGatedFetch = false
 
     nonisolated init(provider: Provider = .claude) {
         self.provider = provider
@@ -1349,6 +1352,10 @@ private final class GatedClaudeAdapter: ProviderAccountAdapter {
                 windows: [],
             )
         }
+        guard !hasGatedFetch else {
+            throw ProviderClientError.reauthenticationRequired
+        }
+        hasGatedFetch = true
         waitingForGate?.resume()
         waitingForGate = nil
         await withCheckedContinuation { continuation in
@@ -1438,7 +1445,7 @@ func staleRefreshCannotUndoAReconnectMigration() async throws {
         (account: sibling, snapshot: nil),
     ])
 
-    let staleRefresh = Task { @MainActor in
+    let inFlightRefresh = Task { @MainActor in
         await model.refreshAccount(id: sibling.id)
     }
     await adapter.waitUntilFetching()
@@ -1451,17 +1458,22 @@ func staleRefreshCannotUndoAReconnectMigration() async throws {
         claudeProfileID: newProfileID,
         claudeOrganizationID: organizationID,
     )
-    try await model.reconnectClaudeAccount(
-        id: reconnecting.id,
-        replacement: replacement,
-        qualifiedOrganizationIDs: [
-            organizationID,
-            siblingOrganizationID,
-        ],
-    )
-
+    let reconnect = Task { @MainActor in
+        try await model.reconnectClaudeAccount(
+            id: reconnecting.id,
+            replacement: replacement,
+            qualifiedOrganizationIDs: [
+                organizationID,
+                siblingOrganizationID,
+            ],
+        )
+    }
+    for _ in 0 ..< 20 {
+        await Task.yield()
+    }
     adapter.releaseGate()
-    await staleRefresh.value
+    await inFlightRefresh.value
+    try await reconnect.value
 
     let siblingState = model.accounts.first { $0.id == sibling.id }
     #expect(siblingState?.error != .authenticationRequired)
@@ -1505,7 +1517,7 @@ func staleRefreshCannotRevertAReconnectMidSave() async throws {
         (account: sibling, snapshot: nil),
     ])
 
-    let staleRefresh = Task { @MainActor in
+    let inFlightRefresh = Task { @MainActor in
         await model.refreshAccount(id: sibling.id)
     }
     await adapter.waitUntilFetching()
@@ -1529,10 +1541,11 @@ func staleRefreshCannotRevertAReconnectMidSave() async throws {
             ],
         )
     }
-    await adapter.waitUntilRemovalGated()
-
+    // The reconnect drains the in-flight refresh before mutating
+    // anything, so the refresh must finish first.
     adapter.releaseGate()
-    await staleRefresh.value
+    await inFlightRefresh.value
+    await adapter.waitUntilRemovalGated()
     adapter.releaseRemovalGate()
     try await reconnect.value
 
@@ -1591,7 +1604,7 @@ func staleRefreshOfAnExcludedSiblingIsDiscardedAfterReconnect() async throws {
         (account: excludedSibling, snapshot: siblingSnapshot),
     ])
 
-    let staleRefresh = Task { @MainActor in
+    let inFlightRefresh = Task { @MainActor in
         await model.refreshAccount(id: excludedSibling.id)
     }
     await adapter.waitUntilFetching()
@@ -1604,24 +1617,26 @@ func staleRefreshOfAnExcludedSiblingIsDiscardedAfterReconnect() async throws {
         claudeProfileID: newProfileID,
         claudeOrganizationID: organizationID,
     )
-    try await model.reconnectClaudeAccount(
-        id: reconnecting.id,
-        replacement: replacement,
-        qualifiedOrganizationIDs: [organizationID],
-    )
-
+    let reconnect = Task { @MainActor in
+        try await model.reconnectClaudeAccount(
+            id: reconnecting.id,
+            replacement: replacement,
+            qualifiedOrganizationIDs: [organizationID],
+        )
+    }
+    // The reconnect waits for the sibling's refresh; its failure
+    // outcome lands first and the exclusion then leaves the sibling's
+    // own state untouched.
     adapter.releaseGate()
-    await staleRefresh.value
+    await inFlightRefresh.value
+    try await reconnect.value
 
     let siblingState = model.accounts.first {
         $0.id == excludedSibling.id
     }
-    #expect(siblingState?.error != .authenticationRequired)
+    #expect(siblingState?.error == .authenticationRequired)
     #expect(siblingState?.isRefreshing == false)
     #expect(siblingState?.account.claudeProfileID == oldProfileID)
-    let persisted = await stateStore.state
-        .refreshStates[excludedSibling.id]
-    #expect(persisted?.requiresReauthentication != true)
     let persistedAccounts = await stateStore.state.accounts
     #expect(
         persistedAccounts.map(\.claudeProfileID)
@@ -1841,7 +1856,7 @@ func failedReconnectSaveClearsIndicatorsAbandonedByStaleRefreshes() async throws
         (account: sibling, snapshot: nil),
     ])
 
-    let staleRefresh = Task { @MainActor in
+    let inFlightRefresh = Task { @MainActor in
         await model.refreshAccount(id: sibling.id)
     }
     await adapter.waitUntilFetching()
@@ -1854,8 +1869,12 @@ func failedReconnectSaveClearsIndicatorsAbandonedByStaleRefreshes() async throws
         claudeProfileID: UUID(),
         claudeOrganizationID: organizationID,
     )
-    stateStore.gateNextSave = true
-    stateStore.failNextSave = true
+    let replacementProfileID = replacement.claudeProfileID
+    stateStore.gateWhen = { state in
+        state.accounts.contains {
+            $0.claudeProfileID == replacementProfileID
+        }
+    }
     let reconnect = Task { @MainActor in
         try await model.reconnectClaudeAccount(
             id: reconnecting.id,
@@ -1866,11 +1885,13 @@ func failedReconnectSaveClearsIndicatorsAbandonedByStaleRefreshes() async throws
             ],
         )
     }
-    await stateStore.waitUntilSaveGated()
-
+    // The refresh's own persistence saves pre-reconnect state and
+    // passes the predicate gate untouched; only the reconnect's save
+    // carries the replacement profile and gates.
     adapter.releaseGate()
-    await staleRefresh.value
-    stateStore.releaseSaveGate()
+    await inFlightRefresh.value
+    await stateStore.waitUntilSaveGated()
+    stateStore.releaseSaveGate(failing: true)
     await #expect(throws: (any Error).self) {
         try await reconnect.value
     }
@@ -1979,3 +2000,172 @@ func refreshPersistenceWaitsBehindStructuralStateChanges() async throws {
     #expect(codexPersisted?.lastRequestStartedAt == clock.date)
 }
 
+
+@Test
+@MainActor
+func batchConnectAllocatesOrdersFromTheLatestStateInsideTheQueue() async throws {
+    let existing = SubscriptionAccount(
+        provider: .claude,
+        displayName: "Existing",
+        displayOrder: 5,
+        claudeProfileID: UUID(),
+        claudeOrganizationID: UUID(),
+    )
+    let model = AppModel(
+        stateStore: TestAppStateStore(
+            state: PersistedAppState(
+                accounts: [existing],
+                snapshots: [:],
+            ),
+        ),
+        credentialStore: TestCredentialStore(),
+        adapters: [TestClaudeProfileRemover()],
+        now: { Date(timeIntervalSince1970: 2_000_000_000) },
+    )
+    await model.start()
+
+    let profileID = UUID()
+    let first = SubscriptionAccount(
+        provider: .claude,
+        displayName: "Personal",
+        displayOrder: 0,
+        claudeProfileID: profileID,
+        claudeOrganizationID: UUID(),
+    )
+    let second = SubscriptionAccount(
+        provider: .claude,
+        displayName: "Team",
+        displayOrder: 1,
+        claudeProfileID: profileID,
+        claudeOrganizationID: UUID(),
+    )
+    try await model.connectClaudeAccounts([
+        (account: first, snapshot: nil),
+        (account: second, snapshot: nil),
+    ])
+
+    let orders = model.accounts
+        .filter { $0.account.provider == .claude }
+        .sorted { $0.account.displayOrder < $1.account.displayOrder }
+        .map { ($0.account.displayName, $0.account.displayOrder) }
+    #expect(orders.map(\.0) == ["Existing", "Personal", "Team"])
+    #expect(orders.map(\.1) == [5, 6, 7])
+}
+
+@MainActor
+private final class StaleCredentialWritingAdapter: ProviderAccountAdapter {
+    nonisolated let provider = Provider.codex
+    private let credentialStore: TestCredentialStore
+    private var gate: CheckedContinuation<Void, Never>?
+    private var waitingForGate: CheckedContinuation<Void, Never>?
+    private var hasGated = false
+    private var fetchCount = 0
+
+    init(credentialStore: TestCredentialStore) {
+        self.credentialStore = credentialStore
+    }
+
+    func fetchUsage(
+        for account: SubscriptionAccount,
+        now _: Date,
+    ) async throws -> UsageSnapshot {
+        fetchCount += 1
+        guard fetchCount == 2, !hasGated else {
+            throw ProviderClientError.temporaryFailure
+        }
+        hasGated = true
+        waitingForGate?.resume()
+        waitingForGate = nil
+        await withCheckedContinuation { continuation in
+            gate = continuation
+        }
+        // The provider refreshed the old token mid-fetch, exactly how
+        // credential adapters persist rotated credentials.
+        try? await credentialStore.save(
+            ProviderCredential.codex(
+                OAuthCredential(
+                    accessToken: "stale-rotated-token",
+                    accountID: "codex-account",
+                ),
+            ),
+            for: account.id,
+        )
+        throw ProviderClientError.temporaryFailure
+    }
+
+    func removeAuthentication(
+        for _: SubscriptionAccount,
+    ) async throws {}
+
+    func waitUntilFetching() async {
+        await withCheckedContinuation { continuation in
+            waitingForGate = continuation
+        }
+    }
+
+    func releaseGate() {
+        gate?.resume()
+        gate = nil
+    }
+}
+
+@Test
+@MainActor
+func credentialReconnectOutlivesInFlightRefreshCredentialWrites() async throws {
+    let account = SubscriptionAccount(
+        provider: .codex,
+        displayName: "Codex",
+        displayOrder: 0,
+    )
+    let credentials = TestCredentialStore()
+    let adapter = StaleCredentialWritingAdapter(
+        credentialStore: credentials,
+    )
+    let clock = MutableClock(Date(timeIntervalSince1970: 2_000_000_000))
+    let model = AppModel(
+        stateStore: TestAppStateStore(state: .empty),
+        credentialStore: credentials,
+        adapters: [adapter],
+        now: { clock.date },
+    )
+    await model.start()
+    try await model.connectAccount(
+        account,
+        credential: ProviderCredential.codex(
+            OAuthCredential(
+                accessToken: "original-token",
+                accountID: "codex-account",
+            ),
+        ),
+    )
+
+    clock.date = clock.date.addingTimeInterval(700)
+    let staleRefresh = Task { @MainActor in
+        await model.refreshAccount(id: account.id)
+    }
+    await adapter.waitUntilFetching()
+
+    let newCredential = ProviderCredential.codex(
+        OAuthCredential(
+            accessToken: "reconnected-token",
+            accountID: "codex-account",
+        ),
+    )
+    let reconnect = Task { @MainActor in
+        try await model.reconnectAccount(
+            id: account.id,
+            credential: newCredential,
+        )
+    }
+    for _ in 0 ..< 20 {
+        await Task.yield()
+    }
+    adapter.releaseGate()
+    await staleRefresh.value
+    try await reconnect.value
+
+    #expect(
+        await credentials.loadCredential(for: account.id)
+            == newCredential,
+    )
+}
