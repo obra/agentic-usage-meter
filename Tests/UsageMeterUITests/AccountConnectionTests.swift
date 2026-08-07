@@ -1250,3 +1250,74 @@ func batchConnectPersistsAllAccountsOrNone() async throws {
     #expect(model.accounts.map(\.id) == [valid.id])
     #expect(await stateStore.state.accounts.map(\.id) == [valid.id])
 }
+
+@Test
+@MainActor
+func reconnectClearsMigratedSiblingsAuthenticationState() async throws {
+    let oldProfileID = UUID()
+    let newProfileID = UUID()
+    let organizationID = UUID()
+    let siblingOrganizationID = UUID()
+    let reconnecting = SubscriptionAccount(
+        provider: .claude,
+        displayName: "Personal",
+        displayOrder: 0,
+        claudeProfileID: oldProfileID,
+        claudeOrganizationID: organizationID,
+    )
+    let sibling = SubscriptionAccount(
+        provider: .claude,
+        displayName: "Team",
+        displayOrder: 1,
+        claudeProfileID: oldProfileID,
+        claudeOrganizationID: siblingOrganizationID,
+    )
+    let stateStore = TestAppStateStore(
+        state: PersistedAppState(
+            accounts: [reconnecting, sibling],
+            snapshots: [:],
+            refreshStates: [
+                sibling.id: AccountRefreshState(
+                    lastRequestStartedAt:
+                    Date(timeIntervalSince1970: 1_999_999_000),
+                    requiresReauthentication: true,
+                ),
+            ],
+        ),
+    )
+    let model = AppModel(
+        stateStore: stateStore,
+        credentialStore: TestCredentialStore(),
+        adapters: [TestClaudeProfileRemover()],
+        now: { Date(timeIntervalSince1970: 2_000_000_000) },
+    )
+    await model.start()
+    #expect(
+        model.accounts.first { $0.id == sibling.id }?.error
+            == .authenticationRequired,
+    )
+
+    let replacement = SubscriptionAccount(
+        id: reconnecting.id,
+        provider: .claude,
+        displayName: "Personal",
+        displayOrder: 0,
+        claudeProfileID: newProfileID,
+        claudeOrganizationID: organizationID,
+    )
+    try await model.reconnectClaudeAccount(
+        id: reconnecting.id,
+        replacement: replacement,
+        qualifiedOrganizationIDs: [
+            organizationID,
+            siblingOrganizationID,
+        ],
+    )
+
+    let siblingState = model.accounts.first { $0.id == sibling.id }
+    #expect(siblingState?.error == nil)
+    #expect(siblingState?.account.claudeProfileID == newProfileID)
+    let persistedSiblingState = await stateStore.state
+        .refreshStates[sibling.id]
+    #expect(persistedSiblingState?.requiresReauthentication == false)
+}

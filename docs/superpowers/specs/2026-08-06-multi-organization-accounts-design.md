@@ -37,12 +37,13 @@ instead of the first organization. If the new login's organization
 list does not include it, the flow fails and explains that the login
 does not belong to the account's organization.
 
-After a successful reconnect, every other account that shared the old
-profile is re-pointed to the replacement profile — they came from the
-same login, so the new session serves them too. The old profile is
-then deleted once, if the profile actually changed. A sibling whose
-organization is missing from the new login keeps its re-pointed
-profile and surfaces reconnect-required when its refresh fails.
+After a successful reconnect, sibling accounts that shared the old
+profile are re-pointed to the replacement profile only when the new
+login's organization list includes their organization; their
+authentication and backoff state resets with the repaired session. A
+sibling whose organization is missing stays on the old profile, and
+the old profile is deleted only when the profile changed and no
+account references it anymore.
 
 ### Removal
 

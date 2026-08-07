@@ -491,7 +491,10 @@ public final class AppModel {
         // Siblings sharing the old profile move to the replacement
         // session only when the new login includes their organization;
         // the others keep the old profile so reconnecting them cannot
-        // break this account again.
+        // break this account again. Migrated siblings are served by
+        // the repaired session, so their authentication and backoff
+        // state resets with it.
+        var migratedSiblingIDs: [UUID] = []
         for index in nextState.accounts.indices
             where nextState.accounts[index].id != id
             && nextState.accounts[index].claudeProfileID
@@ -501,6 +504,12 @@ public final class AppModel {
         {
             nextState.accounts[index].claudeProfileID =
                 replacementProfileID
+            migratedSiblingIDs.append(
+                nextState.accounts[index].id,
+            )
+        }
+        for siblingID in migratedSiblingIDs {
+            nextState.refreshStates[siblingID] = .initial
         }
         nextState.snapshots[id] = snapshot
         nextState.refreshStates[id] = refreshState
@@ -524,15 +533,21 @@ public final class AppModel {
             lastGoodSnapshot: snapshot,
             now: { now() },
         )
-        for index in accounts.indices
-            where accounts[index].id != id
-            && accounts[index].account.claudeProfileID
-            == existingProfileID
-            && accounts[index].account.claudeOrganizationID
-            .map(qualifiedOrganizationIDs.contains) == true
-        {
-            accounts[index].account.claudeProfileID =
-                replacementProfileID
+        for siblingID in migratedSiblingIDs {
+            refreshers[siblingID] = AccountRefresher(
+                minimumInterval:
+                refreshPolicy.minimumProviderInterval,
+                state: .initial,
+                lastGoodSnapshot:
+                persistedState.snapshots[siblingID],
+                now: { now() },
+            )
+            updateAccount(id: siblingID) {
+                $0.account.claudeProfileID =
+                    replacementProfileID
+                $0.error = nil
+                $0.nextEligibleAt = nil
+            }
         }
         updateAccount(id: id) {
             $0.account = replacement
