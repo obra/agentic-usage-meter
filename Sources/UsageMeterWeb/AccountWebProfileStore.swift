@@ -20,6 +20,19 @@ public final class AccountWebProfileStore {
         dataStore = WKWebsiteDataStore(forIdentifier: accountID)
     }
 
+    // WebKit tears down a store's network-process session
+    // asynchronously with no bounded deadline, and slow machines have
+    // been observed needing several seconds before deletion stops
+    // reporting "in use".
+    static let removalRetryDelays: [Duration] = [
+        .zero,
+        .milliseconds(200),
+        .milliseconds(500),
+        .seconds(1),
+        .seconds(2),
+        .seconds(4),
+    ]
+
     public static func remove(accountID: UUID) async throws {
         weak var initializedStore: WKWebsiteDataStore?
         autoreleasepool {
@@ -42,12 +55,7 @@ public final class AccountWebProfileStore {
         }
 
         var lastError: (any Error)?
-        for delay in [
-            Duration.zero,
-            .milliseconds(200),
-            .milliseconds(500),
-            .seconds(1),
-        ] {
+        for delay in Self.removalRetryDelays {
             if delay != .zero {
                 try await Task.sleep(for: delay)
             }
