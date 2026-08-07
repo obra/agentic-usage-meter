@@ -465,10 +465,10 @@ public final class ClaudeConnectionModel {
                 self.authenticatedCookies = nil
                 qualifiedOrganizationIDs = []
                 try? await removeProfile(profileID)
-                profileID = UUID()
                 guard generation == qualificationGeneration else {
                     return
                 }
+                profileID = UUID()
                 phase = .failed(
                     "This Claude login does not belong to the organization \(reconnectingAccount.displayName) was connected to.",
                 )

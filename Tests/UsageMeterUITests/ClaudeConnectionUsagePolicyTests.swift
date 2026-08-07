@@ -483,6 +483,47 @@ struct ClaudeConnectionUsagePolicyTests {
         #expect(model.phase == .idle)
     }
 
+
+    @Test
+    func staleMismatchCleanupCannotStompARestartedLoginsProfile() async throws {
+        let reconnecting = SubscriptionAccount(
+            provider: .claude,
+            displayName: "Team",
+            displayOrder: 0,
+            claudeProfileID: UUID(),
+            claudeOrganizationID: UUID(),
+        )
+        let gate = AsyncGate()
+        let model = try await makeModel(
+            organizationsJSON: singleOrganizationJSON,
+            usageBodies: [],
+            existingAccounts: [reconnecting],
+            reconnectingAccount: reconnecting,
+            removeProfile: { _ in
+                await gate.waitInside()
+            },
+        )
+
+        let mismatch = Task { @MainActor in
+            await model.qualifyLogin(
+                authenticatedCookies: [Self.sessionCookie],
+            )
+        }
+        await gate.waitUntilEntered()
+
+        await model.cancel()
+        await model.start()
+        let restartedProfileID = model.profileID
+
+        await gate.release()
+        await mismatch.value
+
+        #expect(model.profileID == restartedProfileID)
+        #expect(model.phase == .signingIn)
+
+        await model.cancel()
+    }
+
     private var singleOrganizationJSON: String {
         #"[{"uuid":"\#(organizationID.uuidString.lowercased())","name":"Personal","capabilities":["chat","claude_max"]}]"#
     }
@@ -644,5 +685,41 @@ private actor GatedSecondRequestTransport: HTTPTransport {
     func releaseGate() {
         gate?.resume()
         gate = nil
+    }
+}
+
+
+private actor AsyncGate {
+    private var inside: CheckedContinuation<Void, Never>?
+    private var waiting: CheckedContinuation<Void, Never>?
+    private var entered = false
+
+    private var hasGated = false
+
+    func waitInside() async {
+        guard !hasGated else {
+            return
+        }
+        hasGated = true
+        entered = true
+        waiting?.resume()
+        waiting = nil
+        await withCheckedContinuation { continuation in
+            inside = continuation
+        }
+    }
+
+    func waitUntilEntered() async {
+        guard !entered else {
+            return
+        }
+        await withCheckedContinuation { continuation in
+            waiting = continuation
+        }
+    }
+
+    func release() {
+        inside?.resume()
+        inside = nil
     }
 }
