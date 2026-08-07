@@ -451,6 +451,38 @@ struct ClaudeConnectionUsagePolicyTests {
         #expect(appModel.accounts.isEmpty)
     }
 
+
+    @Test
+    func restartingAfterCancellationBeginsAFreshCancellationLifecycle() async throws {
+        var removedProfileIDs: [UUID] = []
+        let model = try await makeModel(
+            organizationsJSON: "[]",
+            usageResponses: [
+                HTTPResponse(
+                    data: Data(),
+                    statusCode: 500,
+                    headers: [:],
+                ),
+            ],
+            removeProfile: { removedProfileIDs.append($0) },
+        )
+        let firstProfileID = model.profileID
+
+        await model.qualifyLogin(
+            authenticatedCookies: [Self.sessionCookie],
+        )
+        await model.cancel()
+        #expect(removedProfileIDs == [firstProfileID])
+        #expect(model.phase == .idle)
+
+        await model.start()
+        #expect(model.profileID != firstProfileID)
+        #expect(model.phase == .signingIn)
+
+        await model.cancel()
+        #expect(model.phase == .idle)
+    }
+
     private var singleOrganizationJSON: String {
         #"[{"uuid":"\#(organizationID.uuidString.lowercased())","name":"Personal","capabilities":["chat","claude_max"]}]"#
     }
@@ -470,6 +502,8 @@ struct ClaudeConnectionUsagePolicyTests {
         usageResponses: [HTTPResponse] = [],
         existingAccounts: [SubscriptionAccount] = [],
         reconnectingAccount: SubscriptionAccount? = nil,
+        removeProfile: @escaping @MainActor @Sendable (UUID) async throws
+            -> Void = { _ in },
     ) async throws -> ClaudeConnectionModel {
         try await makeModelReturningAppModel(
             organizationsJSON: organizationsJSON,
@@ -477,6 +511,7 @@ struct ClaudeConnectionUsagePolicyTests {
             usageResponses: usageResponses,
             existingAccounts: existingAccounts,
             reconnectingAccount: reconnectingAccount,
+            removeProfile: removeProfile,
         ).model
     }
 

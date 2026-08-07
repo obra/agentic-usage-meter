@@ -242,6 +242,14 @@ public final class ClaudeConnectionModel {
 
     public func start() async {
         qualificationGeneration += 1
+        // Starting over after a cancellation begins a fresh
+        // cancellation lifecycle on a fresh profile; the previous one
+        // was already cleaned up.
+        if didRemoveProfile {
+            profileID = UUID()
+            didRemoveProfile = false
+        }
+        pendingCancellation = false
         pendingConnection = nil
         pendingChoices = []
         pendingSelection = []
