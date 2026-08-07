@@ -1617,6 +1617,7 @@ func staleRefreshOfAnExcludedSiblingIsDiscardedAfterReconnect() async throws {
         $0.id == excludedSibling.id
     }
     #expect(siblingState?.error != .authenticationRequired)
+    #expect(siblingState?.isRefreshing == false)
     #expect(siblingState?.account.claudeProfileID == oldProfileID)
     let persisted = await stateStore.state
         .refreshStates[excludedSibling.id]

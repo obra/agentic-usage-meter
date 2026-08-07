@@ -702,6 +702,14 @@ public final class AppModel {
             try? await adapter.removeAuthentication(for: existing)
         }
 
+        // Refreshers were replaced for every account sharing the old
+        // profile, so any of their in-flight refreshes will bail
+        // without clearing the indicator it set.
+        for affectedID in affectedAccountIDs {
+            updateAccount(id: affectedID) {
+                $0.isRefreshing = false
+            }
+        }
         for siblingID in migratedSiblingIDs {
             updateAccount(id: siblingID) {
                 $0.account.claudeProfileID =
