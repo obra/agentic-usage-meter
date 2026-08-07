@@ -11,166 +11,358 @@ struct ClaudeConnectionUsagePolicyTests {
     private let organizationID = UUID(
         uuidString: "10000000-0000-0000-0000-000000000001",
     )!
+    private let teamOrganizationID = UUID(
+        uuidString: "10000000-0000-0000-0000-000000000002",
+    )!
+
+    private static let zeroUsage =
+        #"{"five_hour":{"utilization":0,"resets_at":null},"seven_day":{"utilization":0,"resets_at":null}}"#
 
     @Test
-    func undecodableUsageFailsTheConnectionInsteadOfSavingIt() async {
-        let client = makeClient(
-            usageResponse: HTTPResponse(
-                data: Data(
-                    #"{"five_hour":null,"seven_day":null}"#.utf8,
-                ),
-                statusCode: 200,
-                headers: [:],
-            ),
+    func undecodableUsageFailsTheConnectionInsteadOfSavingIt() async throws {
+        let model = try await makeModel(
+            organizationsJSON: singleOrganizationJSON,
+            usageBodies: [#"{"five_hour":null,"seven_day":null}"#],
         )
 
-        await #expect(throws: ProviderClientError.unsupportedResponse) {
-            _ = try await ClaudeConnectionModel.qualifyConnection(
-                usageClient: client,
-                accountID: UUID(),
-                profileID: UUID(),
-                retrier: ClaudeFreshSessionRetrier(
-                    maximumAttempts: 1,
-                    sleep: { _ in },
+        await model.qualifyLogin(
+            authenticatedCookies: [Self.sessionCookie],
+        )
+
+        #expect(
+            model.phase
+                == .failed(
+                    "Claude returned a usage response this app does not understand.",
                 ),
-            )
-        }
+        )
     }
 
     @Test
     func transientUsageFailureStillQualifiesWithoutASnapshot() async throws {
-        let client = makeClient(
-            usageResponse: HTTPResponse(
-                data: Data(),
-                statusCode: 500,
-                headers: [:],
-            ),
-        )
-        var sawUsageStage = false
-
-        let connection = try await ClaudeConnectionModel.qualifyConnection(
-            usageClient: client,
-            accountID: UUID(),
-            profileID: UUID(),
-            retrier: ClaudeFreshSessionRetrier(
-                maximumAttempts: 1,
-                sleep: { _ in },
-            ),
-            onUsageStage: {
-                sawUsageStage = true
-            },
+        let model = try await makeModel(
+            organizationsJSON: singleOrganizationJSON,
+            usageResponses: [
+                HTTPResponse(
+                    data: Data(),
+                    statusCode: 500,
+                    headers: [:],
+                ),
+            ],
         )
 
-        #expect(sawUsageStage)
-        #expect(connection.snapshot == nil)
-        #expect(connection.organizationID == organizationID)
-        #expect(connection.organizationName == "Personal")
-        #expect(connection.organizationCount == 1)
+        await model.qualifyLogin(
+            authenticatedCookies: [Self.sessionCookie],
+        )
+
+        #expect(
+            model.phase
+                == .readyToSave(
+                    organizationName: "Personal",
+                    organizationCount: 1,
+                ),
+        )
     }
 
     @Test
     func consoleOrganizationsAreNeverSelected() async throws {
-        let usage = HTTPResponse(
-            data: Data(
-                #"{"five_hour":{"utilization":0,"resets_at":null},"seven_day":{"utilization":0,"resets_at":null}}"#
-                    .utf8,
-            ),
-            statusCode: 200,
-            headers: [:],
-        )
-        let client = makeClient(
-            usageResponse: usage,
+        let model = try await makeModel(
             organizationsJSON: """
             [
               {"uuid":"\(UUID().uuidString.lowercased())","name":"Console","capabilities":["api"]},
               {"uuid":"\(organizationID.uuidString.lowercased())","name":"Personal","capabilities":["chat","claude_max"]}
             ]
             """,
+            usageBodies: [Self.zeroUsage],
         )
 
-        let connection = try await ClaudeConnectionModel.qualifyConnection(
-            usageClient: client,
-            accountID: UUID(),
-            profileID: UUID(),
-            retrier: ClaudeFreshSessionRetrier(
-                maximumAttempts: 1,
-                sleep: { _ in },
-            ),
+        await model.qualifyLogin(
+            authenticatedCookies: [Self.sessionCookie],
         )
 
-        #expect(connection.organizationID == organizationID)
-        #expect(connection.organizationName == "Personal")
-        #expect(connection.organizationCount == 1)
+        #expect(
+            model.phase
+                == .readyToSave(
+                    organizationName: "Personal",
+                    organizationCount: 1,
+                ),
+        )
     }
 
     @Test
-    func accountsWithOnlyConsoleOrganizationsCannotQualify() async {
-        let client = makeClient(
-            usageResponse: HTTPResponse(
-                data: Data(),
-                statusCode: 200,
-                headers: [:],
-            ),
+    func accountsWithOnlyConsoleOrganizationsCannotQualify() async throws {
+        let model = try await makeModel(
             organizationsJSON: """
             [{"uuid":"\(UUID().uuidString.lowercased())","name":"Console","capabilities":["api"]}]
             """,
+            usageBodies: [],
         )
 
-        await #expect(throws: ProviderClientError.unsupportedResponse) {
-            _ = try await ClaudeConnectionModel.qualifyConnection(
-                usageClient: client,
-                accountID: UUID(),
-                profileID: UUID(),
-                retrier: ClaudeFreshSessionRetrier(
-                    maximumAttempts: 1,
-                    sleep: { _ in },
+        await model.qualifyLogin(
+            authenticatedCookies: [Self.sessionCookie],
+        )
+
+        #expect(
+            model.phase
+                == .failed(
+                    "Claude returned an organizations response this app does not understand.",
                 ),
+        )
+    }
+
+    @Test
+    func multipleChatOrganizationsOfferAChoice() async throws {
+        let connectedAccount = SubscriptionAccount(
+            provider: .claude,
+            displayName: "Existing Personal",
+            displayOrder: 0,
+            claudeProfileID: UUID(),
+            claudeOrganizationID: organizationID,
+        )
+        let model = try await makeModel(
+            organizationsJSON: multiOrganizationJSON,
+            usageBodies: [],
+            existingAccounts: [connectedAccount],
+        )
+
+        await model.qualifyLogin(
+            authenticatedCookies: [Self.sessionCookie],
+        )
+
+        guard
+            case let .choosingOrganizations(choices) = model.phase
+        else {
+            Issue.record("Expected a choosing phase, got \(model.phase)")
+            return
+        }
+        #expect(choices.map(\.organization.name) == ["Personal", "Acme Team"])
+        #expect(
+            choices.map(\.connectedAccountName)
+                == ["Existing Personal", nil],
+        )
+        #expect(choices.map(\.isSelected) == [false, true])
+    }
+
+    @Test
+    func selectionCreatesOneAccountPerOrganizationSharingTheProfile() async throws {
+        let (model, appModel) = try await makeModelReturningAppModel(
+            organizationsJSON: multiOrganizationJSON,
+            usageBodies: [Self.zeroUsage, Self.zeroUsage],
+        )
+
+        await model.qualifyLogin(
+            authenticatedCookies: [Self.sessionCookie],
+        )
+        await model.confirmOrganizationSelection()
+
+        guard
+            case let .readyToSaveOrganizations(connections) = model.phase
+        else {
+            Issue.record("Expected save-ready phase, got \(model.phase)")
+            return
+        }
+        #expect(
+            connections.map(\.organizationName)
+                == ["Personal", "Acme Team"],
+        )
+        #expect(connections.allSatisfy { $0.snapshot != nil })
+
+        await model.saveSelectedOrganizations()
+
+        #expect(model.phase == .complete)
+        #expect(
+            appModel.accounts.map(\.account.displayName)
+                == ["Personal", "Acme Team"],
+        )
+        let profileIDs = Set(
+            appModel.accounts.compactMap(\.account.claudeProfileID),
+        )
+        #expect(profileIDs.count == 1)
+        #expect(
+            appModel.accounts.map(\.account.claudeOrganizationID)
+                == [organizationID, teamOrganizationID],
+        )
+    }
+
+    @Test
+    func decliningAnOrganizationOnlyConnectsTheSelectedOnes() async throws {
+        let (model, appModel) = try await makeModelReturningAppModel(
+            organizationsJSON: multiOrganizationJSON,
+            usageBodies: [Self.zeroUsage],
+        )
+
+        await model.qualifyLogin(
+            authenticatedCookies: [Self.sessionCookie],
+        )
+        model.toggleOrganization(id: organizationID)
+        await model.confirmOrganizationSelection()
+        await model.saveSelectedOrganizations()
+
+        #expect(model.phase == .complete)
+        #expect(
+            appModel.accounts.map(\.account.claudeOrganizationID)
+                == [teamOrganizationID],
+        )
+    }
+
+    @Test
+    func reconnectQualifiesAgainstTheStoredOrganization() async throws {
+        let reconnecting = SubscriptionAccount(
+            provider: .claude,
+            displayName: "Team",
+            displayOrder: 0,
+            claudeProfileID: UUID(),
+            claudeOrganizationID: teamOrganizationID,
+        )
+        let model = try await makeModel(
+            organizationsJSON: multiOrganizationJSON,
+            usageBodies: [Self.zeroUsage],
+            existingAccounts: [reconnecting],
+            reconnectingAccount: reconnecting,
+        )
+
+        await model.qualifyLogin(
+            authenticatedCookies: [Self.sessionCookie],
+        )
+
+        #expect(
+            model.phase
+                == .readyToSave(
+                    organizationName: "Acme Team",
+                    organizationCount: 2,
+                ),
+        )
+    }
+
+    @Test
+    func reconnectFailsWhenTheLoginLacksTheStoredOrganization() async throws {
+        let reconnecting = SubscriptionAccount(
+            provider: .claude,
+            displayName: "Team",
+            displayOrder: 0,
+            claudeProfileID: UUID(),
+            claudeOrganizationID: UUID(),
+        )
+        let model = try await makeModel(
+            organizationsJSON: singleOrganizationJSON,
+            usageBodies: [],
+            existingAccounts: [reconnecting],
+            reconnectingAccount: reconnecting,
+        )
+
+        await model.qualifyLogin(
+            authenticatedCookies: [Self.sessionCookie],
+        )
+
+        #expect(
+            model.phase
+                == .failed(
+                    "This Claude login does not belong to the organization Team was connected to.",
+                ),
+        )
+    }
+
+    private var singleOrganizationJSON: String {
+        #"[{"uuid":"\#(organizationID.uuidString.lowercased())","name":"Personal","capabilities":["chat","claude_max"]}]"#
+    }
+
+    private var multiOrganizationJSON: String {
+        """
+        [
+          {"uuid":"\(organizationID.uuidString.lowercased())","name":"Personal","capabilities":["chat","claude_max"]},
+          {"uuid":"\(teamOrganizationID.uuidString.lowercased())","name":"Acme Team","capabilities":["chat","claude_team"]}
+        ]
+        """
+    }
+
+    private func makeModel(
+        organizationsJSON: String,
+        usageBodies: [String] = [],
+        usageResponses: [HTTPResponse] = [],
+        existingAccounts: [SubscriptionAccount] = [],
+        reconnectingAccount: SubscriptionAccount? = nil,
+    ) async throws -> ClaudeConnectionModel {
+        try await makeModelReturningAppModel(
+            organizationsJSON: organizationsJSON,
+            usageBodies: usageBodies,
+            usageResponses: usageResponses,
+            existingAccounts: existingAccounts,
+            reconnectingAccount: reconnectingAccount,
+        ).model
+    }
+
+    private func makeModelReturningAppModel(
+        organizationsJSON: String,
+        usageBodies: [String] = [],
+        usageResponses: [HTTPResponse] = [],
+        existingAccounts: [SubscriptionAccount] = [],
+        reconnectingAccount: SubscriptionAccount? = nil,
+    ) async throws -> (
+        model: ClaudeConnectionModel,
+        appModel: AppModel
+    ) {
+        let appModel = AppModel(
+            stateStore: TestAppStateStore(
+                state: PersistedAppState(
+                    accounts: existingAccounts,
+                    snapshots: [:],
+                ),
+            ),
+            credentialStore: TestCredentialStore(),
+            adapters: [TestClaudeProfileRemover()],
+            now: { Date(timeIntervalSince1970: 2_000_000_000) },
+        )
+        await appModel.start()
+
+        var responses = [
+            HTTPResponse(
+                data: Data(organizationsJSON.utf8),
+                statusCode: 200,
+                headers: [:],
+            ),
+        ]
+        responses += usageBodies.map {
+            HTTPResponse(
+                data: Data($0.utf8),
+                statusCode: 200,
+                headers: [:],
             )
         }
+        responses += usageResponses
+
+        let model = ClaudeConnectionModel(
+            appModel: appModel,
+            reconnectingAccount: reconnectingAccount,
+            removeProfile: { _ in },
+            usageClient: ClaudeWebUsageClient(
+                transport: SequencedHTTPTransport(
+                    responses: responses,
+                ),
+                cookieSource: NoCookiesSource(),
+            ),
+        )
+        return (model, appModel)
     }
 
-    private func makeClient(
-        usageResponse: HTTPResponse,
-        organizationsJSON: String? = nil,
-    ) -> ClaudeWebUsageClient {
-        let organizations = HTTPResponse(
-            data: Data(
-                (
-                    organizationsJSON
-                        ?? #"[{"uuid":"\#(organizationID.uuidString.lowercased())","name":"Personal","capabilities":["chat","claude_max"]}]"#
-                ).utf8,
-            ),
-            statusCode: 200,
-            headers: [:],
-        )
-        return ClaudeWebUsageClient(
-            transport: SequencedHTTPTransport(
-                responses: [organizations, usageResponse],
-            ),
-            cookieSource: SessionOnlyCookieSource(),
-        )
-    }
+    private static let sessionCookie = HTTPCookie(
+        properties: [
+            .domain: ".claude.ai",
+            .path: "/",
+            .name: "sessionKey",
+            .value: "session",
+            .secure: "TRUE",
+        ],
+    )!
 }
 
 @MainActor
-private final class SessionOnlyCookieSource:
+private final class NoCookiesSource:
     ClaudeWebCookieSource
 {
     func cookies(
         for _: URL,
         profileID _: UUID,
     ) async -> [HTTPCookie] {
-        [
-            HTTPCookie(
-                properties: [
-                    .domain: ".claude.ai",
-                    .path: "/",
-                    .name: "sessionKey",
-                    .value: "session",
-                    .secure: "TRUE",
-                ],
-            )!,
-        ]
+        []
     }
 }
 

@@ -60,6 +60,8 @@ public struct ClaudeConnectionView: View {
                 }
             case .loadingOrganizations:
                 ProgressView("Loading Claude organizations…")
+            case let .choosingOrganizations(choices):
+                organizationChoiceForm(choices)
             case .loadingUsage:
                 ProgressView("Validating Claude usage…")
             case let .readyToSave(
@@ -72,6 +74,8 @@ public struct ClaudeConnectionView: View {
                         ? "\(organizationName) (first of \(organizationCount) organizations)"
                         : organizationName,
                 )
+            case let .readyToSaveOrganizations(connections):
+                selectionSaveForm(connections)
             case .saving:
                 ProgressView("Saving Claude account…")
             case .complete:
@@ -147,6 +151,82 @@ public struct ClaudeConnectionView: View {
                     in: .whitespacesAndNewlines,
                 ).isEmpty,
             )
+        }
+        .formStyle(.grouped)
+        .frame(maxWidth: 500)
+    }
+
+    private func organizationChoiceForm(
+        _ choices: [ClaudeOrganizationChoice],
+    ) -> some View {
+        Form {
+            Section {
+                ForEach(choices) { choice in
+                    Toggle(
+                        isOn: Binding(
+                            get: { choice.isSelected },
+                            set: { _ in
+                                model.toggleOrganization(
+                                    id: choice.id,
+                                )
+                            },
+                        ),
+                    ) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(choice.organization.name)
+                            if let connectedAccountName =
+                                choice.connectedAccountName
+                            {
+                                Text(
+                                    "Already connected as \(connectedAccountName)",
+                                )
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+            } header: {
+                Text("This login belongs to several organizations")
+            } footer: {
+                Text(
+                    "Each selected organization becomes its own account.",
+                )
+            }
+            Button("Continue") {
+                Task {
+                    await model.confirmOrganizationSelection()
+                }
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(!choices.contains(where: \.isSelected))
+        }
+        .formStyle(.grouped)
+        .frame(maxWidth: 500)
+    }
+
+    private func selectionSaveForm(
+        _ connections: [ClaudeOrganizationConnection],
+    ) -> some View {
+        Form {
+            Section("New accounts") {
+                ForEach(connections) { connection in
+                    Text(connection.organizationName)
+                }
+            }
+            Button(
+                connections.count == 1
+                    ? "Save Account"
+                    : "Save \(connections.count) Accounts",
+            ) {
+                Task {
+                    await model.saveSelectedOrganizations()
+                    if model.phase == .complete {
+                        onComplete()
+                    }
+                }
+            }
+            .buttonStyle(.borderedProminent)
         }
         .formStyle(.grouped)
         .frame(maxWidth: 500)

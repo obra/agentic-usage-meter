@@ -26,15 +26,46 @@ public struct ClaudeQualifiedConnection:
     }
 }
 
+public struct ClaudeOrganizationChoice:
+    Equatable,
+    Identifiable,
+    Sendable
+{
+    public let organization: ClaudeOrganization
+    public let connectedAccountName: String?
+    public var isSelected: Bool
+
+    public var id: UUID {
+        organization.id
+    }
+}
+
+public struct ClaudeOrganizationConnection:
+    Equatable,
+    Identifiable,
+    Sendable
+{
+    public let accountID: UUID
+    public let organizationID: UUID
+    public let organizationName: String
+    public let snapshot: UsageSnapshot?
+
+    public var id: UUID {
+        accountID
+    }
+}
+
 public enum ClaudeConnectionPhase: Equatable, Sendable {
     case idle
     case signingIn
     case loadingOrganizations
+    case choosingOrganizations([ClaudeOrganizationChoice])
     case loadingUsage
     case readyToSave(
         organizationName: String,
         organizationCount: Int,
     )
+    case readyToSaveOrganizations([ClaudeOrganizationConnection])
     case saving
     case complete
     case failed(String)
@@ -165,6 +196,10 @@ public final class ClaudeConnectionModel {
     @ObservationIgnored
     private var pendingConnection: ClaudeQualifiedConnection?
     @ObservationIgnored
+    private var pendingChoices: [ClaudeOrganizationChoice] = []
+    @ObservationIgnored
+    private var pendingSelection: [ClaudeOrganizationConnection] = []
+    @ObservationIgnored
     private var authenticatedCookies: [HTTPCookie]?
     @ObservationIgnored
     private var didSave = false
@@ -196,6 +231,8 @@ public final class ClaudeConnectionModel {
 
     public func start() async {
         pendingConnection = nil
+        pendingChoices = []
+        pendingSelection = []
         authenticatedCookies = nil
         didSave = false
         if let qualify {
@@ -221,7 +258,7 @@ public final class ClaudeConnectionModel {
 
     public func retry() async {
         if let authenticatedCookies {
-            loadQualifiedAccount(
+            await qualifyLogin(
                 authenticatedCookies:
                 authenticatedCookies,
             )
@@ -313,53 +350,277 @@ public final class ClaudeConnectionModel {
                 [weak self] _,
                     cookies in
                 self?.authenticatedCookies = cookies
-                self?.loadQualifiedAccount(
-                    authenticatedCookies: cookies,
-                )
+                Task { @MainActor [weak self] in
+                    await self?.qualifyLogin(
+                        authenticatedCookies: cookies,
+                    )
+                }
             },
         )
         loginSession = session
         webView = session.start()
     }
 
-    private func loadQualifiedAccount(
+    func qualifyLogin(
         authenticatedCookies: [HTTPCookie],
-    ) {
+    ) async {
+        self.authenticatedCookies = authenticatedCookies
         phase = .loadingOrganizations
         let usageClient = usageClient.authenticated(
             with: authenticatedCookies,
         )
         let retrier = ClaudeFreshSessionRetrier()
 
-        Task { @MainActor [weak self] in
-            guard let self else {
+        let organizations: [ClaudeOrganization]
+        do {
+            organizations =
+                ClaudeOrganizationSelection.qualified(
+                    from: try await retrier.run {
+                        try await usageClient.organizations(
+                            profileID: profileID,
+                        )
+                    },
+                )
+        } catch {
+            phase = .failed(
+                ClaudeConnectionFailureDescription
+                    .message(
+                        for: error,
+                        stage: .organizations,
+                    ),
+            )
+            return
+        }
+
+        if let reconnectingAccount {
+            guard
+                let organization = organizations.first(
+                    where: {
+                        $0.id
+                            == reconnectingAccount
+                            .claudeOrganizationID
+                    },
+                )
+            else {
+                closeLogin()
+                phase = .failed(
+                    "This Claude login does not belong to the organization \(reconnectingAccount.displayName) was connected to.",
+                )
                 return
             }
-            var stage = ClaudeConnectionStage.organizations
+            await qualifySingle(
+                organization: organization,
+                organizationCount: organizations.count,
+                usageClient: usageClient,
+                retrier: retrier,
+            )
+            return
+        }
+
+        guard let organization = organizations.first else {
+            phase = .failed(
+                ClaudeConnectionFailureDescription
+                    .message(
+                        for: ProviderClientError
+                            .unsupportedResponse,
+                        stage: .organizations,
+                    ),
+            )
+            return
+        }
+        if organizations.count == 1 {
+            await qualifySingle(
+                organization: organization,
+                organizationCount: 1,
+                usageClient: usageClient,
+                retrier: retrier,
+            )
+            return
+        }
+
+        closeLogin()
+        pendingChoices = Self.organizationChoices(
+            from: organizations,
+            existingAccounts: appModel.accounts.map(\.account),
+        )
+        phase = .choosingOrganizations(pendingChoices)
+    }
+
+    public func toggleOrganization(id: UUID) {
+        guard
+            case .choosingOrganizations = phase,
+            let index = pendingChoices.firstIndex(
+                where: { $0.id == id },
+            )
+        else {
+            return
+        }
+        pendingChoices[index].isSelected.toggle()
+        phase = .choosingOrganizations(pendingChoices)
+    }
+
+    public func confirmOrganizationSelection() async {
+        guard case .choosingOrganizations = phase else {
+            return
+        }
+        let selected = pendingChoices.filter(\.isSelected)
+        guard
+            !selected.isEmpty,
+            let authenticatedCookies
+        else {
+            return
+        }
+
+        phase = .loadingUsage
+        let usageClient = usageClient.authenticated(
+            with: authenticatedCookies,
+        )
+        let retrier = ClaudeFreshSessionRetrier()
+        var connections: [ClaudeOrganizationConnection] = []
+        for choice in selected {
+            let accountID = UUID()
+            let snapshot: UsageSnapshot?
             do {
-                let connection = try await Self.qualifyConnection(
+                snapshot = try await Self.loadSnapshot(
                     usageClient: usageClient,
                     accountID: accountID,
                     profileID: profileID,
+                    organizationID: choice.organization.id,
                     retrier: retrier,
-                    onUsageStage: {
-                        stage = .usage
-                        self.phase = .loadingUsage
-                    },
                 )
-                loginSession?.close()
-                loginSession = nil
-                webView = nil
-                try accept(connection)
             } catch {
                 phase = .failed(
                     ClaudeConnectionFailureDescription
                         .message(
                             for: error,
-                            stage: stage,
+                            stage: .usage,
                         ),
                 )
+                return
             }
+            connections.append(
+                ClaudeOrganizationConnection(
+                    accountID: accountID,
+                    organizationID: choice.organization.id,
+                    organizationName: choice.organization.name,
+                    snapshot: snapshot,
+                ),
+            )
+        }
+        pendingSelection = connections
+        phase = .readyToSaveOrganizations(connections)
+    }
+
+    public func saveSelectedOrganizations() async {
+        guard
+            case .readyToSaveOrganizations = phase,
+            !pendingSelection.isEmpty
+        else {
+            return
+        }
+
+        phase = .saving
+        for connection in pendingSelection {
+            let account = SubscriptionAccount(
+                id: connection.accountID,
+                provider: .claude,
+                displayName: connection.organizationName,
+                authenticatedIdentity:
+                connection.organizationName,
+                displayOrder: appModel.accounts.count {
+                    $0.account.provider == .claude
+                },
+                claudeProfileID: profileID,
+                claudeOrganizationID:
+                connection.organizationID,
+            )
+            do {
+                try await appModel.connectClaudeAccount(
+                    account,
+                    snapshot: connection.snapshot,
+                )
+            } catch {
+                phase = .failed(
+                    "Claude account could not be saved.",
+                )
+                return
+            }
+            didSave = true
+        }
+        pendingSelection = []
+        phase = .complete
+    }
+
+    private func qualifySingle(
+        organization: ClaudeOrganization,
+        organizationCount: Int,
+        usageClient: ClaudeWebUsageClient,
+        retrier: ClaudeFreshSessionRetrier,
+    ) async {
+        phase = .loadingUsage
+        let snapshot: UsageSnapshot?
+        do {
+            snapshot = try await Self.loadSnapshot(
+                usageClient: usageClient,
+                accountID: accountID,
+                profileID: profileID,
+                organizationID: organization.id,
+                retrier: retrier,
+            )
+        } catch {
+            phase = .failed(
+                ClaudeConnectionFailureDescription
+                    .message(
+                        for: error,
+                        stage: .usage,
+                    ),
+            )
+            return
+        }
+        closeLogin()
+        do {
+            try accept(
+                ClaudeQualifiedConnection(
+                    organizationID: organization.id,
+                    organizationName: organization.name,
+                    organizationCount: organizationCount,
+                    snapshot: snapshot,
+                ),
+            )
+        } catch {
+            phase = .failed(
+                ClaudeConnectionFailureDescription
+                    .message(
+                        for: error,
+                        stage: .usage,
+                    ),
+            )
+        }
+    }
+
+    private func closeLogin() {
+        loginSession?.close()
+        loginSession = nil
+        webView = nil
+    }
+
+    static func organizationChoices(
+        from organizations: [ClaudeOrganization],
+        existingAccounts: [SubscriptionAccount],
+    ) -> [ClaudeOrganizationChoice] {
+        organizations.map { organization in
+            // A different login can hold its own seat in the same
+            // organization, so already-metered organizations remain
+            // selectable; they just start unchecked.
+            let connectedAccountName = existingAccounts.first {
+                $0.provider == .claude
+                    && $0.claudeOrganizationID == organization.id
+            }?.displayName
+            return ClaudeOrganizationChoice(
+                organization: organization,
+                connectedAccountName: connectedAccountName,
+                isSelected: connectedAccountName == nil,
+            )
         }
     }
 
@@ -367,48 +628,27 @@ public final class ClaudeConnectionModel {
     // so it fails qualification instead of saving an account that can
     // never show data. Transient failures still qualify without a
     // snapshot.
-    static func qualifyConnection(
+    static func loadSnapshot(
         usageClient: ClaudeWebUsageClient,
         accountID: UUID,
         profileID: UUID,
+        organizationID: UUID,
         retrier: ClaudeFreshSessionRetrier,
-        onUsageStage: @MainActor () -> Void = {},
-    ) async throws -> ClaudeQualifiedConnection {
-        let organizations =
-            ClaudeOrganizationSelection.qualified(
-                from: try await retrier.run {
-                    try await usageClient.organizations(
-                        profileID: profileID,
-                    )
-                },
-            )
-        guard let organization = organizations.first else {
-            throw ProviderClientError
-                .unsupportedResponse
-        }
-
-        onUsageStage()
-        let snapshot: UsageSnapshot?
+    ) async throws -> UsageSnapshot? {
         do {
-            snapshot = try await retrier.run {
+            return try await retrier.run {
                 try await usageClient.fetchUsage(
                     accountID: accountID,
                     profileID: profileID,
-                    organizationID: organization.id,
+                    organizationID: organizationID,
                     now: Date(),
                 )
             }
         } catch ProviderClientError.unsupportedResponse {
             throw ProviderClientError.unsupportedResponse
         } catch {
-            snapshot = nil
+            return nil
         }
-        return ClaudeQualifiedConnection(
-            organizationID: organization.id,
-            organizationName: organization.name,
-            organizationCount: organizations.count,
-            snapshot: snapshot,
-        )
     }
 
     private func accept(
