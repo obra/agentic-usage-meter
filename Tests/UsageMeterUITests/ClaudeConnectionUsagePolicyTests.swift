@@ -294,6 +294,37 @@ struct ClaudeConnectionUsagePolicyTests {
         #expect(model.phase == .signingIn)
     }
 
+    @Test
+    func reconnectMismatchAbandonsTheProvisionalProfileEvenWhenCleanupFails() async throws {
+        let reconnecting = SubscriptionAccount(
+            provider: .claude,
+            displayName: "Team",
+            displayOrder: 0,
+            claudeProfileID: UUID(),
+            claudeOrganizationID: UUID(),
+        )
+        let (model, _) = try await makeModelReturningAppModel(
+            organizationsJSON: singleOrganizationJSON,
+            usageBodies: [],
+            existingAccounts: [reconnecting],
+            reconnectingAccount: reconnecting,
+            removeProfile: { _ in
+                throw ProviderClientError.temporaryFailure
+            },
+        )
+        let provisionalProfileID = model.profileID
+
+        await model.qualifyLogin(
+            authenticatedCookies: [Self.sessionCookie],
+        )
+
+        guard case .failed = model.phase else {
+            Issue.record("Expected failure, got \(model.phase)")
+            return
+        }
+        #expect(model.profileID != provisionalProfileID)
+    }
+
     private var singleOrganizationJSON: String {
         #"[{"uuid":"\#(organizationID.uuidString.lowercased())","name":"Personal","capabilities":["chat","claude_max"]}]"#
     }

@@ -182,7 +182,7 @@ public final class ClaudeConnectionModel {
     @ObservationIgnored
     private let accountID: UUID
     @ObservationIgnored
-    private let profileID: UUID
+    private(set) var profileID: UUID
     @ObservationIgnored
     private let reconnectingAccount: SubscriptionAccount?
     @ObservationIgnored
@@ -412,9 +412,12 @@ public final class ClaudeConnectionModel {
                 // The captured login is deterministically wrong for
                 // this account; retrying must start a fresh sign-in
                 // from a clean profile instead of revalidating it.
+                // Abandoning the provisional profile for a fresh one
+                // keeps that true even when its cleanup fails.
                 self.authenticatedCookies = nil
                 qualifiedOrganizationIDs = []
                 try? await removeProfile(profileID)
+                profileID = UUID()
                 phase = .failed(
                     "This Claude login does not belong to the organization \(reconnectingAccount.displayName) was connected to.",
                 )
