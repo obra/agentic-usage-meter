@@ -342,7 +342,17 @@ public final class AppModel {
         guard let adapter = adaptersByProvider[account.provider] else {
             throw AppModelError.providerUnavailable
         }
-        try await adapter.removeAuthentication(for: account)
+        // Accounts created from one Claude login share a web profile;
+        // authentication data is deleted with the last account using it.
+        let profileIsShared = account.claudeProfileID.map { profileID in
+            accounts.contains {
+                $0.id != id
+                    && $0.account.claudeProfileID == profileID
+            }
+        } ?? false
+        if !profileIsShared {
+            try await adapter.removeAuthentication(for: account)
+        }
 
         var nextState = persistedState
         nextState.accounts.removeAll { $0.id == id }
@@ -444,6 +454,16 @@ public final class AppModel {
             throw AppModelError.accountNotFound
         }
         nextState.accounts[stateIndex] = replacement
+        // Sibling accounts from the same login share the old profile;
+        // the replacement session serves them too.
+        for index in nextState.accounts.indices
+            where nextState.accounts[index].id != id
+            && nextState.accounts[index].claudeProfileID
+            == existingProfileID
+        {
+            nextState.accounts[index].claudeProfileID =
+                replacementProfileID
+        }
         nextState.snapshots[id] = snapshot
         nextState.refreshStates[id] = refreshState
         try await stateStore.save(nextState)
@@ -460,6 +480,14 @@ public final class AppModel {
             lastGoodSnapshot: snapshot,
             now: { now() },
         )
+        for index in accounts.indices
+            where accounts[index].id != id
+            && accounts[index].account.claudeProfileID
+            == existingProfileID
+        {
+            accounts[index].account.claudeProfileID =
+                replacementProfileID
+        }
         updateAccount(id: id) {
             $0.account = replacement
             $0.snapshot = snapshot

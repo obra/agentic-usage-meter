@@ -1048,3 +1048,102 @@ func superGrokConnectionBlocksAnExistingBillingIdentity()
     }
     #expect(appModel.accounts.count == 1)
 }
+
+@Test
+@MainActor
+func sharedProfileSurvivesUntilItsLastAccountIsRemoved() async throws {
+    let profileID = UUID()
+    let first = SubscriptionAccount(
+        provider: .claude,
+        displayName: "Personal",
+        displayOrder: 0,
+        claudeProfileID: profileID,
+        claudeOrganizationID: UUID(),
+    )
+    let second = SubscriptionAccount(
+        provider: .claude,
+        displayName: "Team",
+        displayOrder: 1,
+        claudeProfileID: profileID,
+        claudeOrganizationID: UUID(),
+    )
+    let profileRemover = TestClaudeProfileRemover()
+    let model = AppModel(
+        stateStore: TestAppStateStore(
+            state: PersistedAppState(
+                accounts: [first, second],
+                snapshots: [:],
+            ),
+        ),
+        credentialStore: TestCredentialStore(),
+        adapters: [profileRemover],
+        now: { Date(timeIntervalSince1970: 2_000_000_000) },
+    )
+    await model.start()
+
+    try await model.removeAccount(id: first.id)
+
+    #expect(profileRemover.removedProfileIDs.isEmpty)
+    #expect(model.accounts.map(\.id) == [second.id])
+
+    try await model.removeAccount(id: second.id)
+
+    #expect(profileRemover.removedProfileIDs == [profileID])
+    #expect(model.accounts.isEmpty)
+}
+
+@Test
+@MainActor
+func reconnectRepointsSiblingAccountsToTheReplacementProfile() async throws {
+    let oldProfileID = UUID()
+    let newProfileID = UUID()
+    let organizationID = UUID()
+    let reconnecting = SubscriptionAccount(
+        provider: .claude,
+        displayName: "Personal",
+        displayOrder: 0,
+        claudeProfileID: oldProfileID,
+        claudeOrganizationID: organizationID,
+    )
+    let sibling = SubscriptionAccount(
+        provider: .claude,
+        displayName: "Team",
+        displayOrder: 1,
+        claudeProfileID: oldProfileID,
+        claudeOrganizationID: UUID(),
+    )
+    let profileRemover = TestClaudeProfileRemover()
+    let stateStore = TestAppStateStore(
+        state: PersistedAppState(
+            accounts: [reconnecting, sibling],
+            snapshots: [:],
+        ),
+    )
+    let model = AppModel(
+        stateStore: stateStore,
+        credentialStore: TestCredentialStore(),
+        adapters: [profileRemover],
+        now: { Date(timeIntervalSince1970: 2_000_000_000) },
+    )
+    await model.start()
+
+    let replacement = SubscriptionAccount(
+        id: reconnecting.id,
+        provider: .claude,
+        displayName: "Personal",
+        displayOrder: 0,
+        claudeProfileID: newProfileID,
+        claudeOrganizationID: organizationID,
+    )
+    try await model.reconnectClaudeAccount(
+        id: reconnecting.id,
+        replacement: replacement,
+    )
+
+    let profileIDs = model.accounts.map(\.account.claudeProfileID)
+    #expect(profileIDs == [newProfileID, newProfileID])
+    let persistedProfileIDs = await stateStore.state.accounts
+        .map(\.claudeProfileID)
+    #expect(persistedProfileIDs == [newProfileID, newProfileID])
+    #expect(profileRemover.removedProfileIDs == [oldProfileID])
+}
