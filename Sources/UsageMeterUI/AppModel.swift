@@ -221,6 +221,14 @@ public final class AppModel {
     public func setFloatingWidgetVisible(
         _ isVisible: Bool,
     ) async throws {
+        try await serializeStateMutation {
+            try await self.performSetFloatingWidgetVisible(isVisible)
+        }
+    }
+
+    private func performSetFloatingWidgetVisible(
+        _ isVisible: Bool,
+    ) async throws {
         let previous = isFloatingWidgetVisible
         isFloatingWidgetVisible = isVisible
         persistedState.isFloatingWidgetVisible = isVisible
@@ -236,6 +244,14 @@ public final class AppModel {
     public func setFloatingWidgetPlacement(
         _ placement: FloatingWidgetPlacement,
     ) async throws {
+        try await serializeStateMutation {
+            try await self.performSetFloatingWidgetPlacement(placement)
+        }
+    }
+
+    private func performSetFloatingWidgetPlacement(
+        _ placement: FloatingWidgetPlacement,
+    ) async throws {
         let previous = floatingWidgetPlacement
         floatingWidgetPlacement = placement
         persistedState.floatingWidgetPlacement = placement
@@ -249,6 +265,14 @@ public final class AppModel {
     }
 
     public func toggleUsageSection(
+        _ section: UsageSectionID,
+    ) async throws {
+        try await serializeStateMutation {
+            try await self.performToggleUsageSection(section)
+        }
+    }
+
+    private func performToggleUsageSection(
         _ section: UsageSectionID,
     ) async throws {
         let previous = collapsedUsageSections
@@ -341,22 +365,30 @@ public final class AppModel {
         updateAccount(id: id) {
             $0.isRefreshing = false
         }
-        let refreshedState = await refresher.refreshState()
-        guard refreshers[id] === refresher else {
-            return
+        try? await serializeStateMutation {
+            guard self.refreshers[id] === refresher else {
+                return
+            }
+            let refreshedState = await refresher.refreshState()
+            guard self.refreshers[id] === refresher else {
+                return
+            }
+            self.persistedState.refreshStates[id] = refreshedState
+            if let snapshot = self.accounts.first(
+                where: { $0.id == id },
+            )?.snapshot {
+                self.persistedState.snapshots[id] = snapshot
+            }
+            try await self.stateStore.save(self.persistedState)
         }
-        persistedState.refreshStates[id] = refreshedState
-        if let snapshot = accounts.first(where: { $0.id == id })?.snapshot {
-            persistedState.snapshots[id] = snapshot
-        }
-        try? await stateStore.save(persistedState)
     }
 
-    // Removals and reconnects mutate shared profile ownership across
-    // several suspension points, so they run one at a time: an
-    // interleaved pair could each observe the other's stale state,
-    // clean up the wrong profile, or save conflicting states.
-    private func serializeAccountMutation(
+    // Every persisted-state mutation runs through one serialized
+    // queue. Each writer bases its changes on the state its
+    // predecessors left behind; interleaved writers would otherwise
+    // save stale whole-state copies over each other, reverting
+    // migrations or resurrecting removed accounts on disk.
+    private func serializeStateMutation(
         _ operation: @escaping @MainActor () async throws -> Void
     ) async throws {
         let previous = accountMutation
@@ -369,7 +401,7 @@ public final class AppModel {
     }
 
     public func removeAccount(id: UUID) async throws {
-        try await serializeAccountMutation {
+        try await serializeStateMutation {
             try await self.performAccountRemoval(id: id)
         }
     }
@@ -422,6 +454,17 @@ public final class AppModel {
     // persists or none does, so a failure never leaves an undocumented
     // partial result.
     public func connectClaudeAccounts(
+        _ connections: [(
+            account: SubscriptionAccount,
+            snapshot: UsageSnapshot?
+        )]
+    ) async throws {
+        try await serializeStateMutation {
+            try await self.performConnectClaudeAccounts(connections)
+        }
+    }
+
+    private func performConnectClaudeAccounts(
         _ connections: [(
             account: SubscriptionAccount,
             snapshot: UsageSnapshot?
@@ -495,7 +538,7 @@ public final class AppModel {
         snapshot: UsageSnapshot? = nil,
         qualifiedOrganizationIDs: Set<UUID> = []
     ) async throws {
-        try await serializeAccountMutation {
+        try await serializeStateMutation {
             try await self.performClaudeReconnect(
                 id: id,
                 replacement: replacement,
@@ -675,6 +718,19 @@ public final class AppModel {
         _ account: SubscriptionAccount,
         credential: Credential
     ) async throws {
+        try await serializeStateMutation {
+            try await self.performConnectAccount(
+                account,
+                credential: credential
+            )
+        }
+        await refreshAccount(id: account.id)
+    }
+
+    private func performConnectAccount<Credential: Codable & Sendable>(
+        _ account: SubscriptionAccount,
+        credential: Credential
+    ) async throws {
         guard !accounts.contains(where: { $0.id == account.id }) else {
             throw AppModelError.accountAlreadyExists
         }
@@ -706,7 +762,6 @@ public final class AppModel {
             )
         )
         accounts.sort(by: viewStateComesBefore)
-        await refreshAccount(id: account.id)
     }
 
     public func hasCodexAccount(
@@ -819,6 +874,18 @@ public final class AppModel {
         id: UUID,
         displayName: String,
     ) async throws {
+        try await serializeStateMutation {
+            try await self.performRenameAccount(
+                id: id,
+                displayName: displayName
+            )
+        }
+    }
+
+    private func performRenameAccount(
+        id: UUID,
+        displayName: String,
+    ) async throws {
         let displayName = displayName.trimmingCharacters(
             in: .whitespacesAndNewlines,
         )
@@ -848,6 +915,18 @@ public final class AppModel {
     }
 
     public func reorderAccounts(
+        provider: Provider,
+        orderedIDs: [UUID],
+    ) async throws {
+        try await serializeStateMutation {
+            try await self.performReorderAccounts(
+                provider: provider,
+                orderedIDs: orderedIDs
+            )
+        }
+    }
+
+    private func performReorderAccounts(
         provider: Provider,
         orderedIDs: [UUID],
     ) async throws {
@@ -896,6 +975,23 @@ public final class AppModel {
         id: UUID,
         credential: Credential,
         authenticatedIdentity: String? = nil
+    ) async throws {
+        try await serializeStateMutation {
+            try await self.performCredentialReconnect(
+                id: id,
+                credential: credential,
+                authenticatedIdentity: authenticatedIdentity
+            )
+        }
+        await refreshAccount(id: id)
+    }
+
+    private func performCredentialReconnect<
+        Credential: Codable & Sendable
+    >(
+        id: UUID,
+        credential: Credential,
+        authenticatedIdentity: String?
     ) async throws {
         guard
             let account = accounts.first(
@@ -959,7 +1055,6 @@ public final class AppModel {
                     authenticatedIdentity
             }
         }
-        await refreshAccount(id: id)
     }
 
     private func apply(

@@ -1324,18 +1324,30 @@ func reconnectClearsMigratedSiblingsAuthenticationState() async throws {
 
 @MainActor
 private final class GatedClaudeAdapter: ProviderAccountAdapter {
-    nonisolated let provider = Provider.claude
+    nonisolated let provider: Provider
     private var gate: CheckedContinuation<Void, Never>?
     private var waitingForGate: CheckedContinuation<Void, Never>?
 
     var gateFetches = true
+    var ungatedFetchesSucceed = false
+
+    nonisolated init(provider: Provider = .claude) {
+        self.provider = provider
+    }
 
     func fetchUsage(
-        for _: SubscriptionAccount,
-        now _: Date,
+        for account: SubscriptionAccount,
+        now: Date,
     ) async throws -> UsageSnapshot {
         guard gateFetches else {
-            throw ProviderClientError.reauthenticationRequired
+            guard ungatedFetchesSucceed else {
+                throw ProviderClientError.reauthenticationRequired
+            }
+            return UsageSnapshot(
+                accountID: account.id,
+                fetchedAt: now,
+                windows: [],
+            )
         }
         waitingForGate?.resume()
         waitingForGate = nil
@@ -1865,3 +1877,104 @@ func failedReconnectSaveClearsIndicatorsAbandonedByStaleRefreshes() async throws
     let siblingState = model.accounts.first { $0.id == sibling.id }
     #expect(siblingState?.isRefreshing == false)
 }
+
+private final class MutableClock: @unchecked Sendable {
+    var date: Date
+
+    init(_ date: Date) {
+        self.date = date
+    }
+}
+
+@Test
+@MainActor
+func refreshPersistenceWaitsBehindStructuralStateChanges() async throws {
+    let oldProfileID = UUID()
+    let newProfileID = UUID()
+    let organizationID = UUID()
+    let claudeAccount = SubscriptionAccount(
+        provider: .claude,
+        displayName: "Personal",
+        displayOrder: 0,
+        claudeProfileID: oldProfileID,
+        claudeOrganizationID: organizationID,
+    )
+    let codexAccount = SubscriptionAccount(
+        provider: .codex,
+        displayName: "Codex",
+        displayOrder: 0,
+    )
+    let claudeAdapter = GatedClaudeAdapter()
+    claudeAdapter.gateFetches = false
+    claudeAdapter.ungatedFetchesSucceed = true
+    let codexAdapter = GatedClaudeAdapter(provider: .codex)
+    codexAdapter.gateFetches = false
+    codexAdapter.ungatedFetchesSucceed = true
+    let clock = MutableClock(Date(timeIntervalSince1970: 2_000_000_000))
+    let stateStore = GatedAppStateStore(state: .empty)
+    let model = AppModel(
+        stateStore: stateStore,
+        credentialStore: TestCredentialStore(),
+        adapters: [claudeAdapter, codexAdapter],
+        now: { clock.date },
+    )
+    await model.start()
+    try await model.connectClaudeAccounts([
+        (account: claudeAccount, snapshot: nil),
+    ])
+    try await model.connectAccount(
+        codexAccount,
+        credential: ProviderCredential.codex(
+            OAuthCredential(
+                accessToken: "token",
+                accountID: "codex-account",
+            ),
+        ),
+    )
+
+    clock.date = clock.date.addingTimeInterval(700)
+    codexAdapter.gateFetches = true
+    let codexRefresh = Task { @MainActor in
+        await model.refreshAccount(id: codexAccount.id)
+    }
+    await codexAdapter.waitUntilFetching()
+
+    let replacement = SubscriptionAccount(
+        id: claudeAccount.id,
+        provider: .claude,
+        displayName: "Personal",
+        displayOrder: 0,
+        claudeProfileID: newProfileID,
+        claudeOrganizationID: organizationID,
+    )
+    stateStore.gateNextSave = true
+    let reconnect = Task { @MainActor in
+        try await model.reconnectClaudeAccount(
+            id: claudeAccount.id,
+            replacement: replacement,
+            qualifiedOrganizationIDs: [organizationID],
+        )
+    }
+    await stateStore.waitUntilSaveGated()
+
+    // The codex refresh finishes its fetch while the reconnect is
+    // still writing; its persistence must wait for the reconnect so
+    // neither write clobbers the other.
+    codexAdapter.releaseGate()
+    for _ in 0 ..< 20 {
+        await Task.yield()
+    }
+    stateStore.releaseSaveGate()
+    try await reconnect.value
+    await codexRefresh.value
+
+    let persistedAccounts = await stateStore.state.accounts
+    #expect(
+        persistedAccounts.first { $0.id == claudeAccount.id }?
+            .claudeProfileID == newProfileID,
+    )
+    let codexPersisted = await stateStore.state
+        .refreshStates[codexAccount.id]
+    #expect(codexPersisted?.lastRequestStartedAt == clock.date)
+}
+
