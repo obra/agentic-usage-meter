@@ -261,6 +261,39 @@ struct ClaudeConnectionUsagePolicyTests {
         )
     }
 
+
+    @Test
+    func reconnectMismatchRecoversWithAFreshSignIn() async throws {
+        let reconnecting = SubscriptionAccount(
+            provider: .claude,
+            displayName: "Team",
+            displayOrder: 0,
+            claudeProfileID: UUID(),
+            claudeOrganizationID: UUID(),
+        )
+        var removedProfileIDs: [UUID] = []
+        let (model, _) = try await makeModelReturningAppModel(
+            organizationsJSON: singleOrganizationJSON,
+            usageBodies: [],
+            existingAccounts: [reconnecting],
+            reconnectingAccount: reconnecting,
+            removeProfile: { removedProfileIDs.append($0) },
+        )
+
+        await model.qualifyLogin(
+            authenticatedCookies: [Self.sessionCookie],
+        )
+        guard case .failed = model.phase else {
+            Issue.record("Expected failure, got \(model.phase)")
+            return
+        }
+        #expect(removedProfileIDs.count == 1)
+
+        await model.retry()
+
+        #expect(model.phase == .signingIn)
+    }
+
     private var singleOrganizationJSON: String {
         #"[{"uuid":"\#(organizationID.uuidString.lowercased())","name":"Personal","capabilities":["chat","claude_max"]}]"#
     }
@@ -296,6 +329,8 @@ struct ClaudeConnectionUsagePolicyTests {
         usageResponses: [HTTPResponse] = [],
         existingAccounts: [SubscriptionAccount] = [],
         reconnectingAccount: SubscriptionAccount? = nil,
+        removeProfile: @escaping @MainActor @Sendable (UUID) async throws
+            -> Void = { _ in },
     ) async throws -> (
         model: ClaudeConnectionModel,
         appModel: AppModel
@@ -332,7 +367,7 @@ struct ClaudeConnectionUsagePolicyTests {
         let model = ClaudeConnectionModel(
             appModel: appModel,
             reconnectingAccount: reconnectingAccount,
-            removeProfile: { _ in },
+            removeProfile: removeProfile,
             usageClient: ClaudeWebUsageClient(
                 transport: SequencedHTTPTransport(
                     responses: responses,

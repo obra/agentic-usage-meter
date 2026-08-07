@@ -409,6 +409,12 @@ public final class ClaudeConnectionModel {
                 )
             else {
                 closeLogin()
+                // The captured login is deterministically wrong for
+                // this account; retrying must start a fresh sign-in
+                // from a clean profile instead of revalidating it.
+                self.authenticatedCookies = nil
+                qualifiedOrganizationIDs = []
+                try? await removeProfile(profileID)
                 phase = .failed(
                     "This Claude login does not belong to the organization \(reconnectingAccount.displayName) was connected to.",
                 )
