@@ -1138,6 +1138,10 @@ func reconnectRepointsSiblingAccountsToTheReplacementProfile() async throws {
     try await model.reconnectClaudeAccount(
         id: reconnecting.id,
         replacement: replacement,
+        qualifiedOrganizationIDs: [
+            organizationID,
+            sibling.claudeOrganizationID!,
+        ],
     )
 
     let profileIDs = model.accounts.map(\.account.claudeProfileID)
@@ -1146,4 +1150,103 @@ func reconnectRepointsSiblingAccountsToTheReplacementProfile() async throws {
         .map(\.claudeProfileID)
     #expect(persistedProfileIDs == [newProfileID, newProfileID])
     #expect(profileRemover.removedProfileIDs == [oldProfileID])
+}
+
+@Test
+@MainActor
+func reconnectLeavesSiblingsWhoseOrganizationTheLoginLacks() async throws {
+    let oldProfileID = UUID()
+    let newProfileID = UUID()
+    let organizationID = UUID()
+    let reconnecting = SubscriptionAccount(
+        provider: .claude,
+        displayName: "Personal",
+        displayOrder: 0,
+        claudeProfileID: oldProfileID,
+        claudeOrganizationID: organizationID,
+    )
+    let sibling = SubscriptionAccount(
+        provider: .claude,
+        displayName: "Team",
+        displayOrder: 1,
+        claudeProfileID: oldProfileID,
+        claudeOrganizationID: UUID(),
+    )
+    let profileRemover = TestClaudeProfileRemover()
+    let stateStore = TestAppStateStore(
+        state: PersistedAppState(
+            accounts: [reconnecting, sibling],
+            snapshots: [:],
+        ),
+    )
+    let model = AppModel(
+        stateStore: stateStore,
+        credentialStore: TestCredentialStore(),
+        adapters: [profileRemover],
+        now: { Date(timeIntervalSince1970: 2_000_000_000) },
+    )
+    await model.start()
+
+    let replacement = SubscriptionAccount(
+        id: reconnecting.id,
+        provider: .claude,
+        displayName: "Personal",
+        displayOrder: 0,
+        claudeProfileID: newProfileID,
+        claudeOrganizationID: organizationID,
+    )
+    try await model.reconnectClaudeAccount(
+        id: reconnecting.id,
+        replacement: replacement,
+        qualifiedOrganizationIDs: [organizationID],
+    )
+
+    let profileIDs = model.accounts.map(\.account.claudeProfileID)
+    #expect(profileIDs == [newProfileID, oldProfileID])
+    #expect(profileRemover.removedProfileIDs.isEmpty)
+}
+
+@Test
+@MainActor
+func batchConnectPersistsAllAccountsOrNone() async throws {
+    let profileID = UUID()
+    let stateStore = TestAppStateStore(state: .empty)
+    let model = AppModel(
+        stateStore: stateStore,
+        credentialStore: TestCredentialStore(),
+        adapters: [TestClaudeProfileRemover()],
+        now: { Date(timeIntervalSince1970: 2_000_000_000) },
+    )
+    await model.start()
+
+    let valid = SubscriptionAccount(
+        provider: .claude,
+        displayName: "Personal",
+        displayOrder: 0,
+        claudeProfileID: profileID,
+        claudeOrganizationID: UUID(),
+    )
+    let invalid = SubscriptionAccount(
+        provider: .claude,
+        displayName: "Broken",
+        displayOrder: 1,
+        claudeProfileID: profileID,
+        claudeOrganizationID: nil,
+    )
+
+    await #expect(throws: AppModelError.invalidSnapshot) {
+        try await model.connectClaudeAccounts([
+            (account: valid, snapshot: nil),
+            (account: invalid, snapshot: nil),
+        ])
+    }
+
+    #expect(model.accounts.isEmpty)
+    #expect(await stateStore.state.accounts.isEmpty)
+
+    try await model.connectClaudeAccounts([
+        (account: valid, snapshot: nil),
+    ])
+    #expect(model.accounts.map(\.id) == [valid.id])
+    #expect(await stateStore.state.accounts.map(\.id) == [valid.id])
 }

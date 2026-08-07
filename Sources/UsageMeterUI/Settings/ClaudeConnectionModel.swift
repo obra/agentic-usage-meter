@@ -202,6 +202,8 @@ public final class ClaudeConnectionModel {
     @ObservationIgnored
     private var authenticatedCookies: [HTTPCookie]?
     @ObservationIgnored
+    private var qualifiedOrganizationIDs: Set<UUID> = []
+    @ObservationIgnored
     private var didSave = false
     @ObservationIgnored
     private var didRemoveProfile = false
@@ -234,6 +236,7 @@ public final class ClaudeConnectionModel {
         pendingChoices = []
         pendingSelection = []
         authenticatedCookies = nil
+        qualifiedOrganizationIDs = []
         didSave = false
         if let qualify {
             phase = .loadingUsage
@@ -298,6 +301,8 @@ public final class ClaudeConnectionModel {
                     id: reconnectingAccount.id,
                     replacement: replacement,
                     snapshot: pendingConnection.snapshot,
+                    qualifiedOrganizationIDs:
+                    qualifiedOrganizationIDs,
                 )
             } else {
                 try await appModel.connectClaudeAccount(
@@ -391,6 +396,7 @@ public final class ClaudeConnectionModel {
             )
             return
         }
+        qualifiedOrganizationIDs = Set(organizations.map(\.id))
 
         if let reconnectingAccount {
             guard
@@ -520,33 +526,36 @@ public final class ClaudeConnectionModel {
         }
 
         phase = .saving
-        for connection in pendingSelection {
-            let account = SubscriptionAccount(
-                id: connection.accountID,
-                provider: .claude,
-                displayName: connection.organizationName,
-                authenticatedIdentity:
-                connection.organizationName,
-                displayOrder: appModel.accounts.count {
-                    $0.account.provider == .claude
-                },
-                claudeProfileID: profileID,
-                claudeOrganizationID:
-                connection.organizationID,
-            )
-            do {
-                try await appModel.connectClaudeAccount(
-                    account,
-                    snapshot: connection.snapshot,
-                )
-            } catch {
-                phase = .failed(
-                    "Claude account could not be saved.",
-                )
-                return
-            }
-            didSave = true
+        let firstDisplayOrder = appModel.accounts.count {
+            $0.account.provider == .claude
         }
+        let connections = pendingSelection.enumerated().map {
+            offset,
+                connection in
+            (
+                account: SubscriptionAccount(
+                    id: connection.accountID,
+                    provider: .claude,
+                    displayName: connection.organizationName,
+                    authenticatedIdentity:
+                    connection.organizationName,
+                    displayOrder: firstDisplayOrder + offset,
+                    claudeProfileID: profileID,
+                    claudeOrganizationID:
+                    connection.organizationID,
+                ),
+                snapshot: connection.snapshot
+            )
+        }
+        do {
+            try await appModel.connectClaudeAccounts(connections)
+        } catch {
+            phase = .failed(
+                "Claude accounts could not be saved.",
+            )
+            return
+        }
+        didSave = true
         pendingSelection = []
         phase = .complete
     }

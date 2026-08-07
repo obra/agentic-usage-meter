@@ -74,6 +74,27 @@ struct AccountOrder {
     }
 }
 
+struct AccountRemovalMessage {
+    static func text(
+        for account: SubscriptionAccount,
+        accounts: [SubscriptionAccount],
+    ) -> String {
+        let profileIsShared = account.claudeProfileID.map {
+            profileID in
+            accounts.contains {
+                $0.id != account.id
+                    && $0.claudeProfileID == profileID
+            }
+        } ?? false
+        guard profileIsShared else {
+            return
+                "\(account.displayName) and its local authentication data will be deleted."
+        }
+        return
+            "\(account.displayName) will be removed. Its Claude sign-in is shared with other accounts and stays until the last of them is removed."
+    }
+}
+
 struct AccountRowPresentation {
     static func showsReconnectAction(
         for error: AccountViewError?,
@@ -211,9 +232,7 @@ public struct AccountListView: View {
                 pendingRemoval = nil
             }
         } message: { account in
-            Text(
-                "\(account.displayName) and its local authentication data will be deleted.",
-            )
+            Text(removalMessage(for: account))
         }
         .alert(
             "Couldn't remove account",
@@ -233,6 +252,15 @@ public struct AccountListView: View {
         } message: { failure in
             Text(failure)
         }
+    }
+
+    private func removalMessage(
+        for account: SubscriptionAccount,
+    ) -> String {
+        AccountRemovalMessage.text(
+            for: account,
+            accounts: model.accounts.map(\.account),
+        )
     }
 
     private func providerAccounts(

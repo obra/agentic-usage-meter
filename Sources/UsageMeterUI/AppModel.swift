@@ -369,53 +369,87 @@ public final class AppModel {
         _ account: SubscriptionAccount,
         snapshot: UsageSnapshot? = nil
     ) async throws {
-        guard !accounts.contains(where: { $0.id == account.id }) else {
-            throw AppModelError.accountAlreadyExists
-        }
-        guard
-            account.provider == .claude,
-            account.claudeProfileID != nil,
-            account.claudeOrganizationID != nil,
-            snapshot?.accountID == account.id || snapshot == nil,
-            adaptersByProvider[.claude] != nil
-        else {
-            throw AppModelError.invalidSnapshot
+        try await connectClaudeAccounts([
+            (account: account, snapshot: snapshot),
+        ])
+    }
+
+    // Selections from one login save together: either every account
+    // persists or none does, so a failure never leaves an undocumented
+    // partial result.
+    public func connectClaudeAccounts(
+        _ connections: [(
+            account: SubscriptionAccount,
+            snapshot: UsageSnapshot?
+        )]
+    ) async throws {
+        var connectedIDs = Set(accounts.map(\.id))
+        for connection in connections {
+            guard
+                connectedIDs.insert(connection.account.id)
+                .inserted
+            else {
+                throw AppModelError.accountAlreadyExists
+            }
+            guard
+                connection.account.provider == .claude,
+                connection.account.claudeProfileID != nil,
+                connection.account.claudeOrganizationID != nil,
+                connection.snapshot?.accountID
+                == connection.account.id
+                || connection.snapshot == nil,
+                adaptersByProvider[.claude] != nil
+            else {
+                throw AppModelError.invalidSnapshot
+            }
         }
 
-        let refreshState =
-            snapshot.map {
-                AccountRefreshState(
-                    lastRequestStartedAt: $0.fetchedAt
-                )
-            } ?? .initial
         var nextState = persistedState
-        nextState.accounts.append(account)
-        nextState.snapshots[account.id] = snapshot
-        nextState.refreshStates[account.id] = refreshState
+        var refreshStates: [UUID: AccountRefreshState] = [:]
+        for connection in connections {
+            let refreshState =
+                connection.snapshot.map {
+                    AccountRefreshState(
+                        lastRequestStartedAt: $0.fetchedAt
+                    )
+                } ?? .initial
+            refreshStates[connection.account.id] = refreshState
+            nextState.accounts.append(connection.account)
+            nextState.snapshots[connection.account.id] =
+                connection.snapshot
+            nextState.refreshStates[connection.account.id] =
+                refreshState
+        }
         try await stateStore.save(nextState)
 
         let now = now
         persistedState = nextState
-        refreshers[account.id] = AccountRefresher(
-            minimumInterval: refreshPolicy.minimumProviderInterval,
-            state: refreshState,
-            lastGoodSnapshot: snapshot,
-            now: { now() }
-        )
-        accounts.append(
-            AccountViewState(
-                account: account,
-                snapshot: snapshot,
-                error: snapshot == nil ? .temporarilyUnavailable : nil
+        for connection in connections {
+            refreshers[connection.account.id] = AccountRefresher(
+                minimumInterval: refreshPolicy.minimumProviderInterval,
+                state: refreshStates[connection.account.id]
+                    ?? .initial,
+                lastGoodSnapshot: connection.snapshot,
+                now: { now() }
             )
-        )
+            accounts.append(
+                AccountViewState(
+                    account: connection.account,
+                    snapshot: connection.snapshot,
+                    error: connection.snapshot == nil
+                        ? .temporarilyUnavailable
+                        : nil
+                )
+            )
+        }
         accounts.sort(by: viewStateComesBefore)
     }
 
     public func reconnectClaudeAccount(
         id: UUID,
         replacement: SubscriptionAccount,
-        snapshot: UsageSnapshot? = nil
+        snapshot: UsageSnapshot? = nil,
+        qualifiedOrganizationIDs: Set<UUID> = []
     ) async throws {
         guard
             let existing = accounts.first(
@@ -454,12 +488,16 @@ public final class AppModel {
             throw AppModelError.accountNotFound
         }
         nextState.accounts[stateIndex] = replacement
-        // Sibling accounts from the same login share the old profile;
-        // the replacement session serves them too.
+        // Siblings sharing the old profile move to the replacement
+        // session only when the new login includes their organization;
+        // the others keep the old profile so reconnecting them cannot
+        // break this account again.
         for index in nextState.accounts.indices
             where nextState.accounts[index].id != id
             && nextState.accounts[index].claudeProfileID
             == existingProfileID
+            && nextState.accounts[index].claudeOrganizationID
+            .map(qualifiedOrganizationIDs.contains) == true
         {
             nextState.accounts[index].claudeProfileID =
                 replacementProfileID
@@ -468,7 +506,13 @@ public final class AppModel {
         nextState.refreshStates[id] = refreshState
         try await stateStore.save(nextState)
 
-        if existingProfileID != replacementProfileID {
+        let oldProfileStillReferenced =
+            nextState.accounts.contains {
+                $0.claudeProfileID == existingProfileID
+            }
+        if existingProfileID != replacementProfileID,
+           !oldProfileStillReferenced
+        {
             try? await adapter.removeAuthentication(for: existing)
         }
 
@@ -484,6 +528,8 @@ public final class AppModel {
             where accounts[index].id != id
             && accounts[index].account.claudeProfileID
             == existingProfileID
+            && accounts[index].account.claudeOrganizationID
+            .map(qualifiedOrganizationIDs.contains) == true
         {
             accounts[index].account.claudeProfileID =
                 replacementProfileID

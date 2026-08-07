@@ -71,7 +71,7 @@ public struct ClaudeConnectionView: View {
                 saveForm(
                     detail:
                     organizationCount > 1
-                        ? "\(organizationName) (first of \(organizationCount) organizations)"
+                        ? "\(organizationName) (one of \(organizationCount) organizations)"
                         : organizationName,
                 )
             case let .readyToSaveOrganizations(connections):

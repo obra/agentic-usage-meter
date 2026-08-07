@@ -344,3 +344,39 @@ func apiKeyConnectionCopyMatchesTheSelectedProvider() {
             == "Factory account could not be connected."
     )
 }
+
+@Test
+func removalMessageExplainsSharedClaudeSignIns() {
+    let profileID = UUID()
+    let solo = SubscriptionAccount(
+        provider: .claude,
+        displayName: "Solo",
+        displayOrder: 0,
+        claudeProfileID: UUID(),
+        claudeOrganizationID: UUID(),
+    )
+    let shared = SubscriptionAccount(
+        provider: .claude,
+        displayName: "Personal",
+        displayOrder: 1,
+        claudeProfileID: profileID,
+        claudeOrganizationID: UUID(),
+    )
+    let sibling = SubscriptionAccount(
+        provider: .claude,
+        displayName: "Team",
+        displayOrder: 2,
+        claudeProfileID: profileID,
+        claudeOrganizationID: UUID(),
+    )
+    let accounts = [solo, shared, sibling]
+
+    #expect(
+        AccountRemovalMessage.text(for: solo, accounts: accounts)
+            == "Solo and its local authentication data will be deleted.",
+    )
+    #expect(
+        AccountRemovalMessage.text(for: shared, accounts: accounts)
+            == "Personal will be removed. Its Claude sign-in is shared with other accounts and stays until the last of them is removed.",
+    )
+}
