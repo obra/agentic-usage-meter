@@ -25,6 +25,7 @@ struct ProbeWindow: Codable, Equatable {
   let consumedPercent: Int
   let remainingFraction: Double
   let resetAt: Date?
+  let label: String?
 
   init(window: UsageWindow) {
     kind = window.kind
@@ -32,5 +33,6 @@ struct ProbeWindow: Codable, Equatable {
     consumedPercent = Int((window.consumedFraction * 100).rounded())
     remainingFraction = window.remainingFraction
     resetAt = window.resetAt
+    label = window.label
   }
 }

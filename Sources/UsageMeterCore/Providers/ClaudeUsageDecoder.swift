@@ -156,9 +156,14 @@ public struct ClaudeUsageDecoder: Sendable {
     // surface on top of the qualified legacy contract, so anything
     // unusable is skipped — never a reason to reject the response.
     // Unscoped entries mirror the legacy windows and would
-    // double-render; unknown groups are future provider surface; a
-    // nonzero percent without a reset violates the no-invented-reset
-    // invariant and is dropped by the UsageWindow initializer.
+    // double-render, and non-weekly groups are unqualified surface;
+    // both are expected and pass silently. Only malformed entries are
+    // counted and logged: an undecodable element, an out-of-range
+    // percent, or a nonzero percent without a reset (which the
+    // UsageWindow initializer drops per the no-invented-reset
+    // invariant). Entries that collide on id resolve to the
+    // higher-consumed one, so a duplicate can only tighten the
+    // reported limit, never hide it.
     private func scopedWindows(
         from payload: UsagePayload
     ) -> [UsageWindow] {
@@ -166,51 +171,51 @@ public struct ClaudeUsageDecoder: Sendable {
             return []
         }
         var windows: [UsageWindow] = []
-        var seenIDs: Set<String> = []
-        var skippedEntries = 0
+        var indexByID: [String: Int] = [:]
+        var malformedEntries = 0
         for entry in limits {
             guard let limit = entry.value else {
-                skippedEntries += 1
+                malformedEntries += 1
                 continue
             }
-            guard let model = normalizedModelName(of: limit) else {
-                continue
-            }
-            guard let shape = Self.scopedGroupShapes[limit.group] else {
+            guard
+                let model = normalizedModelName(of: limit),
+                limit.group == "weekly"
+            else {
                 continue
             }
             guard
                 Self.isValidUtilization(limit.percent),
                 let window = UsageWindow(
-                    id: "claude-\(limit.group)-scoped-\(Self.slug(model))",
-                    kind: shape.kind,
-                    duration: shape.duration,
+                    id: "claude-weekly-scoped-\(Self.slug(model))",
+                    kind: .weekly,
+                    duration: 604_800,
                     resetAt: limit.resetsAt,
                     consumedFraction: limit.percent / 100,
                     label: model,
-                ),
-                seenIDs.insert(window.id).inserted
+                )
             else {
-                skippedEntries += 1
+                malformedEntries += 1
                 continue
             }
-            windows.append(window)
+            if let existing = indexByID[window.id] {
+                if window.consumedFraction
+                    > windows[existing].consumedFraction
+                {
+                    windows[existing] = window
+                }
+            } else {
+                indexByID[window.id] = windows.count
+                windows.append(window)
+            }
         }
-        if skippedEntries > 0 {
+        if malformedEntries > 0 {
             claudeLogger.error(
-                "Skipped scoped limit entries: count=\(skippedEntries, privacy: .public)"
+                "Skipped malformed scoped limit entries: count=\(malformedEntries, privacy: .public)"
             )
         }
         return windows
     }
-
-    private static let scopedGroupShapes: [String: (
-        kind: UsageWindowKind,
-        duration: TimeInterval
-    )] = [
-        "session": (kind: .short, duration: 18_000),
-        "weekly": (kind: .weekly, duration: 604_800),
-    ]
 
     private func normalizedModelName(
         of limit: LimitPayload
@@ -305,6 +310,33 @@ private struct UsagePayload: Decodable {
         case extraUsage = "extra_usage"
         case spend
         case limits
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        fiveHour = try container.decode(
+            WindowPayload.self,
+            forKey: .fiveHour
+        )
+        sevenDay = try container.decode(
+            WindowPayload.self,
+            forKey: .sevenDay
+        )
+        extraUsage = try container.decodeIfPresent(
+            ExtraUsagePayload.self,
+            forKey: .extraUsage
+        )
+        spend = try container.decodeIfPresent(
+            SpendPayload.self,
+            forKey: .spend
+        )
+        // A drifted `limits` container (present but not an array)
+        // degrades like a drifted element: scoped limits are optional
+        // surface and must never black out the legacy windows.
+        limits = try? container.decode(
+            [LossyLimitPayload].self,
+            forKey: .limits
+        )
     }
 }
 
