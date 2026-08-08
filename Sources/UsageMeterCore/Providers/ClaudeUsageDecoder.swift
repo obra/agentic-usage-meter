@@ -62,7 +62,7 @@ public struct ClaudeUsageDecoder: Sendable {
         return UsageSnapshot(
             accountID: accountID,
             fetchedAt: fetchedAt,
-            windows: [shortWindow, weeklyWindow],
+            windows: [shortWindow, weeklyWindow] + scopedWindows(from: payload),
             balances: balances,
         )
     }
@@ -150,6 +150,92 @@ public struct ClaudeUsageDecoder: Sendable {
         )
     }
 
+    // The `limits` array is the only place the provider reports
+    // per-model pools (for example the Fable weekly share); the legacy
+    // top-level windows never carry them. Scoped entries are optional
+    // surface on top of the qualified legacy contract, so anything
+    // unusable is skipped — never a reason to reject the response.
+    // Unscoped entries mirror the legacy windows and would
+    // double-render; unknown groups are future provider surface; a
+    // nonzero percent without a reset violates the no-invented-reset
+    // invariant and is dropped by the UsageWindow initializer.
+    private func scopedWindows(
+        from payload: UsagePayload
+    ) -> [UsageWindow] {
+        guard let limits = payload.limits else {
+            return []
+        }
+        var windows: [UsageWindow] = []
+        var seenIDs: Set<String> = []
+        var skippedEntries = 0
+        for entry in limits {
+            guard let limit = entry.value else {
+                skippedEntries += 1
+                continue
+            }
+            guard let model = normalizedModelName(of: limit) else {
+                continue
+            }
+            guard let shape = Self.scopedGroupShapes[limit.group] else {
+                continue
+            }
+            guard
+                Self.isValidUtilization(limit.percent),
+                let window = UsageWindow(
+                    id: "claude-\(limit.group)-scoped-\(Self.slug(model))",
+                    kind: shape.kind,
+                    duration: shape.duration,
+                    resetAt: limit.resetsAt,
+                    consumedFraction: limit.percent / 100,
+                    label: model,
+                ),
+                seenIDs.insert(window.id).inserted
+            else {
+                skippedEntries += 1
+                continue
+            }
+            windows.append(window)
+        }
+        if skippedEntries > 0 {
+            claudeLogger.error(
+                "Skipped scoped limit entries: count=\(skippedEntries, privacy: .public)"
+            )
+        }
+        return windows
+    }
+
+    private static let scopedGroupShapes: [String: (
+        kind: UsageWindowKind,
+        duration: TimeInterval
+    )] = [
+        "session": (kind: .short, duration: 18_000),
+        "weekly": (kind: .weekly, duration: 604_800),
+    ]
+
+    private func normalizedModelName(
+        of limit: LimitPayload
+    ) -> String? {
+        guard
+            let name = limit.scope?.model?.displayName?
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+            !name.isEmpty
+        else {
+            return nil
+        }
+        return name
+    }
+
+    private static func slug(_ value: String) -> String {
+        value
+            .lowercased()
+            .map { character in
+                character.isLetter || character.isNumber
+                    ? String(character)
+                    : "-"
+            }
+            .joined()
+    }
+
     private func normalizedBalances(
         from payload: UsagePayload,
     ) throws -> [UsageBalance] {
@@ -211,12 +297,51 @@ private struct UsagePayload: Decodable {
     let sevenDay: WindowPayload
     let extraUsage: ExtraUsagePayload?
     let spend: SpendPayload?
+    let limits: [LossyLimitPayload]?
 
     private enum CodingKeys: String, CodingKey {
         case fiveHour = "five_hour"
         case sevenDay = "seven_day"
         case extraUsage = "extra_usage"
         case spend
+        case limits
+    }
+}
+
+// A limit entry that fails to decode becomes nil instead of failing
+// the whole response: scoped limits are optional surface, and one
+// drifted entry must not black out an account's legacy windows.
+private struct LossyLimitPayload: Decodable {
+    let value: LimitPayload?
+
+    init(from decoder: Decoder) {
+        value = try? LimitPayload(from: decoder)
+    }
+}
+
+private struct LimitPayload: Decodable {
+    let group: String
+    let percent: Double
+    let resetsAt: Date?
+    let scope: ScopePayload?
+
+    private enum CodingKeys: String, CodingKey {
+        case group
+        case percent
+        case resetsAt = "resets_at"
+        case scope
+    }
+}
+
+private struct ScopePayload: Decodable {
+    let model: ModelScopePayload?
+}
+
+private struct ModelScopePayload: Decodable {
+    let displayName: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case displayName = "display_name"
     }
 }
 
