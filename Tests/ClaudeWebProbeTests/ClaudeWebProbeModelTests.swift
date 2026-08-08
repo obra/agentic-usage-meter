@@ -72,7 +72,8 @@ struct ClaudeWebProbeModelTests {
           kind: .short,
           duration: 18_000,
           consumedFraction: 0.42,
-          resetAt: resetAt
+          resetAt: resetAt,
+          label: nil
         )
       ]
     )

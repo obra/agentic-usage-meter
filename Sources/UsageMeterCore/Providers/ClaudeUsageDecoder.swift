@@ -62,7 +62,7 @@ public struct ClaudeUsageDecoder: Sendable {
         return UsageSnapshot(
             accountID: accountID,
             fetchedAt: fetchedAt,
-            windows: [shortWindow, weeklyWindow],
+            windows: [shortWindow, weeklyWindow] + scopedWindows(from: payload),
             balances: balances,
         )
     }
@@ -150,6 +150,97 @@ public struct ClaudeUsageDecoder: Sendable {
         )
     }
 
+    // The `limits` array is the only place the provider reports
+    // per-model pools (for example the Fable weekly share); the legacy
+    // top-level windows never carry them. Scoped entries are optional
+    // surface on top of the qualified legacy contract, so anything
+    // unusable is skipped — never a reason to reject the response.
+    // Unscoped entries mirror the legacy windows and would
+    // double-render, and non-weekly groups are unqualified surface;
+    // both are expected and pass silently. Only malformed entries are
+    // counted and logged: an undecodable element, an out-of-range
+    // percent, or a nonzero percent without a reset (which the
+    // UsageWindow initializer drops per the no-invented-reset
+    // invariant). Entries that collide on id resolve to the
+    // higher-consumed one, so a duplicate can only tighten the
+    // reported limit, never hide it.
+    private func scopedWindows(
+        from payload: UsagePayload
+    ) -> [UsageWindow] {
+        guard let limits = payload.limits else {
+            return []
+        }
+        var windows: [UsageWindow] = []
+        var indexByID: [String: Int] = [:]
+        var malformedEntries = 0
+        for entry in limits {
+            guard let limit = entry.value else {
+                malformedEntries += 1
+                continue
+            }
+            guard
+                let model = normalizedModelName(of: limit),
+                limit.group == "weekly"
+            else {
+                continue
+            }
+            guard
+                Self.isValidUtilization(limit.percent),
+                let window = UsageWindow(
+                    id: "claude-weekly-scoped-\(Self.slug(model))",
+                    kind: .weekly,
+                    duration: 604_800,
+                    resetAt: limit.resetsAt,
+                    consumedFraction: limit.percent / 100,
+                    label: model,
+                )
+            else {
+                malformedEntries += 1
+                continue
+            }
+            if let existing = indexByID[window.id] {
+                if window.consumedFraction
+                    > windows[existing].consumedFraction
+                {
+                    windows[existing] = window
+                }
+            } else {
+                indexByID[window.id] = windows.count
+                windows.append(window)
+            }
+        }
+        if malformedEntries > 0 {
+            claudeLogger.error(
+                "Skipped malformed scoped limit entries: count=\(malformedEntries, privacy: .public)"
+            )
+        }
+        return windows
+    }
+
+    private func normalizedModelName(
+        of limit: LimitPayload
+    ) -> String? {
+        guard
+            let name = limit.scope?.model?.displayName?
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+            !name.isEmpty
+        else {
+            return nil
+        }
+        return name
+    }
+
+    private static func slug(_ value: String) -> String {
+        value
+            .lowercased()
+            .map { character in
+                character.isLetter || character.isNumber
+                    ? String(character)
+                    : "-"
+            }
+            .joined()
+    }
+
     private func normalizedBalances(
         from payload: UsagePayload,
     ) throws -> [UsageBalance] {
@@ -211,12 +302,78 @@ private struct UsagePayload: Decodable {
     let sevenDay: WindowPayload
     let extraUsage: ExtraUsagePayload?
     let spend: SpendPayload?
+    let limits: [LossyLimitPayload]?
 
     private enum CodingKeys: String, CodingKey {
         case fiveHour = "five_hour"
         case sevenDay = "seven_day"
         case extraUsage = "extra_usage"
         case spend
+        case limits
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        fiveHour = try container.decode(
+            WindowPayload.self,
+            forKey: .fiveHour
+        )
+        sevenDay = try container.decode(
+            WindowPayload.self,
+            forKey: .sevenDay
+        )
+        extraUsage = try container.decodeIfPresent(
+            ExtraUsagePayload.self,
+            forKey: .extraUsage
+        )
+        spend = try container.decodeIfPresent(
+            SpendPayload.self,
+            forKey: .spend
+        )
+        // A drifted `limits` container (present but not an array)
+        // degrades like a drifted element: scoped limits are optional
+        // surface and must never black out the legacy windows.
+        limits = try? container.decode(
+            [LossyLimitPayload].self,
+            forKey: .limits
+        )
+    }
+}
+
+// A limit entry that fails to decode becomes nil instead of failing
+// the whole response: scoped limits are optional surface, and one
+// drifted entry must not black out an account's legacy windows.
+private struct LossyLimitPayload: Decodable {
+    let value: LimitPayload?
+
+    init(from decoder: Decoder) {
+        value = try? LimitPayload(from: decoder)
+    }
+}
+
+private struct LimitPayload: Decodable {
+    let group: String
+    let percent: Double
+    let resetsAt: Date?
+    let scope: ScopePayload?
+
+    private enum CodingKeys: String, CodingKey {
+        case group
+        case percent
+        case resetsAt = "resets_at"
+        case scope
+    }
+}
+
+private struct ScopePayload: Decodable {
+    let model: ModelScopePayload?
+}
+
+private struct ModelScopePayload: Decodable {
+    let displayName: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case displayName = "display_name"
     }
 }
 

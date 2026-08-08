@@ -36,6 +36,7 @@ struct ClaudeWebProbeWindow: Codable, Equatable {
   let duration: TimeInterval
   let consumedFraction: Double
   let resetAt: Date?
+  let label: String?
 }
 
 struct ClaudeWebProbeOutput: Codable, Equatable {
@@ -55,7 +56,8 @@ struct ClaudeWebProbeOutput: Codable, Equatable {
         kind: $0.kind,
         duration: $0.duration,
         consumedFraction: $0.consumedFraction,
-        resetAt: $0.resetAt
+        resetAt: $0.resetAt,
+        label: $0.label
       )
     }
   }

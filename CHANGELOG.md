@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Claude accounts now show per-model weekly pools (currently the Fable
+  share of the weekly limit) as labeled weekly rows, read from the
+  usage endpoint's `limits` array. Because the menu-bar badge tracks
+  the tightest window, an exhausted per-model pool now surfaces there
+  instead of hiding behind a comfortable all-models number.
+
 ## 0.2.4 - 2026-08-07
 
 ### Added

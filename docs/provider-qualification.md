@@ -85,6 +85,25 @@ callback.
 - Fixtures and test output contain no credential, account identifier, live
   numeric balance, or raw provider response.
 
+### 2026-08-08 scoped usage-window contract qualification
+
+- Live responses from five accounts across Max and Enterprise plans were
+  inspected (values not retained in fixtures). Every account returned a
+  `limits` array containing a `weekly_scoped` entry with
+  `scope.model.display_name` "Fable" and a percent, including one account
+  where that entry was inactive; the legacy `seven_day_opus` and
+  `seven_day_sonnet` fields were null on all of them, so `limits` is the
+  only surface reporting per-model pools. `scope.model.id` was null in
+  every sample, so the display name is the only usable model identifier.
+- Sanitized fixtures now carry a `limits` array with unscoped duplicates of
+  the legacy windows, one scoped weekly entry, and one unknown-group scoped
+  entry; the decoder emits exactly one additional labeled weekly window and
+  skips the rest.
+- A malformed scoped entry, a scoped entry with an unknown group, and a
+  nonzero scoped entry without a reset are each skipped without rejecting
+  the response; a response without `limits` still yields exactly the two
+  legacy windows.
+
 ## Codex
 
 The implementation follows OpenAI Codex commit

@@ -163,8 +163,11 @@ struct ClaudeWebUsageClientTests {
 
         #expect(snapshot.accountID == accountID)
         #expect(snapshot.fetchedAt == fetchedAt)
-        #expect(snapshot.windows.map(\.kind) == [.short, .weekly])
-        #expect(snapshot.windows.map(\.duration) == [18_000, 604_800])
+        #expect(snapshot.windows.map(\.kind) == [.short, .weekly, .weekly])
+        #expect(
+            snapshot.windows.map(\.duration) == [18_000, 604_800, 604_800]
+        )
+        #expect(snapshot.windows.map(\.label) == [nil, nil, "Fable"])
         let request = try #require(await transport.lastRequest)
         #expect(
             request.url?.absoluteString

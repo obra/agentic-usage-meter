@@ -18,13 +18,177 @@ struct ClaudeUsageDecoderTests {
 
         #expect(snapshot.accountID == accountID)
         #expect(snapshot.fetchedAt == fetchedAt)
-        #expect(snapshot.windows.count == 2)
+        #expect(snapshot.windows.count == 3)
         #expect(snapshot.windows[0].kind == .short)
         #expect(snapshot.windows[0].duration == 18_000)
         #expect(snapshot.windows[0].consumedFraction == 0.81)
         #expect(snapshot.windows[1].kind == .weekly)
         #expect(snapshot.windows[1].duration == 604_800)
         #expect(snapshot.windows[1].consumedFraction == 0.66)
+        #expect(snapshot.windows[2].id == "claude-weekly-scoped-fable")
+        #expect(snapshot.windows[2].kind == .weekly)
+        #expect(snapshot.windows[2].duration == 604_800)
+        #expect(snapshot.windows[2].consumedFraction == 0.42)
+        #expect(snapshot.windows[2].label == "Fable")
+    }
+
+    @Test
+    func scopedLimitEntriesAreFilteredWithoutRejectingTheResponse() throws {
+        let data = Data(
+            """
+            {
+              "five_hour": {
+                "utilization": 10,
+                "resets_at": "2026-08-01T00:00:00Z"
+              },
+              "seven_day": {
+                "utilization": 20,
+                "resets_at": "2026-08-03T00:00:00Z"
+              },
+              "limits": [
+                {
+                  "kind": "weekly_all",
+                  "group": "weekly",
+                  "percent": 20,
+                  "resets_at": "2026-08-03T00:00:00Z",
+                  "scope": null,
+                  "is_active": false
+                },
+                {
+                  "kind": "session_scoped",
+                  "group": "session",
+                  "percent": 15,
+                  "resets_at": "2026-08-01T00:00:00Z",
+                  "scope": {
+                    "model": {"id": null, "display_name": "Fable"},
+                    "surface": null
+                  },
+                  "is_active": true
+                },
+                {
+                  "kind": "weekly_scoped",
+                  "group": "weekly",
+                  "percent": "not-a-number",
+                  "resets_at": "2026-08-03T00:00:00Z",
+                  "scope": {
+                    "model": {"id": null, "display_name": "Fable"},
+                    "surface": null
+                  },
+                  "is_active": true
+                },
+                {
+                  "kind": "weekly_scoped",
+                  "group": "weekly",
+                  "percent": 40,
+                  "resets_at": null,
+                  "scope": {
+                    "model": {"id": null, "display_name": "Fable"},
+                    "surface": null
+                  },
+                  "is_active": true
+                },
+                {
+                  "kind": "weekly_scoped",
+                  "group": "weekly",
+                  "percent": 35,
+                  "resets_at": "2026-08-03T00:00:00Z",
+                  "scope": {
+                    "model": {"id": null, "display_name": "Fable"},
+                    "surface": null
+                  },
+                  "is_active": false
+                },
+                {
+                  "kind": "weekly_scoped",
+                  "group": "weekly",
+                  "percent": 50,
+                  "resets_at": "2026-08-03T00:00:00Z",
+                  "scope": {
+                    "model": {"id": null, "display_name": "Fable"},
+                    "surface": null
+                  },
+                  "is_active": true
+                }
+              ]
+            }
+            """.utf8,
+        )
+
+        let snapshot = try ClaudeUsageDecoder().decode(
+            data,
+            accountID: UUID(),
+            fetchedAt: Date(timeIntervalSince1970: 2_000_000_000),
+        )
+
+        // The unscoped entry duplicates the legacy weekly window, the
+        // scoped session-group entry is unqualified surface, and the
+        // malformed percent and the nonzero resetless entry are
+        // dropped. The two valid Fable entries collide on id and
+        // resolve to the higher-consumed one, so a duplicate can only
+        // tighten the reported limit; the loser's inactive flag is
+        // irrelevant because the provider reports real percents on
+        // inactive scoped entries too.
+        #expect(snapshot.windows.count == 3)
+        #expect(snapshot.windows[2].id == "claude-weekly-scoped-fable")
+        #expect(snapshot.windows[2].consumedFraction == 0.5)
+        #expect(snapshot.windows[2].label == "Fable")
+    }
+
+    @Test
+    func driftedLimitsContainerDoesNotRejectTheLegacyWindows() throws {
+        for limits in ["{}", "3", "\"drifted\"", "null"] {
+            let data = Data(
+                """
+                {
+                  "five_hour": {
+                    "utilization": 10,
+                    "resets_at": "2026-08-01T00:00:00Z"
+                  },
+                  "seven_day": {
+                    "utilization": 20,
+                    "resets_at": "2026-08-03T00:00:00Z"
+                  },
+                  "limits": \(limits)
+                }
+                """.utf8,
+            )
+
+            let snapshot = try ClaudeUsageDecoder().decode(
+                data,
+                accountID: UUID(),
+                fetchedAt: Date(timeIntervalSince1970: 2_000_000_000),
+            )
+
+            #expect(
+                snapshot.windows.map(\.id) == ["five-hour", "seven-day"]
+            )
+        }
+    }
+
+    @Test
+    func responseWithoutLimitsKeepsTheLegacyWindowPair() throws {
+        let data = Data(
+            """
+            {
+              "five_hour": {
+                "utilization": 10,
+                "resets_at": "2026-08-01T00:00:00Z"
+              },
+              "seven_day": {
+                "utilization": 20,
+                "resets_at": "2026-08-03T00:00:00Z"
+              }
+            }
+            """.utf8,
+        )
+
+        let snapshot = try ClaudeUsageDecoder().decode(
+            data,
+            accountID: UUID(),
+            fetchedAt: Date(timeIntervalSince1970: 2_000_000_000),
+        )
+
+        #expect(snapshot.windows.map(\.id) == ["five-hour", "seven-day"])
     }
 
     @Test
