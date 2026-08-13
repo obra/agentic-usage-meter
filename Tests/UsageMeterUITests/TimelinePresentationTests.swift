@@ -427,7 +427,7 @@ struct TimelinePresentationTests {
     )
     let fable = try #require(
       UsageWindow(
-        id: "claude-weekly-scoped-fable",
+        id: "claude-weekly-scoped-6e616d653a4661626c65",
         kind: .weekly,
         duration: 604_800,
         resetAt: resetAt,

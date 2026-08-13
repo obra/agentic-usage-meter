@@ -9,6 +9,8 @@
   usage endpoint's `limits` array. Because the menu-bar badge tracks
   the tightest window, an exhausted per-model pool now surfaces there
   instead of hiding behind a comfortable all-models number.
+- Claude scoped-limit decoding now keeps distinct model identities separate
+  and degrades safely when the optional provider payload drifts.
 
 ## 0.2.4 - 2026-08-07
 

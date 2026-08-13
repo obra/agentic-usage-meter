@@ -95,6 +95,10 @@ callback.
   `seven_day_sonnet` fields were null on all of them, so `limits` is the
   only surface reporting per-model pools. `scope.model.id` was null in
   every sample, so the display name is the only usable model identifier.
+- Scoped window ids use the provider model id when one appears and an exact
+  encoded display-name identity otherwise; display-name punctuation and case
+  must not collapse separate model pools. A model id can also label a scoped
+  pool when the provider omits its display name.
 - Sanitized fixtures now carry a `limits` array with unscoped duplicates of
   the legacy windows, one scoped weekly entry, and one unknown-group scoped
   entry; the decoder emits exactly one additional labeled weekly window and

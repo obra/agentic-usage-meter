@@ -205,4 +205,29 @@ struct UsageMeterProbeCommandTests {
 
     #expect(output.windows.first?.resetAt == nil)
   }
+
+  @Test
+  func sanitizedOutputPreservesScopedWindowLabel() throws {
+    let window = try #require(
+      UsageWindow(
+        id: "claude-weekly-scoped-6e616d653a4661626c65",
+        kind: .weekly,
+        duration: 604_800,
+        resetAt: Date(timeIntervalSince1970: 2_000_000_000),
+        consumedFraction: 0.42,
+        label: "Fable",
+      ),
+    )
+    let output = ProbeOutput(
+      provider: .claude,
+      identity: nil,
+      snapshot: UsageSnapshot(
+        accountID: accountID,
+        fetchedAt: Date(timeIntervalSince1970: 1_999_999_000),
+        windows: [window],
+      ),
+    )
+
+    #expect(output.windows == [ProbeWindow(window: window)])
+  }
 }

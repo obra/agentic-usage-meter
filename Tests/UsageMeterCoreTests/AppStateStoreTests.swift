@@ -126,10 +126,20 @@ private func makePersistedState() throws -> PersistedAppState {
             consumedFraction: 0.42,
         ),
     )
+    let scopedWindow = try #require(
+        UsageWindow(
+            id: "claude-weekly-scoped-6e616d653a4661626c65",
+            kind: .weekly,
+            duration: 604_800,
+            resetAt: Date(timeIntervalSince1970: 2_000_000_000),
+            consumedFraction: 0.84,
+            label: "Fable",
+        ),
+    )
     let snapshot = UsageSnapshot(
         accountID: account.id,
         fetchedAt: Date(timeIntervalSince1970: 1_999_999_000),
-        windows: [window],
+        windows: [window, scopedWindow],
     )
 
     return PersistedAppState(

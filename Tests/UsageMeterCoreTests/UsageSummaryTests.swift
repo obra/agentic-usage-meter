@@ -162,3 +162,40 @@ func balancesDoNotParticipateInTightestWindowSelection() throws {
       == TightestUsage(accountID: accountID, window: weekly),
   )
 }
+
+@Test
+func inactiveScopedWindowParticipatesInTightestWindowSelection() throws {
+  let now = Date(timeIntervalSince1970: 2_000_000_000)
+  let accountID = UUID()
+  let legacy = try #require(
+    UsageWindow(
+      id: "seven-day",
+      kind: .weekly,
+      duration: 604_800,
+      resetAt: now.addingTimeInterval(604_800),
+      consumedFraction: 0.67,
+    ),
+  )
+  let scoped = try #require(
+    UsageWindow(
+      id: "claude-weekly-scoped-6e616d653a4661626c65",
+      kind: .weekly,
+      duration: 604_800,
+      resetAt: now.addingTimeInterval(604_800),
+      consumedFraction: 1,
+      label: "Fable",
+    ),
+  )
+
+  #expect(
+    UsageSummary.tightestWindow(
+      in: [
+        UsageSnapshot(
+          accountID: accountID,
+          fetchedAt: now,
+          windows: [legacy, scoped],
+        )
+      ]
+    ) == TightestUsage(accountID: accountID, window: scoped),
+  )
+}

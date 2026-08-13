@@ -167,8 +167,17 @@ public struct ClaudeUsageDecoder: Sendable {
     private func scopedWindows(
         from payload: UsagePayload
     ) -> [UsageWindow] {
-        guard let limits = payload.limits else {
+        let limits: [LossyLimitPayload]
+        switch payload.limits {
+        case .absent:
             return []
+        case .malformed:
+            claudeLogger.error(
+                "Skipped malformed scoped limit entries: count=\(1, privacy: .public)"
+            )
+            return []
+        case .values(let decodedLimits):
+            limits = decodedLimits
         }
         var windows: [UsageWindow] = []
         var indexByID: [String: Int] = [:]
@@ -179,29 +188,43 @@ public struct ClaudeUsageDecoder: Sendable {
                 continue
             }
             guard
-                let model = normalizedModelName(of: limit),
                 limit.group == "weekly"
             else {
+                continue
+            }
+            guard let scope = limit.scope else {
+                continue
+            }
+            guard let model = scope.model else {
+                malformedEntries += 1
+                continue
+            }
+            let displayName = Self.normalizedText(model.displayName)
+            let modelID = Self.normalizedText(model.id)
+            guard
+                let identity = modelID.map({ "id:\($0)" })
+                    ?? displayName.map({ "name:\($0)" }),
+                let label = displayName ?? modelID
+            else {
+                malformedEntries += 1
                 continue
             }
             guard
                 Self.isValidUtilization(limit.percent),
                 let window = UsageWindow(
-                    id: "claude-weekly-scoped-\(Self.slug(model))",
+                    id: "claude-weekly-scoped-\(Self.stableIdentifierComponent(identity))",
                     kind: .weekly,
                     duration: 604_800,
                     resetAt: limit.resetsAt,
                     consumedFraction: limit.percent / 100,
-                    label: model,
+                    label: label,
                 )
             else {
                 malformedEntries += 1
                 continue
             }
             if let existing = indexByID[window.id] {
-                if window.consumedFraction
-                    > windows[existing].consumedFraction
-                {
+                if Self.shouldPrefer(window, over: windows[existing]) {
                     windows[existing] = window
                 }
             } else {
@@ -217,28 +240,39 @@ public struct ClaudeUsageDecoder: Sendable {
         return windows
     }
 
-    private func normalizedModelName(
-        of limit: LimitPayload
-    ) -> String? {
-        guard
-            let name = limit.scope?.model?.displayName?
-                .trimmingCharacters(in: .whitespacesAndNewlines),
-            !name.isEmpty
-        else {
+    private static func normalizedText(_ value: String?) -> String? {
+        guard let value else {
             return nil
         }
-        return name
+        let normalized = value.trimmingCharacters(
+            in: .whitespacesAndNewlines,
+        )
+        return normalized.isEmpty ? nil : normalized
     }
 
-    private static func slug(_ value: String) -> String {
-        value
-            .lowercased()
-            .map { character in
-                character.isLetter || character.isNumber
-                    ? String(character)
-                    : "-"
-            }
+    private static func stableIdentifierComponent(_ value: String) -> String {
+        Data(value.utf8)
+            .map { String(format: "%02x", $0) }
             .joined()
+    }
+
+    private static func shouldPrefer(
+        _ candidate: UsageWindow,
+        over existing: UsageWindow,
+    ) -> Bool {
+        if candidate.consumedFraction != existing.consumedFraction {
+            return candidate.consumedFraction > existing.consumedFraction
+        }
+        switch (candidate.resetAt, existing.resetAt) {
+        case (_?, nil):
+            return true
+        case (nil, _?):
+            return false
+        case (let candidateReset?, let existingReset?):
+            return candidateReset < existingReset
+        case (nil, nil):
+            return false
+        }
     }
 
     private func normalizedBalances(
@@ -302,7 +336,7 @@ private struct UsagePayload: Decodable {
     let sevenDay: WindowPayload
     let extraUsage: ExtraUsagePayload?
     let spend: SpendPayload?
-    let limits: [LossyLimitPayload]?
+    let limits: LimitsPayload
 
     private enum CodingKeys: String, CodingKey {
         case fiveHour = "five_hour"
@@ -333,11 +367,29 @@ private struct UsagePayload: Decodable {
         // A drifted `limits` container (present but not an array)
         // degrades like a drifted element: scoped limits are optional
         // surface and must never black out the legacy windows.
-        limits = try? container.decode(
-            [LossyLimitPayload].self,
-            forKey: .limits
-        )
+        if !container.contains(.limits) {
+            limits = .absent
+        } else if try container.decodeNil(forKey: .limits) {
+            limits = .absent
+        } else {
+            do {
+                limits = .values(
+                    try container.decode(
+                        [LossyLimitPayload].self,
+                        forKey: .limits,
+                    ),
+                )
+            } catch {
+                limits = .malformed
+            }
+        }
     }
+}
+
+private enum LimitsPayload {
+    case absent
+    case malformed
+    case values([LossyLimitPayload])
 }
 
 // A limit entry that fails to decode becomes nil instead of failing
@@ -370,9 +422,11 @@ private struct ScopePayload: Decodable {
 }
 
 private struct ModelScopePayload: Decodable {
+    let id: String?
     let displayName: String?
 
     private enum CodingKeys: String, CodingKey {
+        case id
         case displayName = "display_name"
     }
 }

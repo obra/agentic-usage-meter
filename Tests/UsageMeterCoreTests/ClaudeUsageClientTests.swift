@@ -41,7 +41,10 @@ struct ClaudeUsageClientTests {
             snapshot.windows[1].resetAt
                 == Date(timeIntervalSince1970: 1_785_793_200)
         )
-        #expect(snapshot.windows[2].id == "claude-weekly-scoped-fable")
+        #expect(
+            snapshot.windows[2].id
+                == "claude-weekly-scoped-6e616d653a4661626c65"
+        )
         #expect(snapshot.windows[2].label == "Fable")
 
         let request = try #require(await transport.lastRequest)

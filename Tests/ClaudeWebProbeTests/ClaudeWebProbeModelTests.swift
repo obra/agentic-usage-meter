@@ -108,6 +108,32 @@ struct ClaudeWebProbeModelTests {
   }
 
   @Test
+  func outputPreservesScopedWindowLabel() throws {
+    let resetAt = Date(timeIntervalSince1970: 2_000_000_000)
+    let window = try #require(
+      UsageWindow(
+        id: "claude-weekly-scoped-6e616d653a4661626c65",
+        kind: .weekly,
+        duration: 604_800,
+        resetAt: resetAt,
+        consumedFraction: 0.42,
+        label: "Fable",
+      ),
+    )
+    let output = ClaudeWebProbeOutput(
+      profileID: UUID(),
+      organizationCount: 1,
+      snapshot: UsageSnapshot(
+        accountID: UUID(),
+        fetchedAt: resetAt.addingTimeInterval(-60),
+        windows: [window],
+      ),
+    )
+
+    #expect(output.windows.first?.label == "Fable")
+  }
+
+  @Test
   func trackerCompatibleSelectionDoesNotAskBetweenDuplicateNames() {
     let first = ClaudeOrganization(
       id: UUID(),

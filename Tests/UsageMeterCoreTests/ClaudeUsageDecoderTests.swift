@@ -25,7 +25,10 @@ struct ClaudeUsageDecoderTests {
         #expect(snapshot.windows[1].kind == .weekly)
         #expect(snapshot.windows[1].duration == 604_800)
         #expect(snapshot.windows[1].consumedFraction == 0.66)
-        #expect(snapshot.windows[2].id == "claude-weekly-scoped-fable")
+        #expect(
+            snapshot.windows[2].id
+                == "claude-weekly-scoped-6e616d653a4661626c65"
+        )
         #expect(snapshot.windows[2].kind == .weekly)
         #expect(snapshot.windows[2].duration == 604_800)
         #expect(snapshot.windows[2].consumedFraction == 0.42)
@@ -129,9 +132,125 @@ struct ClaudeUsageDecoderTests {
         // irrelevant because the provider reports real percents on
         // inactive scoped entries too.
         #expect(snapshot.windows.count == 3)
-        #expect(snapshot.windows[2].id == "claude-weekly-scoped-fable")
+        #expect(
+            snapshot.windows[2].id
+                == "claude-weekly-scoped-6e616d653a4661626c65"
+        )
         #expect(snapshot.windows[2].consumedFraction == 0.5)
         #expect(snapshot.windows[2].label == "Fable")
+    }
+
+    @Test
+    func scopedModelIdentitiesDoNotCollapseDisplayNameCollisions() throws {
+        let data = Data(
+            """
+            {
+              "five_hour": {
+                "utilization": 10,
+                "resets_at": "2026-08-01T00:00:00Z"
+              },
+              "seven_day": {
+                "utilization": 20,
+                "resets_at": "2026-08-03T00:00:00Z"
+              },
+              "limits": [
+                {
+                  "group": "weekly",
+                  "percent": 20,
+                  "resets_at": "2026-08-03T00:00:00Z",
+                  "scope": {
+                    "model": {"id": null, "display_name": "Foo Bar"}
+                  }
+                },
+                {
+                  "group": "weekly",
+                  "percent": 30,
+                  "resets_at": "2026-08-03T00:00:00Z",
+                  "scope": {
+                    "model": {"id": null, "display_name": "Foo-Bar"}
+                  }
+                },
+                {
+                  "group": "weekly",
+                  "percent": 40,
+                  "resets_at": "2026-08-03T00:00:00Z",
+                  "scope": {
+                    "model": {"id": "model-123", "display_name": null}
+                  }
+                }
+              ]
+            }
+            """.utf8,
+        )
+
+        let snapshot = try ClaudeUsageDecoder().decode(
+            data,
+            accountID: UUID(),
+            fetchedAt: Date(timeIntervalSince1970: 2_000_000_000),
+        )
+
+        let scopedWindows = Array(snapshot.windows.dropFirst(2))
+        #expect(scopedWindows.count == 3)
+        #expect(
+            scopedWindows.map(\.id)
+                == [
+                    "claude-weekly-scoped-6e616d653a466f6f20426172",
+                    "claude-weekly-scoped-6e616d653a466f6f2d426172",
+                    "claude-weekly-scoped-69643a6d6f64656c2d313233",
+                ]
+        )
+        #expect(
+            scopedWindows.map(\.label)
+                == ["Foo Bar", "Foo-Bar", "model-123"]
+        )
+    }
+
+    @Test
+    func duplicateScopedWindowsPreferAConcreteResetWhenUsageTies() throws {
+        let data = Data(
+            """
+            {
+              "five_hour": {
+                "utilization": 10,
+                "resets_at": "2026-08-01T00:00:00Z"
+              },
+              "seven_day": {
+                "utilization": 20,
+                "resets_at": "2026-08-03T00:00:00Z"
+              },
+              "limits": [
+                {
+                  "group": "weekly",
+                  "percent": 0,
+                  "resets_at": null,
+                  "scope": {
+                    "model": {"id": "model-123", "display_name": "Fable"}
+                  }
+                },
+                {
+                  "group": "weekly",
+                  "percent": 0,
+                  "resets_at": "2026-08-03T00:00:00Z",
+                  "scope": {
+                    "model": {"id": "model-123", "display_name": "Fable"}
+                  }
+                }
+              ]
+            }
+            """.utf8,
+        )
+
+        let snapshot = try ClaudeUsageDecoder().decode(
+            data,
+            accountID: UUID(),
+            fetchedAt: Date(timeIntervalSince1970: 2_000_000_000),
+        )
+
+        #expect(snapshot.windows.count == 3)
+        #expect(
+            snapshot.windows[2].resetAt
+                == Date(timeIntervalSince1970: 1_785_715_200)
+        )
     }
 
     @Test
