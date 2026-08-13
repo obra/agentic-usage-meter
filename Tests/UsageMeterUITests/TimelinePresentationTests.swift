@@ -409,6 +409,59 @@ struct TimelinePresentationTests {
   }
 
   @Test
+  func claudeScopedWeeklyWindowShowsItsModelLabel() throws {
+    let account = SubscriptionAccount(
+      provider: .claude,
+      displayName: "Max",
+      displayOrder: 0,
+    )
+    let resetAt = Date(timeIntervalSince1970: 2_000_472_000)
+    let weekly = try #require(
+      UsageWindow(
+        id: "seven-day",
+        kind: .weekly,
+        duration: 604_800,
+        resetAt: resetAt,
+        consumedFraction: 0.2,
+      ),
+    )
+    let fable = try #require(
+      UsageWindow(
+        id: "claude-weekly-scoped-6e616d653a4661626c65",
+        kind: .weekly,
+        duration: 604_800,
+        resetAt: resetAt,
+        consumedFraction: 1,
+        label: "Fable",
+      ),
+    )
+    let state = AccountViewState(
+      account: account,
+      snapshot: UsageSnapshot(
+        accountID: account.id,
+        fetchedAt: resetAt,
+        windows: [weekly, fable],
+      ),
+    )
+
+    let section = UsageTimelineSectionPresentation(
+      kind: .weekly,
+      accounts: [state],
+      now: Date(timeIntervalSince1970: 2_000_000_000),
+      timeZone: TimeZone(secondsFromGMT: 0)!,
+    )
+
+    #expect(
+      section.rows.map(\.windowPresentation.accountText)
+        == ["Max", "Fable · Max"],
+    )
+    #expect(
+      section.rows[1].windowPresentation.accessibilityValue
+        .contains("Fable weekly window"),
+    )
+  }
+
+  @Test
   func dormantFactoryCoreWindowsStayHidden() throws {
     let account = SubscriptionAccount(
       provider: .factory,

@@ -26,7 +26,7 @@ struct ClaudeUsageClientTests {
 
         #expect(snapshot.accountID == accountID)
         #expect(snapshot.fetchedAt == fetchedAt)
-        #expect(snapshot.windows.count == 2)
+        #expect(snapshot.windows.count == 3)
         #expect(snapshot.windows[0].kind == .short)
         #expect(snapshot.windows[0].duration == 18_000)
         #expect(snapshot.windows[0].consumedFraction == 0.81)
@@ -41,6 +41,11 @@ struct ClaudeUsageClientTests {
             snapshot.windows[1].resetAt
                 == Date(timeIntervalSince1970: 1_785_793_200)
         )
+        #expect(
+            snapshot.windows[2].id
+                == "claude-weekly-scoped-6e616d653a4661626c65"
+        )
+        #expect(snapshot.windows[2].label == "Fable")
 
         let request = try #require(await transport.lastRequest)
         #expect(request.httpMethod == "GET")
