@@ -80,23 +80,23 @@ IFS=$'\t' read -r version build < <(
 )
 require_local_release_state
 [[ "$("${git_bin}" remote get-url origin)" == \
-    'https://github.com/obra/agentic-usage-meter.git' ]] || {
+    'https://github.com/prime-radiant-inc/agentic-usage-meter.git' ]] || {
     echo 'Unexpected origin URL.' >&2
     exit 1
 }
 require_remote_tag
 "${gh_bin}" auth status --hostname github.com >/dev/null 2>&1
 if [[ "${GITHUB_ACTIONS:-}" == true \
-    && "${GITHUB_REPOSITORY:-}" == 'obra/agentic-usage-meter' ]]; then
+    && "${GITHUB_REPOSITORY:-}" == 'prime-radiant-inc/agentic-usage-meter' ]]; then
     # The workflow token is an installation token with no user identity
     # and no introspectable permissions; require it to reach the
     # canonical repository and let the declared workflow permissions
     # govern write access.
     [[ "$(
-        "${gh_bin}" api repos/obra/agentic-usage-meter \
+        "${gh_bin}" api repos/prime-radiant-inc/agentic-usage-meter \
             --jq .full_name
-    )" == 'obra/agentic-usage-meter' ]] || {
-        echo 'Actions token cannot access obra/agentic-usage-meter.' >&2
+    )" == 'prime-radiant-inc/agentic-usage-meter' ]] || {
+        echo 'Actions token cannot access prime-radiant-inc/agentic-usage-meter.' >&2
         exit 1
     }
 else
@@ -109,7 +109,7 @@ release_status=
 release_probe_exit=0
 release_status=$(
     "${gh_bin}" api \
-        "repos/obra/agentic-usage-meter/releases/tags/${tag}" \
+        "repos/prime-radiant-inc/agentic-usage-meter/releases/tags/${tag}" \
         --include \
         --silent \
         2>/dev/null \
@@ -219,13 +219,13 @@ for appcast_input in "${appcast_inputs[@]}"; do
     }
 done
 
-appcast_link='https://github.com/obra/agentic-usage-meter'
+appcast_link='https://github.com/prime-radiant-inc/agentic-usage-meter'
 if [[ -n "${SPARKLE_ED_PRIVATE_KEY:-}" ]]; then
     print -r -- "${SPARKLE_ED_PRIVATE_KEY}" \
         | "${sparkle_tools}/generate_appcast" \
             --ed-key-file - \
             --download-url-prefix \
-            "https://github.com/obra/agentic-usage-meter/releases/download/${tag}/" \
+            "https://github.com/prime-radiant-inc/agentic-usage-meter/releases/download/${tag}/" \
             --maximum-deltas 0 \
             --maximum-versions 3 \
             --link "${appcast_link}" \
@@ -235,7 +235,7 @@ else
     "${sparkle_tools}/generate_appcast" \
         --account agentic-usage-meter \
         --download-url-prefix \
-        "https://github.com/obra/agentic-usage-meter/releases/download/${tag}/" \
+        "https://github.com/prime-radiant-inc/agentic-usage-meter/releases/download/${tag}/" \
         --maximum-deltas 0 \
         --maximum-versions 3 \
         --link "${appcast_link}" \
@@ -243,7 +243,7 @@ else
         "${release_directory}"
 fi
 appcast_path="${release_directory}/appcast.xml"
-asset_url="https://github.com/obra/agentic-usage-meter/releases/download/${tag}/${asset_base}.zip"
+asset_url="https://github.com/prime-radiant-inc/agentic-usage-meter/releases/download/${tag}/${asset_base}.zip"
 "${script_directory}/validate-appcast.sh" \
     "${appcast_path}" \
     "${asset_url}" \
@@ -256,7 +256,7 @@ require_remote_tag
     "${archive_path}" \
     "${notes_path}" \
     "${appcast_path}" \
-    --repo obra/agentic-usage-meter \
+    --repo prime-radiant-inc/agentic-usage-meter \
     --verify-tag \
     --title "Agentic Usage Meter ${version}" \
     --notes-file "${notes_path}" || {

@@ -25,7 +25,7 @@ jobs:
       - name: Restore the exact release remote and tag state
         run: |
           git remote set-url origin \
-            https://github.com/obra/agentic-usage-meter.git
+            https://github.com/prime-radiant-inc/agentic-usage-meter.git
           git fetch --tags --force
           git checkout "${GITHUB_REF_NAME}"
 

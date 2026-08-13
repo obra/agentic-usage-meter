@@ -50,7 +50,7 @@ the other, so an installed trusted version can authenticate the transition.
 ## Prepare and publish a release
 
 Start from the intended release commit with a clean worktree and the exact
-`https://github.com/obra/agentic-usage-meter.git` origin. Run the full test
+`https://github.com/prime-radiant-inc/agentic-usage-meter.git` origin. Run the full test
 suite before tagging. Create an annotated tag at `HEAD`:
 
 ```sh
@@ -94,21 +94,21 @@ is allowed into the appcast input.
 Inspect the published release and its three assets:
 
 ```sh
-gh release view v0.1.0 --repo obra/agentic-usage-meter --web
+gh release view v0.1.0 --repo prime-radiant-inc/agentic-usage-meter --web
 ```
 
 Download the public appcast and validate its correlated release metadata:
 
 ```sh
 curl --fail --location \
-  https://github.com/obra/agentic-usage-meter/releases/latest/download/appcast.xml \
+  https://github.com/prime-radiant-inc/agentic-usage-meter/releases/latest/download/appcast.xml \
   --output /tmp/agentic-usage-meter-appcast.xml
 Scripts/validate-appcast.sh \
   /tmp/agentic-usage-meter-appcast.xml \
-  'https://github.com/obra/agentic-usage-meter/releases/download/v0.1.0/Agentic-Usage-Meter-0.1.0.zip' \
+  'https://github.com/prime-radiant-inc/agentic-usage-meter/releases/download/v0.1.0/Agentic-Usage-Meter-0.1.0.zip' \
   1000 \
   0.1.0 \
-  'https://github.com/obra/agentic-usage-meter'
+  'https://github.com/prime-radiant-inc/agentic-usage-meter'
 ```
 
 Also download the zip from the release, expand it, launch the installed app,

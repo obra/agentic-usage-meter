@@ -55,7 +55,7 @@ The app has no analytics or telemetry.
 ## Install
 
 When a public build is available, download the latest notarized app from
-[GitHub Releases](https://github.com/obra/agentic-usage-meter/releases), move
+[GitHub Releases](https://github.com/prime-radiant-inc/agentic-usage-meter/releases), move
 it to Applications, and launch it.
 
 ## Build from source
@@ -94,7 +94,7 @@ data limitations.
 ## Release and updates
 
 Published builds are direct downloads from the
-[latest GitHub Release](https://github.com/obra/agentic-usage-meter/releases/latest).
+[latest GitHub Release](https://github.com/prime-radiant-inc/agentic-usage-meter/releases/latest).
 The app checks the signed Sparkle feed automatically and asks for confirmation
 before installing an update. Maintainers build, sign, notarize, verify, and
 publish releases locally by following the [release guide](docs/releasing.md).

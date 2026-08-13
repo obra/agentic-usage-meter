@@ -53,7 +53,7 @@ func providerRequestIsAvailableOnlyWhenAddingAnAccount() {
         AccountSheetRoute.add.providerRequestURL
             == URL(
                 string:
-                    "https://github.com/obra/agentic-usage-meter/issues/new",
+                    "https://github.com/prime-radiant-inc/agentic-usage-meter/issues/new",
             ),
     )
     #expect(

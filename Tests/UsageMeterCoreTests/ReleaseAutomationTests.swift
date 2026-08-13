@@ -14,14 +14,14 @@ struct ReleaseAutomationTests {
                 <item>
                   <title>0.1.0</title>
                   <pubDate>Sun, 02 Aug 2026 12:23:10 -0700</pubDate>
-                  <link>https://github.com/obra/agentic-usage-meter</link>
+                  <link>https://github.com/prime-radiant-inc/agentic-usage-meter</link>
                   <sparkle:version>1000</sparkle:version>
                   <sparkle:shortVersionString>0.1.0</sparkle:shortVersionString>
                   <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
                   <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-                  <sparkle:releaseNotesLink>https://github.com/obra/agentic-usage-meter/releases/latest/download/Agentic-Usage-Meter-0.1.0.md</sparkle:releaseNotesLink>
+                  <sparkle:releaseNotesLink>https://github.com/prime-radiant-inc/agentic-usage-meter/releases/latest/download/Agentic-Usage-Meter-0.1.0.md</sparkle:releaseNotesLink>
                   <enclosure
-                    url="https://github.com/obra/agentic-usage-meter/releases/download/v0.1.0/Agentic-Usage-Meter-0.1.0.zip"
+                    url="https://github.com/prime-radiant-inc/agentic-usage-meter/releases/download/v0.1.0/Agentic-Usage-Meter-0.1.0.zip"
                     length="2466625"
                     type="application/octet-stream"
                     sparkle:edSignature="fixture-signature" />
@@ -42,11 +42,11 @@ struct ReleaseAutomationTests {
             <rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
               <channel>
                 <item>
-                  <link>https://github.com/obra/agentic-usage-meter</link>
+                  <link>https://github.com/prime-radiant-inc/agentic-usage-meter</link>
                   <!--
                     <sparkle:version>1000</sparkle:version>
                     <sparkle:shortVersionString>0.1.0</sparkle:shortVersionString>
-                    <enclosure url="https://github.com/obra/agentic-usage-meter/releases/download/v0.1.0/Agentic-Usage-Meter-0.1.0.zip" />
+                    <enclosure url="https://github.com/prime-radiant-inc/agentic-usage-meter/releases/download/v0.1.0/Agentic-Usage-Meter-0.1.0.zip" />
                   -->
                   <sparkle:version>999</sparkle:version>
                   <sparkle:shortVersionString>9.9.9</sparkle:shortVersionString>
@@ -69,9 +69,9 @@ struct ReleaseAutomationTests {
             <rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
               <channel>
                 <item>
-                  <link>https://github.com/obra/agentic-usage-meter</link>
+                  <link>https://github.com/prime-radiant-inc/agentic-usage-meter</link>
                   <enclosure
-                    url="https://github.com/obra/agentic-usage-meter/releases/download/v0.1.0/Agentic-Usage-Meter-0.1.0.zip" />
+                    url="https://github.com/prime-radiant-inc/agentic-usage-meter/releases/download/v0.1.0/Agentic-Usage-Meter-0.1.0.zip" />
                 </item>
                 <item>
                   <sparkle:version>1000</sparkle:version>
@@ -95,9 +95,9 @@ struct ReleaseAutomationTests {
                 <sparkle:version>1000</sparkle:version>
                 <sparkle:shortVersionString>0.1.0</sparkle:shortVersionString>
                 <item>
-                  <link>https://github.com/obra/agentic-usage-meter</link>
+                  <link>https://github.com/prime-radiant-inc/agentic-usage-meter</link>
                   <enclosure
-                    url="https://github.com/obra/agentic-usage-meter/releases/download/v0.1.0/Agentic-Usage-Meter-0.1.0.zip" />
+                    url="https://github.com/prime-radiant-inc/agentic-usage-meter/releases/download/v0.1.0/Agentic-Usage-Meter-0.1.0.zip" />
                 </item>
               </channel>
             </rss>
@@ -115,18 +115,18 @@ struct ReleaseAutomationTests {
             <rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
               <channel>
                 <item>
-                  <link>https://github.com/obra/agentic-usage-meter</link>
+                  <link>https://github.com/prime-radiant-inc/agentic-usage-meter</link>
                   <sparkle:version>1000</sparkle:version>
                   <sparkle:shortVersionString>0.1.0</sparkle:shortVersionString>
                   <enclosure
-                    url="https://github.com/obra/agentic-usage-meter/releases/download/v0.1.0/Agentic-Usage-Meter-0.1.0.zip" />
+                    url="https://github.com/prime-radiant-inc/agentic-usage-meter/releases/download/v0.1.0/Agentic-Usage-Meter-0.1.0.zip" />
                 </item>
                 <item>
-                  <link>https://github.com/obra/agentic-usage-meter</link>
+                  <link>https://github.com/prime-radiant-inc/agentic-usage-meter</link>
                   <sparkle:version>1000</sparkle:version>
                   <sparkle:shortVersionString>0.1.0</sparkle:shortVersionString>
                   <enclosure
-                    url="https://github.com/obra/agentic-usage-meter/releases/download/v0.1.0/Agentic-Usage-Meter-0.1.0.zip" />
+                    url="https://github.com/prime-radiant-inc/agentic-usage-meter/releases/download/v0.1.0/Agentic-Usage-Meter-0.1.0.zip" />
                 </item>
               </channel>
             </rss>
@@ -148,7 +148,7 @@ struct ReleaseAutomationTests {
                   <sparkle:version>1000</sparkle:version>
                   <sparkle:shortVersionString>0.1.0</sparkle:shortVersionString>
                   <enclosure
-                    url="https://github.com/obra/agentic-usage-meter/releases/download/v0.1.0/Agentic-Usage-Meter-0.1.0.zip" />
+                    url="https://github.com/prime-radiant-inc/agentic-usage-meter/releases/download/v0.1.0/Agentic-Usage-Meter-0.1.0.zip" />
                 </item>
               </channel>
             </rss>
@@ -169,10 +169,10 @@ struct ReleaseAutomationTests {
                   <sparkle:version>1000</sparkle:version>
                   <sparkle:shortVersionString>0.1.0</sparkle:shortVersionString>
                   <enclosure
-                    url="https://github.com/obra/agentic-usage-meter/releases/download/v0.1.0/Agentic-Usage-Meter-0.1.0.zip" />
+                    url="https://github.com/prime-radiant-inc/agentic-usage-meter/releases/download/v0.1.0/Agentic-Usage-Meter-0.1.0.zip" />
                 </item>
                 <item>
-                  <link>https://github.com/obra/agentic-usage-meter</link>
+                  <link>https://github.com/prime-radiant-inc/agentic-usage-meter</link>
                 </item>
               </channel>
             </rss>
@@ -247,13 +247,13 @@ struct ReleaseAutomationTests {
                 "--account",
                 "agentic-usage-meter",
                 "--download-url-prefix",
-                "https://github.com/obra/agentic-usage-meter/releases/download/v0.1.0/",
+                "https://github.com/prime-radiant-inc/agentic-usage-meter/releases/download/v0.1.0/",
                 "--maximum-deltas",
                 "0",
                 "--maximum-versions",
                 "3",
                 "--link",
-                "https://github.com/obra/agentic-usage-meter",
+                "https://github.com/prime-radiant-inc/agentic-usage-meter",
                 "-o",
                 appcast.path,
                 releaseDirectory.path,
@@ -269,7 +269,7 @@ struct ReleaseAutomationTests {
                 notes.path,
                 appcast.path,
                 "--repo",
-                "obra/agentic-usage-meter",
+                "prime-radiant-inc/agentic-usage-meter",
                 "--verify-tag",
                 "--title",
                 "Agentic Usage Meter 0.1.0",
@@ -538,7 +538,7 @@ struct ReleaseAutomationTests {
         let result = try fixture.run(
             environment: [
                 "GITHUB_ACTIONS": "true",
-                "GITHUB_REPOSITORY": "obra/agentic-usage-meter",
+                "GITHUB_REPOSITORY": "prime-radiant-inc/agentic-usage-meter",
                 "GH_USER_UNAVAILABLE": "1",
             ],
         )
@@ -742,10 +742,10 @@ struct ReleaseAutomationTests {
                 print -r -- obra
                 exit 0
             fi
-            if [[ "$1" == api && "$2" == repos/obra/agentic-usage-meter \
+            if [[ "$1" == api && "$2" == repos/prime-radiant-inc/agentic-usage-meter \
                 && "${3:-}" == --jq && "${4:-}" == .full_name ]]; then
                 print -r -- 'gh:repo-access' >> "$EVENT_LOG"
-                print -r -- obra/agentic-usage-meter
+                print -r -- prime-radiant-inc/agentic-usage-meter
                 exit 0
             fi
             if [[ "$1" == api && "$2" == repos/* ]]; then
@@ -882,9 +882,9 @@ struct ReleaseAutomationTests {
                 shift
             done
             if [[ "${FAIL_PHASE:-}" == appcast-validation ]]; then
-                item='<!-- <sparkle:version>1000</sparkle:version><sparkle:shortVersionString>0.1.0</sparkle:shortVersionString><enclosure url="https://github.com/obra/agentic-usage-meter/releases/download/v0.1.0/Agentic-Usage-Meter-0.1.0.zip" /> --><link>https://github.com/obra/agentic-usage-meter</link><sparkle:version>999</sparkle:version><sparkle:shortVersionString>9.9.9</sparkle:shortVersionString><enclosure url="https://invalid.example/app.zip" />'
+                item='<!-- <sparkle:version>1000</sparkle:version><sparkle:shortVersionString>0.1.0</sparkle:shortVersionString><enclosure url="https://github.com/prime-radiant-inc/agentic-usage-meter/releases/download/v0.1.0/Agentic-Usage-Meter-0.1.0.zip" /> --><link>https://github.com/prime-radiant-inc/agentic-usage-meter</link><sparkle:version>999</sparkle:version><sparkle:shortVersionString>9.9.9</sparkle:shortVersionString><enclosure url="https://invalid.example/app.zip" />'
             else
-                item='<link>https://github.com/obra/agentic-usage-meter</link><sparkle:version>1000</sparkle:version><sparkle:shortVersionString>0.1.0</sparkle:shortVersionString><enclosure url="https://github.com/obra/agentic-usage-meter/releases/download/v0.1.0/Agentic-Usage-Meter-0.1.0.zip" />'
+                item='<link>https://github.com/prime-radiant-inc/agentic-usage-meter</link><sparkle:version>1000</sparkle:version><sparkle:shortVersionString>0.1.0</sparkle:shortVersionString><enclosure url="https://github.com/prime-radiant-inc/agentic-usage-meter/releases/download/v0.1.0/Agentic-Usage-Meter-0.1.0.zip" />'
             fi
             /usr/bin/printf '%s\n' \
                 '<?xml version="1.0" encoding="UTF-8"?>' \
@@ -927,7 +927,7 @@ struct ReleaseAutomationTests {
             ],
             [
                 "-C", repository.path, "remote", "add", "origin",
-                "https://github.com/obra/agentic-usage-meter.git",
+                "https://github.com/prime-radiant-inc/agentic-usage-meter.git",
             ],
         ] {
             let result = try runExecutable(
@@ -1004,10 +1004,10 @@ struct ReleaseAutomationTests {
                     path: "Scripts/validate-appcast.sh",
                 ).path,
                 appcast.path,
-                "https://github.com/obra/agentic-usage-meter/releases/download/v0.1.0/Agentic-Usage-Meter-0.1.0.zip",
+                "https://github.com/prime-radiant-inc/agentic-usage-meter/releases/download/v0.1.0/Agentic-Usage-Meter-0.1.0.zip",
                 "1000",
                 "0.1.0",
-                "https://github.com/obra/agentic-usage-meter",
+                "https://github.com/prime-radiant-inc/agentic-usage-meter",
             ],
         )
     }

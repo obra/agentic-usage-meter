@@ -25,7 +25,7 @@
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>SUFeedURL</key>
-    <string>https://github.com/obra/agentic-usage-meter/releases/latest/download/appcast.xml</string>
+    <string>https://github.com/prime-radiant-inc/agentic-usage-meter/releases/latest/download/appcast.xml</string>
     <key>SUPublicEDKey</key>
     <string>jhg1JuyATBkt2XfP4urchr1co3dXMz+zEioCi7zFMCE=</string>
     <key>SUEnableAutomaticChecks</key>

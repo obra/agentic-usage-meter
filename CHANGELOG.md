@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.2.5 - 2026-08-13
+
 ### Added
 
 - Claude accounts now show per-model weekly pools (currently the Fable

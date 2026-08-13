@@ -30,7 +30,7 @@ struct ReleaseConfigurationTests {
         #expect(plist["LSMinimumSystemVersion"] as? String == "26.0")
         #expect(
             plist["SUFeedURL"] as? String
-                == "https://github.com/obra/agentic-usage-meter/releases/latest/download/appcast.xml",
+                == "https://github.com/prime-radiant-inc/agentic-usage-meter/releases/latest/download/appcast.xml",
         )
         #expect(plist["SUEnableAutomaticChecks"] as? Bool == true)
         #expect(plist["SUAutomaticallyUpdate"] as? Bool == false)
@@ -339,7 +339,7 @@ struct ReleaseConfigurationTests {
             ["-C", temporaryRoot.path, "tag", "-a", "v0.1.0", "-m",
              "Release v0.1.0"],
             ["-C", temporaryRoot.path, "remote", "add", "origin",
-             "https://github.com/obra/agentic-usage-meter.git"],
+             "https://github.com/prime-radiant-inc/agentic-usage-meter.git"],
         ] {
             let result = try runExecutable(
                 URL(fileURLWithPath: "/usr/bin/git"),

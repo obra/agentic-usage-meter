@@ -41,7 +41,7 @@ enum AccountSheetRoute: Identifiable {
         }
         return URL(
             string:
-                "https://github.com/obra/agentic-usage-meter/issues/new",
+                "https://github.com/prime-radiant-inc/agentic-usage-meter/issues/new",
         )
     }
 }
