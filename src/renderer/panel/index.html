@@ -1,0 +1,49 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self' 'unsafe-inline'"
+    />
+    <title>Usage</title>
+    <link rel="stylesheet" href="../common.css" />
+    <style>
+      body {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+      }
+      .content {
+        flex: 1;
+        min-height: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <span class="title">Usage</span>
+      <span id="sample" class="sample-badge" hidden>SAMPLE DATA</span>
+      <span class="spacer"></span>
+      <button id="refresh" class="icon-button" title="Refresh eligible accounts">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+          <path
+            d="M13.5 8a5.5 5.5 0 1 1-1.61-3.89M13.5 1.5v3h-3"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+      </button>
+    </div>
+    <div id="content" class="content"></div>
+    <div class="footer">
+      <button id="widget-toggle">Show Widget</button>
+      <span class="spacer"></span>
+      <button id="settings">Settings</button>
+      <button id="quit">Quit</button>
+    </div>
+    <script type="module" src="./panel.js"></script>
+  </body>
+</html>

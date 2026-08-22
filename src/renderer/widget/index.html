@@ -1,0 +1,42 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self' 'unsafe-inline'"
+    />
+    <title>Agentic Usage</title>
+    <link rel="stylesheet" href="../common.css" />
+    <style>
+      body {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        background: var(--surface);
+        border-radius: 10px;
+      }
+      .drag {
+        -webkit-app-region: drag;
+      }
+      .drag button {
+        -webkit-app-region: no-drag;
+      }
+      .content {
+        flex: 1;
+        min-height: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header drag">
+      <span class="title" style="font-size: 13px">Agentic Usage</span>
+      <span id="sample" class="sample-badge" hidden>SAMPLE DATA</span>
+      <span class="spacer"></span>
+      <button id="settings" class="icon-button" title="Settings">⚙</button>
+      <button id="close" class="icon-button" title="Hide Widget">✕</button>
+    </div>
+    <div id="content" class="content"></div>
+    <script type="module" src="./widget.js"></script>
+  </body>
+</html>

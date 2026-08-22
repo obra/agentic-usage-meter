@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2022"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "sourceMap": false,
+    "declaration": false,
+    "outDir": "out",
+    "rootDir": "src"
+  },
+  "include": ["src/core/**/*.ts", "src/shared/**/*.ts", "src/main/**/*.ts", "src/preload/**/*.ts"]
+}
